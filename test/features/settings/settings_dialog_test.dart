@@ -6,6 +6,7 @@ import 'package:cullimingo/core/cache/memory_budget.dart';
 import 'package:cullimingo/core/secrets/secret_store.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:cullimingo/core/settings/performance_preset.dart';
+import 'package:cullimingo/core/version/app_version.g.dart';
 import 'package:cullimingo/features/settings/presentation/settings_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -174,7 +175,7 @@ void main() {
 
     // The about dialog shows the app name + version (and a View-licenses link).
     expect(find.byType(AboutDialog), findsOneWidget);
-    expect(find.text('1.0.0'), findsOneWidget);
+    expect(find.text(kAppVersion), findsOneWidget);
   });
 
   testWidgets('Cancel returns null', (tester) async {
