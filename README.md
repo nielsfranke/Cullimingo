@@ -39,14 +39,19 @@ get through thousands of frames and keep the keepers, fast.
 
 ## About
 
-I built Cullimingo for myself — a fast, keyboard-first way to get through
-thousands of frames and keep the keepers, without a subscription or a
-heavyweight forever-catalog. There's plenty of paid culling software but little
-that's open-source and self-owned, so I made my own. I'm not a professional
-developer and much of it was built with AI assistance
-([Claude Code](https://claude.com/claude-code)) under my direction, so expect
-the odd rough edge — [bug reports](https://github.com/nielsfranke/Cullimingo/issues)
-are very welcome.
+Photography software keeps drifting behind monthly subscriptions and the cloud,
+while the open-source side stays thin — plenty of it is capable, but little is
+polished or genuinely pleasant to use for a real culling session. I wanted a
+fast, keyboard-first culling app that I owned outright and actually enjoyed
+reaching for, so I built one for my own photo workflow — and I'm sharing it in
+case it's useful to you too.
+
+This is a solo, spare-time project. I'm a photographer rather than a software
+engineer, and I leaned heavily on AI ([Claude Code](https://claude.com/claude-code))
+— directing it rather than writing most of the code myself — so there are bound
+to be rough edges. If you hit one, please
+[open an issue](https://github.com/nielsfranke/Cullimingo/issues); real-world
+feedback is what shapes where it goes next.
 
 ## Download
 
