@@ -65,7 +65,18 @@ Future<void> main() async {
 
   final pos = settings.windowPosition;
   await windowManager.waitUntilReadyToShow(windowOptions, () async {
-    if (pos != null) await windowManager.setPosition(Offset(pos.x, pos.y));
+    // Position BEFORE (re-)applying the size. The size in [windowOptions] is
+    // applied to the still-hidden window on whichever display it first lands
+    // on, and macOS clamps a window's height to that display's visible frame —
+    // so a window saved taller than a *shorter* second monitor came back short
+    // on a dual-monitor setup. Move onto the saved screen first, then re-apply
+    // the saved size there, where its full height fits.
+    if (pos != null) {
+      await windowManager.setPosition(Offset(pos.x, pos.y));
+      if (saved != null) {
+        await windowManager.setSize(Size(saved.width, saved.height));
+      }
+    }
     await windowManager.show();
     await windowManager.focus();
   });
