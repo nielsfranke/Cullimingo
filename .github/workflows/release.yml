@@ -1,0 +1,155 @@
+# Builds the Linux AppImage + macOS .dmg and publishes them on a GitHub Release
+# whenever a version tag is pushed.
+#
+# Why a Release (not just a tag): the app's startup update check reads
+# `api.github.com/repos/nielsfranke/Cullimingo/releases/latest`, and that
+# endpoint only returns *published Releases*. The Forgejo → GitHub mirror copies
+# tags but never creates Releases, so this workflow turns each mirrored `v*` tag
+# into a Release with downloadable artifacts.
+#
+# Tag convention: `v<pubspec version>` (e.g. `v1.0.0`). Pre-release tags carry a
+# suffix (`v1.1.0-rc.1`) and are flagged as pre-releases so `/releases/latest`
+# skips them.
+#
+# `workflow_dispatch` builds both artifacts and leaves them as run artifacts
+# (no Release) so the build pipeline can be exercised without cutting a tag.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: 3.44.4
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-24.04 # oldest glibc we support; AppImage is forward-compatible only
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build + native deps
+        run: |
+          sudo apt-get update
+          # Flutter Linux desktop toolchain + the native libs bundle_linux.sh
+          # copies in (libvips/libraw + heif AVIF encoder plugin) + patchelf.
+          sudo apt-get install -y \
+            clang cmake ninja-build pkg-config libgtk-3-dev \
+            patchelf libvips-dev libraw-dev libheif-dev libheif-plugin-aomenc
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Build AppImage
+        run: |
+          flutter pub get
+          flutter build linux --release
+          tool/bundle_linux.sh
+          tool/build_appimage.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: build/linux/Cullimingo-x86_64.AppImage
+          if-no-files-found: error
+
+  build-macos:
+    runs-on: macos-14 # Apple Silicon (arm64) — matches the bundled arm64 dylibs
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install native deps
+        run: brew install vips libraw dylibbundler
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Build .dmg
+        run: |
+          flutter pub get
+          flutter build macos --release
+          tool/bundle_macos.sh
+          tool/build_dmg.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dmg
+          path: build/macos/Cullimingo-arm64.dmg
+          if-no-files-found: error
+
+  release:
+    needs: [build-linux, build-macos]
+    if: startsWith(github.ref, 'refs/tags/') # only tag pushes publish a Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # gh release create/upload needs to write Releases
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true # both artifacts land flat in dist/
+
+      - name: Publish the Release with artifacts
+        run: |
+          set -euo pipefail
+
+          # Install instructions shown at the top of the Release notes.
+          cat > install.md <<'EOF'
+          ## Install
+
+          ### Linux (AppImage)
+          Download `Cullimingo-x86_64.AppImage`, make it executable, and run it:
+          ```
+          chmod +x Cullimingo-x86_64.AppImage
+          ./Cullimingo-x86_64.AppImage
+          ```
+
+          ### macOS (Apple Silicon)
+          1. Open `Cullimingo-arm64.dmg` and drag **Cullimingo** to **Applications**.
+          2. The app isn't signed/notarized, so clear the quarantine flag once —
+             open **Terminal** and run:
+             ```
+             xattr -cr /Applications/Cullimingo.app
+             ```
+          3. Launch it from Applications.
+          EOF
+
+          # A hyphen in the tag (v1.1.0-rc.1) marks a pre-release.
+          prerelease_flag=""
+          case "$TAG" in
+            *-*) prerelease_flag="--prerelease" ;;
+          esac
+
+          # Idempotent: create the Release if absent, else refresh its artifacts.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" \
+              --title "Cullimingo ${TAG#v}" \
+              --generate-notes \
+              --verify-tag \
+              $prerelease_flag \
+              dist/*
+          fi
+
+          # Prepend the install instructions to the auto-generated notes (once).
+          body="$(gh release view "$TAG" --json body -q .body)"
+          case "$body" in
+            *"## Install"*) echo "Notes already carry install instructions." ;;
+            *)
+              { cat install.md; printf '\n'; printf '%s\n' "$body"; } > notes.md
+              gh release edit "$TAG" --notes-file notes.md
+              ;;
+          esac

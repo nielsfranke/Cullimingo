@@ -1,0 +1,18 @@
+include: package:very_good_analysis/analysis_options.yaml
+
+analyzer:
+  # NOTE: custom_lint (which powers riverpod_lint) is temporarily disabled.
+  # At the June-2026 stable snapshot, riverpod_lint >=3.1.4-dev.1 requires
+  # analyzer_plugin ^0.14.0, but the custom_lint runner only supports <=0.13.0,
+  # so the two cannot be co-resolved alongside riverpod 3.3 + drift_dev.
+  # very_good_analysis remains active as the strict lint set. Re-enable the
+  # plugin (and add riverpod_lint + custom_lint as dev_dependencies) once
+  # custom_lint ships analyzer_plugin 0.14.0 support. See ARCHITECTURE.md.
+  # plugins:
+  #   - custom_lint
+  errors:
+    invalid_annotation_target: ignore # common with riverpod/json codegen
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "build/**" # generated native build tooling (e.g. cargokit)

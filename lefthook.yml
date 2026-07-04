@@ -1,0 +1,19 @@
+pre-commit:
+  parallel: true
+  commands:
+    format:
+      glob: "*.dart"
+      run: dart format {staged_files} && git add {staged_files}
+    analyze:
+      run: flutter analyze
+    # Keep the generated kAppVersion in sync when pubspec's version changes.
+    version:
+      glob: "pubspec.yaml"
+      run: dart run tool/gen_version.dart && dart format lib/core/version/app_version.g.dart && git add lib/core/version/app_version.g.dart
+
+# Tests run on push (not every commit) so commits stay fast while red code can
+# never reach the remote — main stays green (BUILD_PLAN.md §4).
+pre-push:
+  commands:
+    test:
+      run: flutter test

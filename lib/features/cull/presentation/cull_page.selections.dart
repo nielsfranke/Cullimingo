@@ -1,0 +1,178 @@
+part of 'cull_page.dart';
+
+/// Saved selections and paste-a-list find/import.
+mixin _CullSelections on _CullWorkspace {
+  Future<void> _importSelection() async {
+    const group = XTypeGroup(label: 'Lists', extensions: ['csv', 'txt']);
+    final file = await openFile(acceptedTypeGroups: [group]);
+    if (file == null) return;
+
+    final list = await CsvSelectionSource(
+      name: file.name,
+      content: await file.readAsString(),
+    ).load();
+    final photos = ref.read(photosProvider).value ?? const <Photo>[];
+    final ids = matchPhotoIds(list.filenames, photos);
+    ref.read(cullControllerProvider.notifier).setSelection(ids);
+    _revealFirstSelected(ids);
+    _gridFocus.requestFocus();
+
+    if (!mounted) return;
+    _notify(
+      'Selected ${ids.length} of ${list.filenames.length} from ${file.name}',
+    );
+  }
+
+  /// Photo-Mechanic-style "Find": paste a list of filenames (any separator,
+  /// with or without extensions) and select every photo that matches
+  /// (`BUILD_PLAN.md` §5). Robust to JPEG-named lists over RAW files.
+  Future<void> _findByList() async {
+    final photos = ref.read(photosProvider).value ?? const <Photo>[];
+    if (photos.isEmpty) return;
+    final text = await _promptList();
+    if (text == null || text.trim().isEmpty) return;
+    final names = parseNameTokens(text);
+    final ids = matchPhotoIds(names, photos);
+    ref.read(cullControllerProvider.notifier).setSelection(ids);
+    _revealFirstSelected(ids);
+    _gridFocus.requestFocus();
+    if (!mounted) return;
+    _notify(
+      'Selected ${ids.length} of ${names.length} name(s)',
+      kind: ids.isEmpty ? NoticeKind.warning : NoticeKind.success,
+    );
+  }
+
+  /// Multiline paste dialog for [_findByList]. Returns the entered text, or
+  /// null if cancelled.
+  Future<String?> _promptList() {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Find photos by filename'),
+        content: SizedBox(
+          width: 460,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Paste a list of filenames (from Capture One, Lightroom or '
+                'ContactSheet). Any separator works, and the extension is '
+                'optional — a JPEG list still selects your RAWs.',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                minLines: 4,
+                maxLines: 10,
+                decoration: const InputDecoration(
+                  hintText: '_AIV9551 _AIV9555 _AIV9562 …',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Find'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Saves the current grid selection under a name the user types, scoped to
+  /// the open import (`BUILD_PLAN.md` §5: saved selections).
+  Future<void> _saveSelection() async {
+    final importId = ref.read(currentImportProvider);
+    final ids = ref.read(cullControllerProvider).selectedIds;
+    if (importId == null) return;
+    if (ids.isEmpty) {
+      _notify(
+        'Select photos first to save a selection',
+        kind: NoticeKind.warning,
+      );
+      return;
+    }
+    final name = await _promptText(
+      title: 'Save selection',
+      hint: 'Selection name',
+    );
+    if (name == null || name.trim().isEmpty) return;
+    await ref
+        .read(appDatabaseProvider)
+        .saveSelection(
+          importId: importId,
+          name: name.trim(),
+          photoIds: ids.toList(),
+        );
+    if (!mounted) return;
+    _notify(
+      'Saved "${name.trim()}" (${ids.length} photo(s))',
+      kind: NoticeKind.success,
+    );
+    _gridFocus.requestFocus();
+  }
+
+  /// Replaces the grid selection with a previously saved one.
+  void _loadSelection(SavedSelection selection) {
+    ref
+        .read(cullControllerProvider.notifier)
+        .setSelection(
+          selection.photoIds.toSet(),
+        );
+    _gridFocus.requestFocus();
+    _notify('Loaded "${selection.name}" (${selection.photoIds.length})');
+  }
+
+  /// Deletes a saved selection.
+  Future<void> _deleteSelection(SavedSelection selection) async {
+    await ref.read(appDatabaseProvider).deleteSavedSelection(selection.id);
+    if (!mounted) return;
+    _notify('Deleted "${selection.name}"');
+  }
+
+  /// Shows a single-line text dialog and returns the entered text (or null if
+  /// cancelled). Used for naming a saved selection.
+  Future<String?> _promptText({
+    required String title,
+    required String hint,
+  }) {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(hintText: hint),
+          onSubmitted: (value) => Navigator.of(context).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+}
