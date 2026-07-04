@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cullimingo/app/theme/tokens.dart';
 import 'package:cullimingo/core/db/database.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
+import 'package:cullimingo/features/cull/presentation/widgets/grid_zoom_slider.dart';
 import 'package:cullimingo/features/filter/domain/photo_sort.dart';
 import 'package:cullimingo/features/filter/presentation/filter_providers.dart';
 import 'package:flutter/material.dart';
@@ -180,11 +181,9 @@ class CullTopBar extends StatelessWidget {
                       ),
                       SizedBox(
                         width: 140,
-                        child: Slider(
+                        child: GridZoomSlider(
                           value: cellWidth!,
-                          min: GridCellWidth.min,
-                          max: GridCellWidth.max,
-                          onChanged: onCellWidth,
+                          onCommit: onCellWidth!,
                         ),
                       ),
                       const _BarDivider(),
