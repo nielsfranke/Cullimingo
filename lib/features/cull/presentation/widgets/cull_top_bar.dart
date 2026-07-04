@@ -43,6 +43,8 @@ class CullTopBar extends StatelessWidget {
     this.onContactSheet,
     this.cellWidth,
     this.onCellWidth,
+    this.onZoomStart,
+    this.onZoomEnd,
     super.key,
   });
 
@@ -129,6 +131,13 @@ class CullTopBar extends StatelessWidget {
   /// Called as the size slider moves.
   final ValueChanged<double>? onCellWidth;
 
+  /// Called once when a size-slider drag begins (freezes decode + captures the
+  /// scroll anchor, so the live resize doesn't flicker/jump).
+  final VoidCallback? onZoomStart;
+
+  /// Called once when a size-slider drag ends (re-decode + restore the anchor).
+  final VoidCallback? onZoomEnd;
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -183,7 +192,9 @@ class CullTopBar extends StatelessWidget {
                         width: 140,
                         child: GridZoomSlider(
                           value: cellWidth!,
-                          onCommit: onCellWidth!,
+                          onChanged: onCellWidth!,
+                          onZoomStart: onZoomStart ?? () {},
+                          onZoomEnd: onZoomEnd ?? () {},
                         ),
                       ),
                       const _BarDivider(),

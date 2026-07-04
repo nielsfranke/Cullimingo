@@ -29,13 +29,21 @@ mixin _CullGrid on _CullNotices {
   // the jump happens with the new content's real maxScrollExtent.
   double? _pendingScrollRestore;
 
-  // The cell width from the last grid build, so a zoom change is detectable.
-  double? _lastCellWidth;
-
   // A grid item to hold steady across a zoom change (see [zoomAnchor]), or null
   // when no re-anchor is pending. Consumed after the new layout so the anchor
   // photo stays under the eye instead of scrolling away when thumbnails resize.
   ZoomAnchor? _pendingZoomAnchor;
+
+  // True while a size-slider drag is in progress. During the drag the grid
+  // reflows live, but the thumbnail decode width is frozen (see
+  // [_frozenDecodeWidth]) and the scroll re-anchor is deferred to drag-end — so
+  // a live zoom reflows smoothly instead of re-decoding every thumbnail and
+  // jumping the scroll every frame.
+  bool _zoomDragging = false;
+
+  // The thumbnail decode width held steady across a zoom drag (frozen on start,
+  // released on end), so the visible thumbnails aren't re-decoded per frame.
+  double _frozenDecodeWidth = GridCellWidth.fallback;
 
   // Debounced: a scroll or grid (re)layout triggers one prefetch once settled.
   void _schedulePrefetch() {
@@ -187,6 +195,24 @@ mixin _CullGrid on _CullNotices {
       );
     }
   }
+
+  /// A size-slider drag began: freeze the thumbnail decode width at the current
+  /// value and capture the scroll anchor now, so the live resize can reflow
+  /// every frame without re-decoding or re-anchoring until the drag settles.
+  void _onZoomStart() {
+    _frozenDecodeWidth = ref.read(gridCellWidthProvider);
+    _queueZoomReanchor(
+      ref.read(filteredPhotosProvider),
+      oldColumns: _columns,
+      oldExtent: _cellExtent,
+    );
+    setState(() => _zoomDragging = true);
+  }
+
+  /// The drag ended: go back to decoding at the live width (one gapless
+  /// re-decode) and apply the anchor captured on start — both happen in the
+  /// rebuild this `setState` triggers (see `_grid`).
+  void _onZoomEnd() => setState(() => _zoomDragging = false);
 
   /// Opens the loupe on [photoId] (from a double-click), focusing it first.
   void _openLoupe(int photoId) {

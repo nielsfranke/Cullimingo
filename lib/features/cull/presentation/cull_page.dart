@@ -260,6 +260,8 @@ class _CullPageState extends ConsumerState<CullPage>
                         : null,
                     onCellWidth: (w) =>
                         ref.read(gridCellWidthProvider.notifier).set(w),
+                    onZoomStart: total > 0 ? _onZoomStart : null,
+                    onZoomEnd: total > 0 ? _onZoomEnd : null,
                   ),
                   if (workspace.tabs.isNotEmpty)
                     CullTabBar(
@@ -384,13 +386,13 @@ class _CullPageState extends ConsumerState<CullPage>
 
   Widget _grid(List<Photo> photos) {
     final cellWidth = ref.watch(gridCellWidthProvider);
-    // A zoom (slider) change reflows the grid; capture an anchor from the
-    // outgoing layout so the photo under the eye doesn't scroll away (§7).
-    if (_lastCellWidth != null && _lastCellWidth != cellWidth) {
-      _queueZoomReanchor(photos, oldColumns: _columns, oldExtent: _cellExtent);
-    }
-    _lastCellWidth = cellWidth;
     _cellExtent = cellWidth * _cellAspect;
+    // While a zoom drag is live the thumbnails keep decoding at the frozen
+    // width, so the grid reflows every frame without re-decoding; on release we
+    // drop back to the live width for one gapless re-decode at full sharpness.
+    // The scroll re-anchor is captured on drag-start and applied on drag-end
+    // (see _onZoomStart/_onZoomEnd), never per frame — that was the jump.
+    final decodeWidth = _zoomDragging ? _frozenDecodeWidth : cellWidth;
     return Focus(
       focusNode: _gridFocus,
       autofocus: true,
@@ -407,7 +409,8 @@ class _CullPageState extends ConsumerState<CullPage>
           // photo away. Re-anchor on it too, the same as a zoom change — unless
           // the zoom path already queued an anchor this frame (don't clobber it
           // with the now-updated cell extent).
-          if (_pendingZoomAnchor == null &&
+          if (!_zoomDragging &&
+              _pendingZoomAnchor == null &&
               _columns > 0 &&
               newColumns != _columns) {
             _queueZoomReanchor(
@@ -420,9 +423,10 @@ class _CullPageState extends ConsumerState<CullPage>
           _viewportHeight = constraints.maxHeight;
           // The grid is laid out for this tab now — apply any pending scroll
           // restore (jump to the tab's saved offset, clamped to its content),
-          // then warm the visible window + lookahead.
+          // then warm the visible window + lookahead. The zoom re-anchor waits
+          // until the drag settles, so a live resize doesn't jumpTo per frame.
           _applyPendingScrollRestore();
-          _applyPendingZoomReanchor();
+          if (!_zoomDragging) _applyPendingZoomReanchor();
           _schedulePrefetch();
           return GridView.builder(
             controller: _scroll,
@@ -436,7 +440,7 @@ class _CullPageState extends ConsumerState<CullPage>
             itemCount: photos.length,
             itemBuilder: (context, i) => GridCell(
               photo: photos[i],
-              cellWidth: cellWidth,
+              cellWidth: decodeWidth,
               onOpenLoupe: _openLoupe,
               onTransfer: _transfer,
               onSendTo: (editor) => unawaited(_sendTo(editor)),
