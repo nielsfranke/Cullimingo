@@ -258,8 +258,7 @@ class _CullPageState extends ConsumerState<CullPage>
                     cellWidth: total > 0
                         ? ref.watch(gridCellWidthProvider)
                         : null,
-                    onCellWidth: (w) =>
-                        ref.read(gridCellWidthProvider.notifier).set(w),
+                    onCellWidth: _onZoomChanged,
                     onZoomStart: total > 0 ? _onZoomStart : null,
                     onZoomEnd: total > 0 ? _onZoomEnd : null,
                   ),
@@ -390,8 +389,8 @@ class _CullPageState extends ConsumerState<CullPage>
     // While a zoom drag is live the thumbnails keep decoding at the frozen
     // width, so the grid reflows every frame without re-decoding; on release we
     // drop back to the live width for one gapless re-decode at full sharpness.
-    // The scroll offset is left untouched throughout, so the grid stays exactly
-    // where the drag left it (see _onZoomStart/_onZoomEnd).
+    // The scroll is re-anchored around the captured photo synchronously in
+    // _onZoomChanged, so the grid zooms in place (see _onZoomStart).
     final decodeWidth = _zoomDragging ? _frozenDecodeWidth : cellWidth;
     return Focus(
       focusNode: _gridFocus,
@@ -421,6 +420,7 @@ class _CullPageState extends ConsumerState<CullPage>
           }
           _columns = newColumns;
           _viewportHeight = constraints.maxHeight;
+          _gridWidth = constraints.maxWidth;
           // The grid is laid out for this tab now — apply any pending scroll
           // restore (jump to the tab's saved offset, clamped to its content),
           // then warm the visible window + lookahead. A pending re-anchor (from

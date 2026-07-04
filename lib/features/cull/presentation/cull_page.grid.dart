@@ -44,6 +44,15 @@ mixin _CullGrid on _CullNotices {
   // released on end), so the visible thumbnails aren't re-decoded per frame.
   double _frozenDecodeWidth = GridCellWidth.fallback;
 
+  // The grid's cross-axis width from the last layout, cached so a zoom drag can
+  // recompute the column count synchronously while re-anchoring the scroll.
+  double _gridWidth = 0;
+
+  // The photo to hold under the eye across a zoom drag (the focused one if it's
+  // on screen, else the viewport-centre one). Captured on drag-start, applied
+  // on every width change so the grid zooms *around* it. Null between drags.
+  ZoomAnchor? _zoomAnchor;
+
   // Debounced: a scroll or grid (re)layout triggers one prefetch once settled.
   void _schedulePrefetch() {
     _prefetchTimer?.cancel();
@@ -195,18 +204,68 @@ mixin _CullGrid on _CullNotices {
     }
   }
 
-  /// A size-slider drag began: freeze the thumbnail decode width at the current
-  /// value so the live resize can reflow every frame without re-decoding until
-  /// the drag settles. The scroll offset is left alone — the grid stays exactly
-  /// where the live drag put it, rather than snapping to a re-anchored row.
+  /// A size-slider drag began: freeze the thumbnail decode width and capture
+  /// the photo to hold steady — the focused one if it's on screen, else the one
+  /// nearest the viewport centre (see [zoomAnchor]). The anchor is then applied
+  /// synchronously on every width change ([_onZoomChanged]) so the grid zooms
+  /// *around* that photo, without re-decoding or lagging a frame behind.
   void _onZoomStart() {
+    final photos = ref.read(filteredPhotosProvider);
+    final focusedId = ref.read(cullControllerProvider).focusedId;
+    _zoomAnchor = _scroll.hasClients
+        ? zoomAnchor(
+            offset: _scroll.offset,
+            viewportHeight: _viewportHeight,
+            columns: _columns,
+            rowHeight: _cellExtent + _cellSpacing,
+            count: photos.length,
+            focusedIndex: focusedId == null
+                ? -1
+                : photos.indexWhere((p) => p.id == focusedId),
+          )
+        : null;
     _frozenDecodeWidth = ref.read(gridCellWidthProvider);
     setState(() => _zoomDragging = true);
   }
 
+  /// The size slider moved: set the new width and, in the same gesture
+  /// callback, re-anchor the scroll so the captured photo keeps its on-screen
+  /// position. Doing it here (not in a post-frame callback) keeps the width and
+  /// offset in step, so the grid zooms smoothly instead of lurching a frame
+  /// behind.
+  void _onZoomChanged(double width) {
+    ref.read(gridCellWidthProvider.notifier).set(width);
+    final anchor = _zoomAnchor;
+    if (anchor == null || !_scroll.hasClients || _gridWidth <= 0) return;
+    final count = ref.read(filteredPhotosProvider).length;
+    final columns = (_gridWidth / width).floor().clamp(1, 12);
+    final cellExtent = width * _cellAspect;
+    final rows = (count / columns).ceil();
+    // Mirror the GridView's own content extent (vertical padding + rows +
+    // inter-row gaps) so the re-anchored offset can't overscroll past the new
+    // layout's bottom.
+    final contentHeight =
+        2 * AppSpacing.md + rows * cellExtent + (rows - 1) * _cellSpacing;
+    final maxScroll = (contentHeight - _viewportHeight).clamp(
+      0.0,
+      double.infinity,
+    );
+    _scroll.jumpTo(
+      zoomReanchorOffset(
+        anchor: anchor,
+        columns: columns,
+        rowHeight: cellExtent + _cellSpacing,
+        maxScrollExtent: maxScroll,
+      ),
+    );
+  }
+
   /// The drag ended: go back to decoding at the live width (one gapless
-  /// re-decode), which the rebuild this `setState` triggers picks up.
-  void _onZoomEnd() => setState(() => _zoomDragging = false);
+  /// re-decode, via the rebuild this `setState` triggers) and drop the anchor.
+  void _onZoomEnd() {
+    _zoomAnchor = null;
+    setState(() => _zoomDragging = false);
+  }
 
   /// Opens the loupe on [photoId] (from a double-click), focusing it first.
   void _openLoupe(int photoId) {
