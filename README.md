@@ -37,6 +37,17 @@ get through thousands of frames and keep the keepers, fast.
 </p>
 <p align="center"><sub>Rating, flagging and colouring a shoot in the grid · <a href="https://github.com/nielsfranke/Cullimingo/wiki/Screenshots">more screenshots →</a> · placeholder photos via <a href="https://picsum.photos/">Lorem Picsum</a> (Unsplash; see <a href="docs/screenshots/CREDITS.md">credits</a>)</sub></p>
 
+## About
+
+I built Cullimingo for myself — a fast, keyboard-first way to get through
+thousands of frames and keep the keepers, without a subscription or a
+heavyweight forever-catalog. There's plenty of paid culling software but little
+that's open-source and self-owned, so I made my own. I'm not a professional
+developer and much of it was built with AI assistance
+([Claude Code](https://claude.com/claude-code)) under my direction, so expect
+the odd rough edge — [bug reports](https://github.com/nielsfranke/Cullimingo/issues)
+are very welcome.
+
 ## Download
 
 Grab the latest build from the
@@ -143,9 +154,22 @@ RAW/thumbnail decode (`brew install libraw vips`, or the distro `-dev` packages)
 Full setup and the pre-commit checks are in
 [**Development**](https://github.com/nielsfranke/Cullimingo/wiki/Development).
 
+## Support
+
+Cullimingo is free, open-source, and built in my spare time. If it saves you
+time on a shoot and you'd like to help keep it going, you can buy me a coffee —
+every bit is appreciated. ☕
+
+[![Support me on Ko-fi](https://img.shields.io/badge/Support%20me-Ko--fi-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/nielsfranke)
+
 ## License
 
-[GNU AGPL-3.0-or-later](LICENSE).
+[GNU AGPL-3.0-or-later](LICENSE). Cullimingo is free software — use, modify, and
+self-host it freely. If you distribute a modified version, you must release your
+changes under the same license and make the corresponding source available.
+
+Contributions are welcome under a simple
+[Contributor License Agreement](CLA.md).
 
 Reverse geocoding uses place data from [GeoNames](https://www.geonames.org)
 ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)), bundled as
