@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 /// The toolbar grid-size slider.
 ///
 /// The grid resizes **live** as you drag ([onChanged] fires every frame), but
-/// the two expensive reactions are deferred to the drag boundaries:
-/// [onZoomStart] freezes the thumbnail decode resolution and captures a scroll
-/// anchor; [onZoomEnd] re-decodes once and restores the anchor. Doing those per
-/// drag-frame (as it once did) re-decoded every visible thumbnail and issued a
-/// scroll `jumpTo` on every frame — which flickered and jumped the grid.
+/// the expensive thumbnail re-decode is deferred to the drag boundaries:
+/// [onZoomStart] freezes the decode resolution so the cells just scale while
+/// dragging, and [onZoomEnd] re-decodes once at the settled size. Re-decoding
+/// (and re-anchoring the scroll) on every drag frame was what flickered and
+/// jumped the grid.
 class GridZoomSlider extends StatelessWidget {
   /// Creates the slider.
   const GridZoomSlider({

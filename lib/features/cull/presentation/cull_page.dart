@@ -390,8 +390,8 @@ class _CullPageState extends ConsumerState<CullPage>
     // While a zoom drag is live the thumbnails keep decoding at the frozen
     // width, so the grid reflows every frame without re-decoding; on release we
     // drop back to the live width for one gapless re-decode at full sharpness.
-    // The scroll re-anchor is captured on drag-start and applied on drag-end
-    // (see _onZoomStart/_onZoomEnd), never per frame — that was the jump.
+    // The scroll offset is left untouched throughout, so the grid stays exactly
+    // where the drag left it (see _onZoomStart/_onZoomEnd).
     final decodeWidth = _zoomDragging ? _frozenDecodeWidth : cellWidth;
     return Focus(
       focusNode: _gridFocus,
@@ -423,8 +423,9 @@ class _CullPageState extends ConsumerState<CullPage>
           _viewportHeight = constraints.maxHeight;
           // The grid is laid out for this tab now — apply any pending scroll
           // restore (jump to the tab's saved offset, clamped to its content),
-          // then warm the visible window + lookahead. The zoom re-anchor waits
-          // until the drag settles, so a live resize doesn't jumpTo per frame.
+          // then warm the visible window + lookahead. A pending re-anchor (from
+          // an inspector-driven reflow) is held while a zoom drag is live so it
+          // can't jump the scroll mid-resize.
           _applyPendingScrollRestore();
           if (!_zoomDragging) _applyPendingZoomReanchor();
           _schedulePrefetch();

@@ -36,9 +36,8 @@ mixin _CullGrid on _CullNotices {
 
   // True while a size-slider drag is in progress. During the drag the grid
   // reflows live, but the thumbnail decode width is frozen (see
-  // [_frozenDecodeWidth]) and the scroll re-anchor is deferred to drag-end — so
-  // a live zoom reflows smoothly instead of re-decoding every thumbnail and
-  // jumping the scroll every frame.
+  // [_frozenDecodeWidth]) — so a live zoom reflows smoothly instead of
+  // re-decoding every visible thumbnail every frame.
   bool _zoomDragging = false;
 
   // The thumbnail decode width held steady across a zoom drag (frozen on start,
@@ -197,21 +196,16 @@ mixin _CullGrid on _CullNotices {
   }
 
   /// A size-slider drag began: freeze the thumbnail decode width at the current
-  /// value and capture the scroll anchor now, so the live resize can reflow
-  /// every frame without re-decoding or re-anchoring until the drag settles.
+  /// value so the live resize can reflow every frame without re-decoding until
+  /// the drag settles. The scroll offset is left alone — the grid stays exactly
+  /// where the live drag put it, rather than snapping to a re-anchored row.
   void _onZoomStart() {
     _frozenDecodeWidth = ref.read(gridCellWidthProvider);
-    _queueZoomReanchor(
-      ref.read(filteredPhotosProvider),
-      oldColumns: _columns,
-      oldExtent: _cellExtent,
-    );
     setState(() => _zoomDragging = true);
   }
 
   /// The drag ended: go back to decoding at the live width (one gapless
-  /// re-decode) and apply the anchor captured on start — both happen in the
-  /// rebuild this `setState` triggers (see `_grid`).
+  /// re-decode), which the rebuild this `setState` triggers picks up.
   void _onZoomEnd() => setState(() => _zoomDragging = false);
 
   /// Opens the loupe on [photoId] (from a double-click), focusing it first.
