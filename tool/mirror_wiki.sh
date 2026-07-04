@@ -29,11 +29,15 @@ trap 'rm -rf "$work"' EXIT
 echo "Cloning Forgejo wiki: $FORGEJO_WIKI_URL"
 git clone --bare "$FORGEJO_WIKI_URL" "$work/wiki.git"
 
-echo "Pushing (mirror) to GitHub wiki: ${GITHUB_WIKI_URL%%:*}…"
-# --mirror makes the GitHub wiki an exact copy: pages deleted on Forgejo are
-# deleted on GitHub too. This is one-way (Forgejo → GitHub), matching the code
-# mirror's direction, so never edit the GitHub wiki directly — changes there are
-# overwritten on the next run.
-git -C "$work/wiki.git" push --mirror "$GITHUB_WIKI_URL"
+echo "Pushing to GitHub wiki: ${GITHUB_WIKI_URL%%:*}…"
+# Branch mismatch: Forgejo serves wikis from `main`, but GitHub renders its wiki
+# from `master`. A plain `push --mirror` would push `main` and DELETE `master`,
+# leaving the GitHub wiki showing an empty "Pages" list. So map main → master
+# with a force push (one-way, Forgejo → GitHub — never edit the GitHub wiki
+# directly; it's overwritten on the next run). Force-replacing master's tip with
+# main's is an "exact copy" for the content branch: pages deleted on Forgejo are
+# gone from the pushed tree too.
+git -C "$work/wiki.git" push --force "$GITHUB_WIKI_URL" \
+  "refs/heads/main:refs/heads/master"
 
 echo "Wiki mirrored."
