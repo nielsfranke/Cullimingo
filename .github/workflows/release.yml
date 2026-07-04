@@ -99,6 +99,8 @@ jobs:
       GH_REPO: ${{ github.repository }}
       TAG: ${{ github.ref_name }}
     steps:
+      - uses: actions/checkout@v4 # for CHANGELOG.md
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -107,8 +109,22 @@ jobs:
       - name: Publish the Release with artifacts
         run: |
           set -euo pipefail
+          VERSION="${TAG#v}"
 
-          # Install instructions shown at the top of the Release notes.
+          # Pull this version's section out of CHANGELOG.md (between its
+          # "## <version>" heading and the next "## " heading). This is the
+          # curated fixes/features list; --generate-notes only lists merged PRs,
+          # which this one-way mirror never has, so it produced empty notes.
+          changelog="$(awk -v v="$VERSION" '
+            $0 ~ "^## " v "( |$)" { grab = 1; next }
+            /^## / && grab { exit }
+            grab { print }
+          ' CHANGELOG.md)"
+          if [ -z "$changelog" ]; then
+            changelog="See the [full changelog](https://github.com/${GH_REPO}/blob/main/CHANGELOG.md)."
+          fi
+
+          # Install instructions shown below the changes.
           cat > install.md <<'EOF'
           ## Install
 
@@ -129,30 +145,29 @@ jobs:
           3. Launch it from Applications.
           EOF
 
+          # Notes = what changed (from CHANGELOG) + install instructions.
+          {
+            printf "## What's changed\n\n"
+            printf '%s\n\n' "$changelog"
+            cat install.md
+          } > notes.md
+
           # A hyphen in the tag (v1.1.0-rc.1) marks a pre-release.
           prerelease_flag=""
           case "$TAG" in
             *-*) prerelease_flag="--prerelease" ;;
           esac
 
-          # Idempotent: create the Release if absent, else refresh its artifacts.
+          # Idempotent: create the Release if absent, else refresh its artifacts
+          # and notes (so a re-run after editing the changelog updates them).
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
+            gh release edit "$TAG" --notes-file notes.md
           else
             gh release create "$TAG" \
               --title "Cullimingo ${TAG#v}" \
-              --generate-notes \
+              --notes-file notes.md \
               --verify-tag \
               $prerelease_flag \
               dist/*
           fi
-
-          # Prepend the install instructions to the auto-generated notes (once).
-          body="$(gh release view "$TAG" --json body -q .body)"
-          case "$body" in
-            *"## Install"*) echo "Notes already carry install instructions." ;;
-            *)
-              { cat install.md; printf '\n'; printf '%s\n' "$body"; } > notes.md
-              gh release edit "$TAG" --notes-file notes.md
-              ;;
-          esac
