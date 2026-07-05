@@ -1,9 +1,13 @@
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
 
 import 'package:cullimingo/core/files/exif_reader.dart';
 import 'package:cullimingo/core/files/supported_files.dart';
+import 'package:cullimingo/core/raw/libraw_metadata.dart';
+import 'package:cullimingo/core/raw/libraw_preview_extractor.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
+import 'package:flutter_libraw/flutter_libraw.dart';
 import 'package:path/path.dart' as p;
 
 /// One file found by the fast scan pass: just path + stat, no EXIF yet.
@@ -52,6 +56,8 @@ class ScannedExif {
     this.latitude,
     this.longitude,
     this.orientation,
+    this.exposureBias,
+    this.exposureTime,
   });
 
   /// The file this EXIF belongs to.
@@ -77,6 +83,12 @@ class ScannedExif {
 
   /// EXIF orientation (1–8), when available.
   final int? orientation;
+
+  /// Exposure compensation in EV, when available.
+  final double? exposureBias;
+
+  /// Shutter speed in seconds, when available.
+  final double? exposureTime;
 }
 
 /// Fast pass: list [root] and `stat` each matching file — no EXIF decode, so it
@@ -140,16 +152,64 @@ String _stem(String path) =>
     p.join(p.dirname(path), p.basenameWithoutExtension(path)).toLowerCase();
 
 /// Backfill pass: read EXIF for [paths] on a background isolate. This is the
-/// slow part (opening each file), kept off the import critical path.
+/// slow part (opening each file), kept off the import critical path. The RAW
+/// libraw path (resolved on the caller's isolate, since it needs the packaged
+/// bundle layout) lets the pass fall back to LibRaw for container formats whose
+/// EXIF the `exif` package can't reach (Fuji `.RAF`).
 Future<List<ScannedExif>> scanExif(List<String> paths) {
-  return Isolate.run(() => _readExif(paths));
+  final rawLibPath = LibRawPreviewExtractor.resolveLibraryPath();
+  return Isolate.run(() => _readExif(paths, rawLibPath));
 }
 
-Future<List<ScannedExif>> _readExif(List<String> paths) async {
+Future<List<ScannedExif>> _readExif(
+  List<String> paths,
+  String? rawLibPath,
+) async {
+  // Open libraw once for the whole batch (only if we actually hit a RAW that
+  // the exif package couldn't read).
+  FlutterLibRawBindings? lr;
+  FlutterLibRawBindings? libraw() {
+    if (rawLibPath == null) return null;
+    try {
+      return lr ??= FlutterLibRawBindings(DynamicLibrary.open(rawLibPath));
+    } on Object {
+      return null;
+    }
+  }
+
   final out = <ScannedExif>[];
   for (final path in paths) {
-    final exif = await readPhotoExif(File(path));
-    if (exif.isEmpty) continue;
+    var exif = await readPhotoExif(File(path));
+
+    // Fuji `.RAF` (and similar wrapped containers) hide their EXIF from the
+    // pure-Dart reader, so capture time / camera / shutter come back null.
+    // LibRaw parses them natively — fill only the gaps so TIFF-based raws
+    // (DNG/ARW/CR2/NEF) keep their richer exif fields (incl. exposure bias).
+    if (isRawPath(path) &&
+        (exif.capturedAt == null ||
+            exif.exposureTime == null ||
+            exif.camera == null)) {
+      final bindings = libraw();
+      if (bindings != null) {
+        final raw = readRawMetadata(bindings, path);
+        exif = PhotoExif(
+          capturedAt: exif.capturedAt ?? raw.capturedAt,
+          camera: exif.camera ?? raw.camera,
+          width: exif.width,
+          height: exif.height,
+          latitude: exif.latitude,
+          longitude: exif.longitude,
+          orientation: exif.orientation,
+          exposureBias: exif.exposureBias,
+          exposureTime: exif.exposureTime ?? raw.exposureTime,
+        );
+      }
+    }
+
+    // Emit a record even when nothing was found, so the caller can write the
+    // "scanned, no exposure tag" sentinel and never re-scan the file; skip only
+    // videos (they carry no bracket signal and shouldn't get the sentinel).
+    if (exif.isEmpty && isVideoPath(path)) continue;
     // (0,0) means "GPS block present but no fix" — treat as no position.
     final hasFix =
         exif.latitude != null &&
@@ -165,6 +225,8 @@ Future<List<ScannedExif>> _readExif(List<String> paths) async {
         latitude: hasFix ? exif.latitude : null,
         longitude: hasFix ? exif.longitude : null,
         orientation: exif.orientation,
+        exposureBias: exif.exposureBias,
+        exposureTime: exif.exposureTime,
       ),
     );
   }

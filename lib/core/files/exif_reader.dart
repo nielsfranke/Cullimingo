@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cullimingo/core/files/exif_values.dart';
 import 'package:cullimingo/core/files/image_dimensions.dart';
 import 'package:exif/exif.dart';
 
@@ -16,6 +17,8 @@ class PhotoExif {
     this.latitude,
     this.longitude,
     this.orientation,
+    this.exposureBias,
+    this.exposureTime,
   });
 
   /// EXIF DateTimeOriginal, when present.
@@ -39,6 +42,14 @@ class PhotoExif {
   /// GPS longitude in decimal degrees (west negative), when present.
   final double? longitude;
 
+  /// Exposure compensation in EV (`EXIF ExposureBiasValue`), when present.
+  /// Drives exposure-bracket grouping.
+  final double? exposureBias;
+
+  /// Shutter speed in seconds (`EXIF ExposureTime`), when present. Bracket
+  /// grouping uses it to allow the long gaps long exposures cause.
+  final double? exposureTime;
+
   /// True when nothing useful was found.
   bool get isEmpty =>
       capturedAt == null &&
@@ -47,7 +58,9 @@ class PhotoExif {
       height == null &&
       latitude == null &&
       longitude == null &&
-      orientation == null;
+      orientation == null &&
+      exposureBias == null &&
+      exposureTime == null;
 }
 
 /// Reads [PhotoExif] from [file] using the streaming `exif` reader (no full
@@ -99,6 +112,8 @@ Future<PhotoExif> readPhotoExif(File file) async {
       limit: 180,
     ),
     orientation: _orientation(tags),
+    exposureBias: exifNum(tags, 'EXIF ExposureBiasValue'),
+    exposureTime: exifNum(tags, 'EXIF ExposureTime'),
   );
 }
 

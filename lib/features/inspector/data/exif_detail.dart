@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:cullimingo/core/files/exif_values.dart';
 import 'package:exif/exif.dart';
 
 /// The richer EXIF fields the metadata inspector shows beyond what the drift
@@ -69,41 +70,19 @@ Future<ExifDetail> _readExifDetail(String path) async {
   }
   if (tags.isEmpty) return const ExifDetail();
 
-  final iso = _num(tags, 'EXIF ISOSpeedRatings');
+  final iso = exifNum(tags, 'EXIF ISOSpeedRatings');
   return ExifDetail(
-    lens: _text(tags, 'EXIF LensModel'),
-    aperture: _num(tags, 'EXIF FNumber'),
-    shutterSeconds: _num(tags, 'EXIF ExposureTime'),
+    lens: exifText(tags, 'EXIF LensModel'),
+    aperture: exifNum(tags, 'EXIF FNumber'),
+    shutterSeconds: exifNum(tags, 'EXIF ExposureTime'),
     iso: iso?.round(),
-    focalLength: _num(tags, 'EXIF FocalLength'),
-    exposureBias: _num(tags, 'EXIF ExposureBiasValue'),
+    focalLength: exifNum(tags, 'EXIF FocalLength'),
+    exposureBias: exifNum(tags, 'EXIF ExposureBiasValue'),
     width:
-        _num(tags, 'EXIF ExifImageWidth')?.round() ??
-        _num(tags, 'Image ImageWidth')?.round(),
+        exifNum(tags, 'EXIF ExifImageWidth')?.round() ??
+        exifNum(tags, 'Image ImageWidth')?.round(),
     height:
-        _num(tags, 'EXIF ExifImageLength')?.round() ??
-        _num(tags, 'Image ImageLength')?.round(),
+        exifNum(tags, 'EXIF ExifImageLength')?.round() ??
+        exifNum(tags, 'Image ImageLength')?.round(),
   );
-}
-
-String? _text(Map<String, IfdTag> tags, String key) {
-  final s = tags[key]?.printable.trim();
-  return (s == null || s.isEmpty) ? null : s;
-}
-
-/// Parses an EXIF numeric/ratio printable (`28/10`, `2.8`, `[400]`) to a
-/// double; tolerant of brackets and comma-separated lists (takes the first).
-double? _num(Map<String, IfdTag> tags, String key) {
-  var s = tags[key]?.printable.trim();
-  if (s == null || s.isEmpty) return null;
-  s = s.replaceAll('[', '').replaceAll(']', '').trim();
-  if (s.contains(',')) s = s.split(',').first.trim();
-  final slash = s.indexOf('/');
-  if (slash >= 0) {
-    final n = double.tryParse(s.substring(0, slash).trim());
-    final d = double.tryParse(s.substring(slash + 1).trim());
-    if (n == null || d == null || d == 0) return null;
-    return n / d;
-  }
-  return double.tryParse(s);
 }

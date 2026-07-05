@@ -91,6 +91,25 @@ void main() {
     expect(exif.longitude, isNull);
   });
 
+  test('parses exposure bias and exposure time', () async {
+    final image = img.Image(width: 24, height: 16);
+    image.exif.imageIfd['Make'] = 'FUJIFILM';
+    image.exif.exifIfd['ExposureBiasValue'] = img.IfdValueSRational(-3, 1);
+    image.exif.exifIfd['ExposureTime'] = img.IfdValueRational(1, 100);
+    final file = File(p.join(tmp.path, 'bracket.jpg'))
+      ..writeAsBytesSync(img.encodeJpg(image));
+
+    final exif = await readPhotoExif(file);
+    expect(exif.exposureBias, -3.0);
+    expect(exif.exposureTime, closeTo(0.01, 0.000001));
+  });
+
+  test('exposure fields are null when the tags are absent', () async {
+    final exif = await readPhotoExif(writeJpegWithExif());
+    expect(exif.exposureBias, isNull);
+    expect(exif.exposureTime, isNull);
+  });
+
   test('returns empty for a file without EXIF', () async {
     final plain = File(p.join(tmp.path, 'plain.jpg'))
       ..writeAsBytesSync(img.encodeJpg(img.Image(width: 8, height: 8)));
