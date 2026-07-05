@@ -91,6 +91,12 @@ Future<void> main() async {
         autoAdvanceAfterMarkSeedProvider.overrideWithValue(
           settings.autoAdvanceAfterMark,
         ),
+        propagateMarksToStackSeedProvider.overrideWithValue(
+          settings.propagateMarksToStack,
+        ),
+        autoExpandBracketsOnSelectSeedProvider.overrideWithValue(
+          settings.autoExpandBracketsOnSelect,
+        ),
         cullShortcutsSeedProvider.overrideWithValue(settings.shortcutOverrides),
         shortcutsHintSeenSeedProvider.overrideWithValue(
           settings.hasSeenShortcutsHint,

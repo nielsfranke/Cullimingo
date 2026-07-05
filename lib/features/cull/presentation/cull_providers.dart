@@ -18,6 +18,7 @@ import 'package:cullimingo/features/cull/domain/preview_retry.dart';
 import 'package:cullimingo/features/cull/domain/recent_folders.dart';
 import 'package:cullimingo/features/filter/domain/photo_filter.dart';
 import 'package:cullimingo/features/filter/domain/photo_sort.dart';
+import 'package:cullimingo/features/filter/presentation/filter_providers.dart';
 import 'package:cullimingo/features/library/data/library_repository.dart';
 import 'package:cullimingo/features/metadata/data/metadata_repository.dart';
 import 'package:cullimingo/features/metadata/domain/iptc_core.dart';
@@ -222,6 +223,48 @@ class AutoAdvanceAfterMark extends _$AutoAdvanceAfterMark {
   void set(bool value) {
     state = value;
     unawaited(AppSettings.load().then((s) => s.setAutoAdvanceAfterMark(value)));
+  }
+}
+
+/// Startup seed for [PropagateMarksToStack].
+@Riverpod(keepAlive: true)
+bool propagateMarksToStackSeed(Ref ref) => false;
+
+/// Whether marking a photo also marks the rest of its exposure bracket
+/// (Settings → Interface). Read by [CullController]; persisted.
+@Riverpod(keepAlive: true)
+class PropagateMarksToStack extends _$PropagateMarksToStack {
+  @override
+  bool build() => ref.watch(propagateMarksToStackSeedProvider);
+
+  /// Turns bracket mark-propagation on or off and remembers the choice.
+  // ignore: avoid_positional_boolean_parameters — simple flag setter.
+  void set(bool value) {
+    state = value;
+    unawaited(
+      AppSettings.load().then((s) => s.setPropagateMarksToStack(value)),
+    );
+  }
+}
+
+/// Startup seed for [AutoExpandBracketsOnSelect].
+@Riverpod(keepAlive: true)
+bool autoExpandBracketsOnSelectSeed(Ref ref) => false;
+
+/// Whether pulling client picks in auto-expands the selection to each pick's
+/// exposure bracket (Settings → Interface). Read by the page; persisted.
+@Riverpod(keepAlive: true)
+class AutoExpandBracketsOnSelect extends _$AutoExpandBracketsOnSelect {
+  @override
+  bool build() => ref.watch(autoExpandBracketsOnSelectSeedProvider);
+
+  /// Turns auto-expand-on-select on or off and remembers the choice.
+  // ignore: avoid_positional_boolean_parameters — simple flag setter.
+  void set(bool value) {
+    state = value;
+    unawaited(
+      AppSettings.load().then((s) => s.setAutoExpandBracketsOnSelect(value)),
+    );
   }
 }
 
@@ -818,21 +861,35 @@ class CullController extends _$CullController {
     );
   }
 
-  /// Sets [rating] on every [CullSelection.markTargets] photo (batch marking).
+  /// The photos a batch mark applies to: [CullSelection.markTargets], grown to
+  /// each target's whole exposure bracket when the propagate-to-stack setting
+  /// is on — so rating/flagging the reference frame carries to its ±EV
+  /// siblings without an explicit expand.
+  Set<int> get _effectiveMarkTargets {
+    final base = state.markTargets;
+    if (base.isEmpty || !ref.read(propagateMarksToStackProvider)) return base;
+    final groups = ref.read(bracketGroupsProvider);
+    return {
+      for (final id in base) ...groups.groupOf(id),
+    };
+  }
+
+  /// Sets [rating] on every effective mark target (batch marking).
   Future<void> applyRating(int rating) =>
-      _setRatingAll(state.markTargets, rating);
+      _setRatingAll(_effectiveMarkTargets, rating);
 
-  /// Sets [flag] on every [CullSelection.markTargets] photo (batch marking).
-  Future<void> applyFlag(PickFlag flag) => _setFlagAll(state.markTargets, flag);
+  /// Sets [flag] on every effective mark target (batch marking).
+  Future<void> applyFlag(PickFlag flag) =>
+      _setFlagAll(_effectiveMarkTargets, flag);
 
-  /// Sets [label] on every [CullSelection.markTargets] photo (batch marking).
+  /// Sets [label] on every effective mark target (batch marking).
   Future<void> applyColor(ColorLabel label) =>
-      _setColorAll(state.markTargets, label);
+      _setColorAll(_effectiveMarkTargets, label);
 
-  /// Rotates every [CullSelection.markTargets] photo by [quarterTurnsCW]
-  /// clockwise quarter-turns (negative = counter-clockwise). Batch rotate.
+  /// Rotates every effective mark target by [quarterTurnsCW] clockwise
+  /// quarter-turns (negative = counter-clockwise). Batch rotate.
   Future<void> applyRotation(int quarterTurnsCW) =>
-      _rotateAll(state.markTargets.toList(), quarterTurnsCW);
+      _rotateAll(_effectiveMarkTargets.toList(), quarterTurnsCW);
 
   /// Manually stacks every [CullSelection.markTargets] photo into one exposure
   /// bracket, overriding automatic detection (a fresh stack id, mirrored to the

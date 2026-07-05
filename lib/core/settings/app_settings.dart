@@ -323,6 +323,26 @@ class AppSettings {
   Future<void> setAutoAdvanceAfterMark(bool value) =>
       _setAll({'autoAdvanceAfterMark': value});
 
+  /// Whether marking (rate/flag/colour/rotate) a photo also applies the mark to
+  /// the rest of its exposure bracket (default false).
+  bool get propagateMarksToStack =>
+      _data['propagateMarksToStack'] as bool? ?? false;
+
+  /// Sets the propagate-marks-to-stack preference.
+  // ignore: avoid_positional_boolean_parameters — simple flag setter.
+  Future<void> setPropagateMarksToStack(bool value) =>
+      _setAll({'propagateMarksToStack': value});
+
+  /// Whether pulling client picks in (Find-by-list / ContactSheet) auto-expands
+  /// the selection to each pick's exposure bracket (default false).
+  bool get autoExpandBracketsOnSelect =>
+      _data['autoExpandBracketsOnSelect'] as bool? ?? false;
+
+  /// Sets the auto-expand-brackets-on-select preference.
+  // ignore: avoid_positional_boolean_parameters — simple flag setter.
+  Future<void> setAutoExpandBracketsOnSelect(bool value) =>
+      _setAll({'autoExpandBracketsOnSelect': value});
+
   /// Whether to reopen the last session's folders on startup (default false).
   bool get reopenLastFolders => _data['reopenLastFolders'] as bool? ?? false;
 

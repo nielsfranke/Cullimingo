@@ -137,6 +137,8 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
   late bool _checkForUpdates = widget.initialCheckForUpdates;
   late bool _showTooltips = ref.read(tooltipsEnabledProvider);
   late bool _autoAdvanceAfterMark = ref.read(autoAdvanceAfterMarkProvider);
+  late bool _propagateMarksToStack = ref.read(propagateMarksToStackProvider);
+  late bool _autoExpandBrackets = ref.read(autoExpandBracketsOnSelectProvider);
   late bool _markConfirmation = ref.read(markConfirmationEnabledProvider);
   late List<ExternalEditor> _editors = [...widget.initialEditors];
   late List<DeliveryServer> _servers = [...widget.initialServers];
@@ -170,6 +172,12 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
     // their providers.
     ref.read(tooltipsEnabledProvider.notifier).set(_showTooltips);
     ref.read(autoAdvanceAfterMarkProvider.notifier).set(_autoAdvanceAfterMark);
+    ref
+        .read(propagateMarksToStackProvider.notifier)
+        .set(_propagateMarksToStack);
+    ref
+        .read(autoExpandBracketsOnSelectProvider.notifier)
+        .set(_autoExpandBrackets);
     ref.read(markConfirmationEnabledProvider.notifier).set(_markConfirmation);
     // Persist in the background and pop immediately — the page only needs the
     // result, and a settings save shouldn't block closing the dialog. Capture
@@ -468,6 +476,20 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
         value: _markConfirmation,
         onChanged: (v) => setState(() => _markConfirmation = v ?? true),
         label: 'Flash a confirmation over the loupe when you mark a photo',
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      const DialogSection('Exposure brackets'),
+      DialogCheckbox(
+        value: _propagateMarksToStack,
+        onChanged: (v) => setState(() => _propagateMarksToStack = v ?? false),
+        label: 'Apply ratings, flags and colours to the whole bracket',
+      ),
+      DialogCheckbox(
+        value: _autoExpandBrackets,
+        onChanged: (v) => setState(() => _autoExpandBrackets = v ?? false),
+        label:
+            'Expand pulled-in client picks (Find / ContactSheet) to their '
+            'brackets automatically',
       ),
       const SizedBox(height: AppSpacing.lg),
       const DialogSection('Startup'),

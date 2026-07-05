@@ -762,6 +762,228 @@ abstract class _$AutoAdvanceAfterMark extends $Notifier<bool> {
   }
 }
 
+/// Startup seed for [PropagateMarksToStack].
+
+@ProviderFor(propagateMarksToStackSeed)
+final propagateMarksToStackSeedProvider = PropagateMarksToStackSeedProvider._();
+
+/// Startup seed for [PropagateMarksToStack].
+
+final class PropagateMarksToStackSeedProvider
+    extends $FunctionalProvider<bool, bool, bool>
+    with $Provider<bool> {
+  /// Startup seed for [PropagateMarksToStack].
+  PropagateMarksToStackSeedProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'propagateMarksToStackSeedProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$propagateMarksToStackSeedHash();
+
+  @$internal
+  @override
+  $ProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  bool create(Ref ref) {
+    return propagateMarksToStackSeed(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$propagateMarksToStackSeedHash() =>
+    r'6bf77b90d3502e2a4b67dc400c2a8f060c760ab7';
+
+/// Whether marking a photo also marks the rest of its exposure bracket
+/// (Settings → Interface). Read by [CullController]; persisted.
+
+@ProviderFor(PropagateMarksToStack)
+final propagateMarksToStackProvider = PropagateMarksToStackProvider._();
+
+/// Whether marking a photo also marks the rest of its exposure bracket
+/// (Settings → Interface). Read by [CullController]; persisted.
+final class PropagateMarksToStackProvider
+    extends $NotifierProvider<PropagateMarksToStack, bool> {
+  /// Whether marking a photo also marks the rest of its exposure bracket
+  /// (Settings → Interface). Read by [CullController]; persisted.
+  PropagateMarksToStackProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'propagateMarksToStackProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$propagateMarksToStackHash();
+
+  @$internal
+  @override
+  PropagateMarksToStack create() => PropagateMarksToStack();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$propagateMarksToStackHash() =>
+    r'2441b6b89de76d47bc88d0dcec62018a6cb255e5';
+
+/// Whether marking a photo also marks the rest of its exposure bracket
+/// (Settings → Interface). Read by [CullController]; persisted.
+
+abstract class _$PropagateMarksToStack extends $Notifier<bool> {
+  bool build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<bool, bool>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<bool, bool>,
+              bool,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// Startup seed for [AutoExpandBracketsOnSelect].
+
+@ProviderFor(autoExpandBracketsOnSelectSeed)
+final autoExpandBracketsOnSelectSeedProvider =
+    AutoExpandBracketsOnSelectSeedProvider._();
+
+/// Startup seed for [AutoExpandBracketsOnSelect].
+
+final class AutoExpandBracketsOnSelectSeedProvider
+    extends $FunctionalProvider<bool, bool, bool>
+    with $Provider<bool> {
+  /// Startup seed for [AutoExpandBracketsOnSelect].
+  AutoExpandBracketsOnSelectSeedProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'autoExpandBracketsOnSelectSeedProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$autoExpandBracketsOnSelectSeedHash();
+
+  @$internal
+  @override
+  $ProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  bool create(Ref ref) {
+    return autoExpandBracketsOnSelectSeed(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$autoExpandBracketsOnSelectSeedHash() =>
+    r'802165e83e80625752ce3317d752d25b2d2a9a48';
+
+/// Whether pulling client picks in auto-expands the selection to each pick's
+/// exposure bracket (Settings → Interface). Read by the page; persisted.
+
+@ProviderFor(AutoExpandBracketsOnSelect)
+final autoExpandBracketsOnSelectProvider =
+    AutoExpandBracketsOnSelectProvider._();
+
+/// Whether pulling client picks in auto-expands the selection to each pick's
+/// exposure bracket (Settings → Interface). Read by the page; persisted.
+final class AutoExpandBracketsOnSelectProvider
+    extends $NotifierProvider<AutoExpandBracketsOnSelect, bool> {
+  /// Whether pulling client picks in auto-expands the selection to each pick's
+  /// exposure bracket (Settings → Interface). Read by the page; persisted.
+  AutoExpandBracketsOnSelectProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'autoExpandBracketsOnSelectProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$autoExpandBracketsOnSelectHash();
+
+  @$internal
+  @override
+  AutoExpandBracketsOnSelect create() => AutoExpandBracketsOnSelect();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$autoExpandBracketsOnSelectHash() =>
+    r'28f75d40bdc8cfeec68aec0d77a194348912c631';
+
+/// Whether pulling client picks in auto-expands the selection to each pick's
+/// exposure bracket (Settings → Interface). Read by the page; persisted.
+
+abstract class _$AutoExpandBracketsOnSelect extends $Notifier<bool> {
+  bool build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<bool, bool>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<bool, bool>,
+              bool,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
 /// Startup seed for [ShortcutsHintSeen]. **Defaults to true (already seen)** so
 /// the first-run cheat sheet only ever fires on a real launch, where `main()`
 /// overrides it with the persisted flag — widget tests, which don't override
@@ -2176,7 +2398,7 @@ final class CullControllerProvider
   }
 }
 
-String _$cullControllerHash() => r'1c53480a4b1f782c8430147f748191c37f8ac178';
+String _$cullControllerHash() => r'e184ff1c073b7a8d5f231834cb049c434926992c';
 
 /// Owns grid focus/selection and writes cull marks straight to the read model
 /// (the reactive `photos` stream reflects them immediately).
