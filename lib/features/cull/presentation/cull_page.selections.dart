@@ -43,6 +43,38 @@ mixin _CullSelections on _CullWorkspace {
     );
   }
 
+  /// Grows the current selection to every frame of each selected photo's
+  /// exposure bracket — the ±EV siblings the client never saw. The pivot of the
+  /// interior-culling workflow: pull the client's picks in (⌘F paste-list or
+  /// ContactSheet), then one keystroke re-attaches the bracketed exposures
+  /// before export. Members hidden by the collapse filter still select — export
+  /// reads the selection, not the filtered grid.
+  void _expandSelectionToBrackets() {
+    final selected = ref.read(cullControllerProvider).selectedIds;
+    if (selected.isEmpty) {
+      _notify('Select photos first', kind: NoticeKind.warning);
+      return;
+    }
+    final groups = ref.read(bracketGroupsProvider);
+    // Build the union selection-first so setSelection keeps focus on an
+    // already-selected photo (it refocuses ids.first).
+    final expanded = {
+      ...selected,
+      for (final id in selected) ...groups.groupOf(id),
+    };
+    if (expanded.length == selected.length) {
+      _notify('No bracket members to add');
+      _gridFocus.requestFocus();
+      return;
+    }
+    ref.read(cullControllerProvider.notifier).setSelection(expanded);
+    _gridFocus.requestFocus();
+    _notify(
+      'Expanded ${selected.length} → ${expanded.length} photos',
+      kind: NoticeKind.success,
+    );
+  }
+
   /// Multiline paste dialog for [_findByList]. Returns the entered text, or
   /// null if cancelled.
   Future<String?> _promptList() {

@@ -85,7 +85,12 @@ enum CullAction {
 
   /// Rotate the selection 90° counter-clockwise. `,` (comma) — see
   /// [rotateRight].
-  rotateLeft('Rotate left', LogicalKeyboardKey.comma);
+  rotateLeft('Rotate left', LogicalKeyboardKey.comma),
+
+  /// Grow the selection to include every frame of each selected photo's
+  /// exposure bracket (its ±EV siblings). `G` for group — free across the
+  /// keymap. Rebindable.
+  expandBrackets('Expand selection to bracket', LogicalKeyboardKey.keyG);
 
   const CullAction(this.label, this.defaultKey);
 

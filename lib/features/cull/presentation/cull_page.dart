@@ -211,6 +211,9 @@ class _CullPageState extends ConsumerState<CullPage>
                     onIncludeSubfolders: _setIncludeSubfolders,
                     onFind: total > 0 ? _findByList : null,
                     onCompare: total > 0 ? _openCompare : null,
+                    onExpandBrackets: total > 0
+                        ? _expandSelectionToBrackets
+                        : null,
                     onFindSimilar: total > 0 ? _findSimilar : null,
                     onClearSimilar:
                         ref.watch(currentSimilarGroupsProvider) != null
@@ -455,6 +458,7 @@ class _CullPageState extends ConsumerState<CullPage>
               onApplyTemplate: () => unawaited(_applyTemplate()),
               onGeocode: () => unawaited(_geocodeSelection()),
               onExport: _export,
+              onExpandBrackets: _expandSelectionToBrackets,
             ),
           );
         },

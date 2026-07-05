@@ -32,6 +32,7 @@ class GridCell extends ConsumerWidget {
     this.onApplyTemplate,
     this.onGeocode,
     this.onExport,
+    this.onExpandBrackets,
     super.key,
   });
 
@@ -68,6 +69,10 @@ class GridCell extends ConsumerWidget {
 
   /// Exports the selection (opens the export dialog). Null disables it.
   final VoidCallback? onExport;
+
+  /// Grows the selection to each photo's exposure-bracket siblings. Null
+  /// disables it (the menu entry is only shown for a bracket member).
+  final VoidCallback? onExpandBrackets;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -269,6 +274,11 @@ class GridCell extends ConsumerWidget {
           onApplyTemplate: onApplyTemplate,
           onGeocode: onGeocode,
           onExport: onExport,
+          // Only offered on a frame that actually belongs to a bracket.
+          onExpandBrackets:
+              ref.read(bracketGroupsProvider).memberIds.contains(shown.id)
+              ? onExpandBrackets
+              : null,
         );
       } finally {
         GestureBinding.instance.pointerRouter.removeGlobalRoute(

@@ -140,6 +140,12 @@ mixin _CullKeyboard on _CullJobs {
       _compareBurst();
       return KeyEventResult.handled;
     }
+    // Grid-only: grow the selection to each bracket's ±EV siblings. Acts on the
+    // whole selection, so it runs before the per-photo mark handling below.
+    if (!_loupeOpen && action == CullAction.expandBrackets) {
+      _expandSelectionToBrackets();
+      return KeyEventResult.handled;
+    }
 
     if (_loupeOpen) {
       // Esc / Enter / loupe-key leave the loupe; `[`/`]` and arrows blit.

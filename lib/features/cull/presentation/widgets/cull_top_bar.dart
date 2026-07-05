@@ -27,6 +27,7 @@ class CullTopBar extends StatelessWidget {
     this.onToggleInspector,
     this.onFind,
     this.onCompare,
+    this.onExpandBrackets,
     this.onFindSimilar,
     this.onClearSimilar,
     this.onImport,
@@ -80,6 +81,10 @@ class CullTopBar extends StatelessWidget {
 
   /// Opens the compare view on the selection (null = disabled, no folder).
   final VoidCallback? onCompare;
+
+  /// Grows the selection to each photo's exposure-bracket siblings (null =
+  /// disabled, no folder).
+  final VoidCallback? onExpandBrackets;
 
   /// Runs the perceptual-hash "find similar" pass (null = disabled, no folder).
   final Future<void> Function()? onFindSimilar;
@@ -283,6 +288,8 @@ class CullTopBar extends StatelessWidget {
                         switch (value) {
                           case 'compare':
                             onCompare?.call();
+                          case 'expand-brackets':
+                            onExpandBrackets?.call();
                           case 'find-similar':
                             if (onFindSimilar != null) {
                               unawaited(onFindSimilar!());
@@ -328,6 +335,11 @@ class CullTopBar extends StatelessWidget {
                           [
                             if (onCompare != null)
                               entry('compare', 'Compare selected (C)'),
+                            if (onExpandBrackets != null)
+                              entry(
+                                'expand-brackets',
+                                'Expand selection to bracket (G)',
+                              ),
                             if (onFindSimilar != null)
                               entry('find-similar', 'Find similar photos'),
                             if (onClearSimilar != null)

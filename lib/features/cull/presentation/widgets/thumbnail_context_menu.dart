@@ -32,6 +32,7 @@ Future<void> showThumbnailContextMenu({
   VoidCallback? onApplyTemplate,
   VoidCallback? onGeocode,
   VoidCallback? onExport,
+  VoidCallback? onExpandBrackets,
 }) async {
   final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
   final position = RelativeRect.fromRect(
@@ -110,6 +111,11 @@ Future<void> showThumbnailContextMenu({
           child: const Text('Fill location from GPS'),
         ),
       const PopupMenuDivider(),
+      if (onExpandBrackets != null)
+        PopupMenuItem<_MenuAction>(
+          value: () async => onExpandBrackets(),
+          child: const _MenuRow('Expand selection to bracket', 'G'),
+        ),
       if (onRename != null)
         PopupMenuItem<_MenuAction>(
           value: () async => onRename(),

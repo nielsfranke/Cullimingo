@@ -27,6 +27,8 @@ void main() {
     // Pick / reject on P / X.
     expect(s.keyFor(CullAction.pick), LogicalKeyboardKey.keyP);
     expect(s.keyFor(CullAction.reject), LogicalKeyboardKey.keyX);
+    // Expand-selection-to-bracket on G.
+    expect(s.keyFor(CullAction.expandBrackets), LogicalKeyboardKey.keyG);
     // No two actions share a key.
     final keys = [for (final a in CullAction.values) s.keyFor(a)];
     expect(keys.toSet().length, keys.length);
@@ -35,11 +37,11 @@ void main() {
   test('rebinding moves the action and records an override', () {
     final s = CullShortcuts.defaults().withBinding(
       CullAction.pick,
-      LogicalKeyboardKey.keyG,
+      LogicalKeyboardKey.keyH,
     );
-    expect(s.keyFor(CullAction.pick), LogicalKeyboardKey.keyG);
-    expect(s.actionFor(LogicalKeyboardKey.keyG), CullAction.pick);
-    expect(s.toOverrides(), {'pick': LogicalKeyboardKey.keyG.keyId});
+    expect(s.keyFor(CullAction.pick), LogicalKeyboardKey.keyH);
+    expect(s.actionFor(LogicalKeyboardKey.keyH), CullAction.pick);
+    expect(s.toOverrides(), {'pick': LogicalKeyboardKey.keyH.keyId});
   });
 
   test('conflictFor reports a key already used by another action', () {
@@ -50,7 +52,7 @@ void main() {
       CullAction.reject,
     );
     // A free key has no conflict.
-    expect(s.conflictFor(CullAction.pick, LogicalKeyboardKey.keyG), isNull);
+    expect(s.conflictFor(CullAction.pick, LogicalKeyboardKey.keyH), isNull);
     // The action's own current key is not a conflict.
     expect(s.conflictFor(CullAction.pick, LogicalKeyboardKey.keyP), isNull);
   });
