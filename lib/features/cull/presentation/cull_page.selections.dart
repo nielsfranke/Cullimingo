@@ -13,13 +13,14 @@ mixin _CullSelections on _CullWorkspace {
     ).load();
     final photos = ref.read(photosProvider).value ?? const <Photo>[];
     final ids = matchPhotoIds(list.filenames, photos);
-    ref.read(cullControllerProvider.notifier).setSelection(ids);
-    _revealFirstSelected(ids);
+    final selected = _applySelectionMaybeExpanding(ids);
+    _revealFirstSelected(selected);
     _gridFocus.requestFocus();
 
     if (!mounted) return;
     _notify(
-      'Selected ${ids.length} of ${list.filenames.length} from ${file.name}',
+      'Selected ${ids.length} of ${list.filenames.length} from ${file.name}'
+      '${_bracketSuffix(ids, selected)}',
     );
   }
 
@@ -33,14 +34,37 @@ mixin _CullSelections on _CullWorkspace {
     if (text == null || text.trim().isEmpty) return;
     final names = parseNameTokens(text);
     final ids = matchPhotoIds(names, photos);
-    ref.read(cullControllerProvider.notifier).setSelection(ids);
-    _revealFirstSelected(ids);
+    final selected = _applySelectionMaybeExpanding(ids);
+    _revealFirstSelected(selected);
     _gridFocus.requestFocus();
     if (!mounted) return;
     _notify(
-      'Selected ${ids.length} of ${names.length} name(s)',
+      'Selected ${ids.length} of ${names.length} name(s)'
+      '${_bracketSuffix(ids, selected)}',
       kind: ids.isEmpty ? NoticeKind.warning : NoticeKind.success,
     );
+  }
+
+  /// Replaces the selection with [ids], first growing it to each photo's
+  /// exposure bracket when the auto-expand-on-select setting is on (the client
+  /// only ever saw the normal exposures, so their picks re-attach the siblings
+  /// automatically). Returns the ids actually selected.
+  Set<int> _applySelectionMaybeExpanding(Set<int> ids) {
+    var selected = ids;
+    if (ids.isNotEmpty && ref.read(autoExpandBracketsOnSelectProvider)) {
+      final groups = ref.read(bracketGroupsProvider);
+      selected = {
+        for (final id in ids) ...groups.groupOf(id),
+      };
+    }
+    ref.read(cullControllerProvider.notifier).setSelection(selected);
+    return selected;
+  }
+
+  /// A note like " (+6 bracket frames)" when auto-expand added photos.
+  String _bracketSuffix(Set<int> matched, Set<int> selected) {
+    final extra = selected.length - matched.length;
+    return extra > 0 ? ' (+$extra bracket frames)' : '';
   }
 
   /// Grows the current selection to every frame of each selected photo's

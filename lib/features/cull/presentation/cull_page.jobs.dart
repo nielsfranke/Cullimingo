@@ -729,7 +729,9 @@ mixin _CullJobs on _CullSelections {
                 .updateContactSheet(done: done);
           }
         }
-        controller.setSelection({for (final m in resolved) m.photoId});
+        // The client only ever saw the normal exposures, so their picks
+        // re-attach the ±EV bracket siblings when auto-expand is on.
+        _applySelectionMaybeExpanding({for (final m in resolved) m.photoId});
       }
 
       // Collections → saved selections (best-effort; a gallery with collections
