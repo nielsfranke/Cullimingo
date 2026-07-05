@@ -123,6 +123,47 @@ void main() {
     expect(request.preset.longEdge, 2048);
   });
 
+  testWidgets(
+    '"Same folder as originals" returns a next-to-originals request',
+    (
+      tester,
+    ) async {
+      await tester.binding.setSurfaceSize(const Size(900, 1400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final sources = [_src('/s/DSC_0001.ARW')];
+      ExportRequest? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () async {
+                  result = await showExportDialog(context, sources: sources);
+                },
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      // Switch the destination mode to beside-the-originals.
+      await tester.tap(find.text('Choose a folder…'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Same folder as originals').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Export 1'));
+      await tester.pumpAndSettle();
+
+      expect(result!.nextToOriginals, isTrue);
+      expect(result!.destinationRoot, isNull);
+      expect(result!.subfolder, 'Exports'); // the default subfolder
+    },
+  );
+
   testWidgets('Cancel returns null (no export)', (tester) async {
     final request = await openAndAct(tester, [_src('/s/a.JPG')], tap: 'Cancel');
     expect(request, isNull);
@@ -130,6 +171,8 @@ void main() {
 
   testWidgets('format dropdown (with libvips): WebP lands in the preset '
       'and the preview extension follows', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     ExportRequest? result;
     await tester.pumpWidget(
       MaterialApp(

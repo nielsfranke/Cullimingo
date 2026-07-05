@@ -35,6 +35,70 @@ void main() {
       expect(ExportSummary(progress.map((t) => t.last).toList()).allOk, isTrue);
     });
 
+    test('nextToOriginals writes each file beside its source', () async {
+      final destPaths = <String>[];
+      await runExport(
+        plan: [
+          const ExportItem(
+            source: '/shoot/a/img1.arw',
+            relPath: 'img1.jpg',
+            isRaw: true,
+          ),
+          const ExportItem(
+            source: '/shoot/b/img2.arw',
+            relPath: 'img2.jpg',
+            isRaw: true,
+          ),
+        ],
+        nextToOriginals: true,
+        subfolder: 'Exports',
+        preset: const ExportPreset(),
+        concurrency: 1,
+        renderer:
+            ({
+              required item,
+              required destPath,
+              required preset,
+              required libraryPath,
+            }) async {
+              destPaths.add(destPath);
+              return ExportOutcome.written;
+            },
+      ).drain<void>();
+
+      expect(destPaths, [
+        p.join('/shoot/a', 'Exports', 'img1.jpg'),
+        p.join('/shoot/b', 'Exports', 'img2.jpg'),
+      ]);
+    });
+
+    test('nextToOriginals with a blank subfolder writes alongside', () async {
+      final destPaths = <String>[];
+      await runExport(
+        plan: [
+          const ExportItem(
+            source: '/shoot/img1.jpg',
+            relPath: 'img1.jpg',
+            isRaw: false,
+          ),
+        ],
+        nextToOriginals: true,
+        preset: const ExportPreset(),
+        renderer:
+            ({
+              required item,
+              required destPath,
+              required preset,
+              required libraryPath,
+            }) async {
+              destPaths.add(destPath);
+              return ExportOutcome.written;
+            },
+      ).drain<void>();
+
+      expect(destPaths, [p.join('/shoot', 'img1.jpg')]);
+    });
+
     test('cancelling stops launching new renders', () async {
       var started = 0;
       final blocker = Completer<void>();

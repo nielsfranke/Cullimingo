@@ -61,7 +61,9 @@ mixin _CullJobs on _CullSelections {
     _exportSub =
         runExport(
           plan: request.plan,
-          destinationRoot: request.destinationRoot!,
+          destinationRoot: request.destinationRoot,
+          nextToOriginals: request.nextToOriginals,
+          subfolder: request.subfolder,
           preset: request.preset,
         ).listen(
           (tick) {
@@ -82,7 +84,17 @@ mixin _CullJobs on _CullSelections {
               kind: failed > 0 ? NoticeKind.warning : NoticeKind.success,
             );
             if (request.openWhenDone && summary.written > 0) {
-              unawaited(openExternally(request.destinationRoot!));
+              // Next-to-originals has no single root — open the first output's
+              // folder (beside its source, plus the optional subfolder).
+              final target =
+                  request.destinationRoot ??
+                  (request.plan.isEmpty
+                      ? null
+                      : p.join(
+                          p.dirname(request.plan.first.source),
+                          request.subfolder,
+                        ));
+              if (target != null) unawaited(openExternally(target));
             }
           },
         );

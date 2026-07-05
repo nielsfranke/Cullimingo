@@ -87,31 +87,51 @@ typedef Renderer =
       required String? libraryPath,
     });
 
-/// Renders [plan] into [destinationRoot] off the UI isolate, emitting an
-/// [ExportProgress] as each file finishes (`BUILD_PLAN.md` §6). Up to
-/// [concurrency] files render at once so decode/encode overlap across cores;
-/// the UI isolate only receives ticks. Cancelling the subscription stops
-/// launching new renders.
+/// Renders [plan] off the UI isolate, emitting an [ExportProgress] as each file
+/// finishes (`BUILD_PLAN.md` §6). Files land under [destinationRoot], unless
+/// [nextToOriginals] is set — then each output goes beside its own source file
+/// (optionally inside [subfolder], e.g. `Exports/`), so a shoot exports in
+/// place. Up to [concurrency] files render at once so decode/encode overlap
+/// across cores; the UI isolate only receives ticks. Cancelling the
+/// subscription stops launching new renders.
 Stream<ExportProgress> runExport({
   required List<ExportItem> plan,
-  required String destinationRoot,
   required ExportPreset preset,
+  String? destinationRoot,
+  bool nextToOriginals = false,
+  String subfolder = '',
   String? libraryPath,
   int concurrency = 4,
   Renderer renderer = _isolateRender,
 }) {
+  assert(
+    nextToOriginals || destinationRoot != null,
+    'runExport needs a destinationRoot unless nextToOriginals is set',
+  );
   final total = plan.length;
   final controller = StreamController<ExportProgress>();
   var next = 0;
   var done = 0;
   var stopped = false;
 
+  // Where one item's output file lands. Next-to-originals resolves per source
+  // dir (plus the optional subfolder); otherwise everything shares the root.
+  String destPathFor(ExportItem item) {
+    if (nextToOriginals) {
+      final base = subfolder.isEmpty
+          ? p.dirname(item.source)
+          : p.join(p.dirname(item.source), subfolder);
+      return p.join(base, item.relPath);
+    }
+    return p.join(destinationRoot!, item.relPath);
+  }
+
   Future<void> worker() async {
     while (!stopped) {
       final i = next++;
       if (i >= total) return;
       final item = plan[i];
-      final destPath = p.join(destinationRoot, item.relPath);
+      final destPath = destPathFor(item);
       ExportOutcome outcome;
       try {
         outcome = await renderer(

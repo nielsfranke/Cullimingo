@@ -22,16 +22,28 @@ class ExportRequest {
     required this.destinationRoot,
     required this.preset,
     required this.openWhenDone,
+    this.nextToOriginals = false,
+    this.subfolder = '',
     this.server,
   });
 
   /// The resolved plan (ordered, named, de-duped).
   final List<ExportItem> plan;
 
-  /// Destination root, including the optional subfolder. Null only when
+  /// Destination root, including the optional subfolder. Null when
+  /// [nextToOriginals] is set (each file goes beside its source), or when
   /// [server] is set and no local copy is kept — then the page renders into
   /// a temp dir it cleans up after the upload (`BUILD_PLAN.md` §11).
   final String? destinationRoot;
+
+  /// Export each file beside its own source instead of into one folder. When
+  /// set, [destinationRoot] is null and [subfolder] names the optional
+  /// per-source subfolder.
+  final bool nextToOriginals;
+
+  /// The subfolder placed beside each source under [nextToOriginals] (e.g.
+  /// `Exports`); empty writes directly alongside the originals.
+  final String subfolder;
 
   /// The settings to render with.
   final ExportPreset preset;
@@ -100,6 +112,12 @@ class _ExportDialogState extends State<_ExportDialog> {
 
   int _sizeValue = 2048;
   String? _destination;
+
+  /// Export beside each source (in [_subfolder]), not into [_destination].
+  bool _nextToOriginals = false;
+  final TextEditingController _subfolder = TextEditingController(
+    text: 'Exports',
+  );
   bool _limitSize = false;
   bool _openWhenDone = true;
 
@@ -165,6 +183,10 @@ class _ExportDialogState extends State<_ExportDialog> {
     if (maxMb is String) _maxMb.text = maxMb;
     final open = last['openWhenDone'];
     if (open is bool) _openWhenDone = open;
+    final nextTo = last['nextToOriginals'];
+    if (nextTo is bool) _nextToOriginals = nextTo;
+    final subfolder = last['subfolder'];
+    if (subfolder is String) _subfolder.text = subfolder;
   }
 
   /// The current form as a persistable blob for next time.
@@ -178,6 +200,8 @@ class _ExportDialogState extends State<_ExportDialog> {
     'limitSize': _limitSize,
     'maxMb': _maxMb.text,
     'openWhenDone': _openWhenDone,
+    'nextToOriginals': _nextToOriginals,
+    'subfolder': _subfolder.text,
   };
 
   @override
@@ -185,8 +209,16 @@ class _ExportDialogState extends State<_ExportDialog> {
     _shoot.dispose();
     _customEdge.dispose();
     _maxMb.dispose();
+    _subfolder.dispose();
     super.dispose();
   }
+
+  /// Whether the "same folder as originals" mode is offered — local exports
+  /// only (an upload always renders into a chosen/temp folder first).
+  bool get _nextToOriginalsAvailable => _server == null;
+
+  /// Effective mode after availability: never next-to-originals for uploads.
+  bool get _useNextToOriginals => _nextToOriginals && _nextToOriginalsAvailable;
 
   int get _effectiveLongEdge => _sizeValue == _customSize
       ? (int.tryParse(_customEdge.text.trim()) ?? 2048).clamp(16, 100000)
@@ -255,13 +287,15 @@ class _ExportDialogState extends State<_ExportDialog> {
   /// Whether the current target/destination combination can be exported.
   bool get _canSubmit => _server != null
       ? (!_keepLocalCopy || _destination != null)
-      : _destination != null;
+      : (_useNextToOriginals || _destination != null);
 
   /// Resolves the plan + destination and pops with an [ExportRequest]; the page
   /// runs it non-modally so the grid stays scrollable during the export.
   void _submit() {
     if (!_canSubmit) return;
-    final needsFolder = _server == null || _keepLocalCopy;
+    final nextTo = _useNextToOriginals;
+    // A specific folder is needed unless we're exporting beside the originals.
+    final needsFolder = !nextTo && (_server == null || _keepLocalCopy);
     final root = needsFolder ? _resolvedDestination() : null;
     if (needsFolder && root == null) return;
     final preset = _effectivePreset;
@@ -278,7 +312,9 @@ class _ExportDialogState extends State<_ExportDialog> {
         plan: plan,
         destinationRoot: root,
         preset: preset,
-        openWhenDone: needsFolder && _openWhenDone,
+        openWhenDone: (needsFolder || nextTo) && _openWhenDone,
+        nextToOriginals: nextTo,
+        subfolder: _subfolder.text.trim(),
         server: _server,
       ),
     );
@@ -355,18 +391,43 @@ class _ExportDialogState extends State<_ExportDialog> {
           onChanged: (v) => setState(() => _keepLocalCopy = v ?? false),
           label: 'Also keep a local copy',
         ),
-      if (_server == null || _keepLocalCopy) ...[
+      // Local export: pick between one chosen folder and beside-each-original.
+      if (_nextToOriginalsAvailable) ...[
+        DialogDropdown<bool>(
+          value: _nextToOriginals,
+          onChanged: (v) => setState(() => _nextToOriginals = v ?? false),
+          items: const [
+            DropdownMenuItem(value: false, child: Text('Choose a folder…')),
+            DropdownMenuItem(
+              value: true,
+              child: Text('Same folder as originals'),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+      ],
+      if (_useNextToOriginals)
+        DialogField(
+          label: 'Subfolder',
+          child: TextField(
+            controller: _subfolder,
+            decoration: dialogInputDecoration('Exports (blank = alongside)'),
+            style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+            onChanged: (_) => setState(() {}),
+          ),
+        )
+      else if (_server == null || _keepLocalCopy)
         DialogPathRow(
           path: _destination,
           onPick: _pickDestination,
           hint: 'Choose a folder…',
         ),
+      if (_server == null || _keepLocalCopy)
         DialogCheckbox(
           value: _openWhenDone,
           onChanged: (v) => setState(() => _openWhenDone = v ?? true),
           label: 'Open folder when done',
         ),
-      ],
     ],
   );
 
