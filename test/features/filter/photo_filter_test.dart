@@ -16,12 +16,18 @@ Photo _photo({
   String caption = '',
   String? path,
   bool isRaw = false,
+  DateTime? capturedAt,
+  String? camera,
+  double? exposureBias,
+  double? exposureTime,
 }) {
   return Photo(
     id: id,
     importId: 1,
     path: path ?? '/x/$id.jpg',
     mtime: DateTime(2026),
+    capturedAt: capturedAt,
+    camera: camera,
     orientation: 1,
     userRotation: 0,
     hasCrop: false,
@@ -34,6 +40,8 @@ Photo _photo({
     xmpConflict: false,
     previewCached: false,
     isRaw: isRaw,
+    exposureBias: exposureBias,
+    exposureTime: exposureTime,
   );
 }
 
@@ -90,6 +98,17 @@ void main() {
       const filter = PhotoFilter(color: ColorLabel.red);
       expect(filter.withColor(null).color, isNull);
       expect(filter.withColor(null).isActive, isFalse);
+    });
+
+    test('collapse-brackets is active and survives a json round-trip', () {
+      const filter = PhotoFilter(collapseBrackets: true);
+      expect(filter.isActive, isTrue);
+      expect(filter.matches(_photo()), isTrue); // provider applies it, not this
+      expect(
+        PhotoFilter.fromJson(filter.toJson()).collapseBrackets,
+        isTrue,
+      );
+      expect(filter.withCollapseBrackets(false).isActive, isFalse);
     });
   });
 
@@ -200,6 +219,41 @@ void main() {
           .read(photoFilterControllerProvider.notifier)
           .toggleHideJpegPairs();
       expect(container.read(filteredPhotosProvider).map((p) => p.id), [1, 3]);
+    });
+
+    test('collapse-brackets shows only reference frames + non-brackets', () {
+      DateTime at(int s) =>
+          DateTime(2026, 5, 29, 12, 44).add(Duration(seconds: s));
+      final shoot = [
+        // One 0/+3/−3 bracket: id 1 is the 0 EV reference.
+        _photo(camera: 'Fuji', capturedAt: at(0), exposureBias: 0),
+        _photo(id: 2, camera: 'Fuji', capturedAt: at(1), exposureBias: 3),
+        _photo(id: 3, camera: 'Fuji', capturedAt: at(2), exposureBias: -3),
+        // A lone drone frame — not a bracket, always visible.
+        _photo(id: 4, camera: 'DJI', capturedAt: at(600), exposureBias: 0),
+      ];
+      final container = ProviderContainer(
+        overrides: [photosProvider.overrideWith((ref) => Stream.value(shoot))],
+      );
+      addTearDown(container.dispose);
+      container.listen(photosProvider, (_, _) {});
+
+      return container.read(photosProvider.future).then((_) {
+        expect(container.read(bracketGroupsProvider).bracketCount, 1);
+        container
+            .read(photoFilterControllerProvider.notifier)
+            .toggleCollapseBrackets();
+        // Reference frame (1) + the non-bracket drone frame (4) survive.
+        expect(container.read(filteredPhotosProvider).map((p) => p.id), [1, 4]);
+        // Turning it back off restores the hidden bracket members.
+        container
+            .read(photoFilterControllerProvider.notifier)
+            .toggleCollapseBrackets();
+        expect(
+          container.read(filteredPhotosProvider).map((p) => p.id),
+          [1, 2, 3, 4],
+        );
+      });
     });
   });
 }

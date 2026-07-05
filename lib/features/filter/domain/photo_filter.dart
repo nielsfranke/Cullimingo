@@ -19,6 +19,7 @@ class PhotoFilter {
     this.selectedOnly = false,
     this.burstsOnly = false,
     this.hideJpegPairs = false,
+    this.collapseBrackets = false,
   });
 
   /// Rebuilds a filter from a saved-preset [json] (see [toJson]). Missing keys
@@ -32,6 +33,7 @@ class PhotoFilter {
     needsCaption: json['needsCaption'] as bool? ?? false,
     burstsOnly: json['burstsOnly'] as bool? ?? false,
     hideJpegPairs: json['hideJpegPairs'] as bool? ?? false,
+    collapseBrackets: json['collapseBrackets'] as bool? ?? false,
   );
 
   /// Minimum star rating (0 = any).
@@ -64,6 +66,12 @@ class PhotoFilter {
   /// object).
   final bool hideJpegPairs;
 
+  /// When true, exposure-bracket stacks collapse to their reference (normal)
+  /// frame — the non-reference members are hidden so the grid shows one cell
+  /// per bracket. Applied by the provider, not [matches] (grouping lives
+  /// outside this value object).
+  final bool collapseBrackets;
+
   /// Whether any constraint is set.
   bool get isActive =>
       minRating > 0 ||
@@ -73,7 +81,8 @@ class PhotoFilter {
       needsCaption ||
       selectedOnly ||
       burstsOnly ||
-      hideJpegPairs;
+      hideJpegPairs ||
+      collapseBrackets;
 
   /// True if [photo] passes every active constraint that this object can judge
   /// on its own. Does **not** consider [selectedOnly] — see the class doc.
@@ -97,6 +106,7 @@ class PhotoFilter {
     'needsCaption': needsCaption,
     'burstsOnly': burstsOnly,
     'hideJpegPairs': hideJpegPairs,
+    'collapseBrackets': collapseBrackets,
   };
 
   /// Returns a copy with the minimum rating set (0 clears it).
@@ -128,6 +138,11 @@ class PhotoFilter {
   // ignore: avoid_positional_boolean_parameters — mirrors the other with* setters.
   PhotoFilter withHideJpegPairs(bool value) => _copyWith(hideJpegPairs: value);
 
+  /// Returns a copy with the collapse-brackets constraint set.
+  // ignore: avoid_positional_boolean_parameters — mirrors the other with* setters.
+  PhotoFilter withCollapseBrackets(bool value) =>
+      _copyWith(collapseBrackets: value);
+
   // Nullable fields use a thunk so passing null clears them (vs "absent").
   PhotoFilter _copyWith({
     int? minRating,
@@ -138,6 +153,7 @@ class PhotoFilter {
     bool? selectedOnly,
     bool? burstsOnly,
     bool? hideJpegPairs,
+    bool? collapseBrackets,
   }) => PhotoFilter(
     minRating: minRating ?? this.minRating,
     flag: flag != null ? flag() : this.flag,
@@ -147,6 +163,7 @@ class PhotoFilter {
     selectedOnly: selectedOnly ?? this.selectedOnly,
     burstsOnly: burstsOnly ?? this.burstsOnly,
     hideJpegPairs: hideJpegPairs ?? this.hideJpegPairs,
+    collapseBrackets: collapseBrackets ?? this.collapseBrackets,
   );
 }
 

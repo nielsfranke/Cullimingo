@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:cullimingo/core/db/database.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:cullimingo/features/cull/domain/duplicate_groups.dart';
+import 'package:cullimingo/features/cull/domain/exposure_brackets.dart';
 import 'package:cullimingo/features/cull/domain/raw_jpeg_pairs.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
+import 'package:cullimingo/features/filter/domain/filename_match.dart';
 import 'package:cullimingo/features/filter/domain/filter_preset.dart';
 import 'package:cullimingo/features/filter/domain/photo_filter.dart';
 import 'package:cullimingo/features/filter/domain/photo_sort.dart';
@@ -56,6 +58,10 @@ class PhotoFilterController extends _$PhotoFilterController {
   /// Toggles the "hide JPEG (RAW+JPEG)" quick-filter.
   void toggleHideJpegPairs() =>
       state = state.withHideJpegPairs(!state.hideJpegPairs);
+
+  /// Toggles the "collapse exposure brackets" quick-filter.
+  void toggleCollapseBrackets() =>
+      state = state.withCollapseBrackets(!state.collapseBrackets);
 }
 
 /// Startup seed for [FilterPresets] — the presets persisted last session,
@@ -141,6 +147,45 @@ final rawJpegPairsProvider = Provider<RawJpegPairs>((ref) {
   ]);
 }, name: 'rawJpegPairs');
 
+/// Exposure-bracket grouping over the current import's photos (§8). Classic
+/// provider — it reads the drift-generated `Photo` type via [photosProvider].
+/// The hidden JPEG side of a RAW+JPEG pair is kept out of the grouping input (a
+/// duplicated exposure would trip the repeat-boundary rule) and folded back in
+/// afterwards so expanding a selection still grabs both files.
+final bracketGroupsProvider = Provider<BracketGroups>((ref) {
+  final photos = ref.watch(photosProvider).value ?? const <Photo>[];
+  final hiddenJpeg = ref.watch(rawJpegPairsProvider).hiddenJpegIds;
+
+  // A RAW's hidden JPEG sibling shares its normalized basename — map each
+  // grouping-visible photo to the hidden siblings that should rejoin its stack.
+  final visible = [
+    for (final p in photos)
+      if (!hiddenJpeg.contains(p.id)) p,
+  ];
+  final hiddenByName = <String, List<int>>{};
+  for (final p in photos) {
+    if (hiddenJpeg.contains(p.id)) {
+      hiddenByName.putIfAbsent(normalizeName(p.path), () => []).add(p.id);
+    }
+  }
+  final siblings = <int, List<int>>{};
+  for (final p in visible) {
+    final ids = hiddenByName[normalizeName(p.path)];
+    if (ids != null) siblings[p.id] = ids;
+  }
+
+  return BracketGroups([
+    for (final p in visible)
+      (
+        id: p.id,
+        capturedAt: p.capturedAt,
+        camera: p.camera,
+        exposureBias: p.exposureBias,
+        exposureTime: p.exposureTime,
+      ),
+  ], siblings: siblings);
+}, name: 'bracketGroups');
+
 /// On-demand perceptual-hash similarity groups (§8), **per import** so running
 /// "Find similar" in one folder doesn't switch every other tab to similarity
 /// mode. Empty until the user runs the pass for a folder.
@@ -199,10 +244,16 @@ final filteredPhotosProvider = Provider<List<Photo>>((ref) {
     final hiddenJpeg = filter.hideJpegPairs
         ? ref.watch(rawJpegPairsProvider).hiddenJpegIds
         : null;
+    // `collapseBrackets`: hide the non-reference frames of each exposure
+    // bracket so the grid shows one cell (the normal exposure) per stack.
+    final hiddenBracket = filter.collapseBrackets
+        ? ref.watch(bracketGroupsProvider).collapsedHiddenIds
+        : null;
     bool passes(Photo p) =>
         filter.matches(p) &&
         (selectedIds == null || selectedIds.contains(p.id)) &&
-        (hiddenJpeg == null || !hiddenJpeg.contains(p.id));
+        (hiddenJpeg == null || !hiddenJpeg.contains(p.id)) &&
+        (hiddenBracket == null || !hiddenBracket.contains(p.id));
 
     // `burstsOnly`: show only photos in a group (≥2), and lay each group out
     // contiguously (members together, groups in capture order) so it's obvious

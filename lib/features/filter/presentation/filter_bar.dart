@@ -32,6 +32,7 @@ class FilterBar extends ConsumerWidget {
         : 'Bursts';
     final groupCount = ref.watch(effectiveGroupsProvider).memberIds.length;
     final pairCount = ref.watch(rawJpegPairsProvider).pairCount;
+    final bracketCount = ref.watch(bracketGroupsProvider).bracketCount;
 
     return Container(
       height: 44,
@@ -107,6 +108,13 @@ class FilterBar extends ConsumerWidget {
                 label: 'Hide JPEG ($pairCount)',
                 selected: filter.hideJpegPairs,
                 onTap: controller.toggleHideJpegPairs,
+              ),
+            // Only offered when the folder actually has exposure brackets.
+            if (bracketCount > 0)
+              _Chip(
+                label: 'Stack brackets ($bracketCount)',
+                selected: filter.collapseBrackets,
+                onTap: controller.toggleCollapseBrackets,
               ),
           ],
         ),
