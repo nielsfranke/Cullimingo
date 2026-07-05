@@ -33,6 +33,8 @@ class GridCell extends ConsumerWidget {
     this.onGeocode,
     this.onExport,
     this.onExpandBrackets,
+    this.onStack,
+    this.onUnstack,
     super.key,
   });
 
@@ -73,6 +75,14 @@ class GridCell extends ConsumerWidget {
   /// Grows the selection to each photo's exposure-bracket siblings. Null
   /// disables it (the menu entry is only shown for a bracket member).
   final VoidCallback? onExpandBrackets;
+
+  /// Manually stacks the selection into one bracket. Null disables it (the menu
+  /// entry is only shown when 2+ photos are selected).
+  final VoidCallback? onStack;
+
+  /// Removes the selection from any bracket. Null disables it (only shown on a
+  /// bracket member).
+  final VoidCallback? onUnstack;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -278,6 +288,14 @@ class GridCell extends ConsumerWidget {
           onExpandBrackets:
               ref.read(bracketGroupsProvider).memberIds.contains(shown.id)
               ? onExpandBrackets
+              : null,
+          // Stack needs 2+ selected; unstack only makes sense on a member.
+          onStack: ref.read(cullControllerProvider).markTargets.length >= 2
+              ? onStack
+              : null,
+          onUnstack:
+              ref.read(bracketGroupsProvider).memberIds.contains(shown.id)
+              ? onUnstack
               : null,
         );
       } finally {

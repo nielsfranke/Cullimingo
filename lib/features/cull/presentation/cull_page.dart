@@ -459,6 +459,8 @@ class _CullPageState extends ConsumerState<CullPage>
               onGeocode: () => unawaited(_geocodeSelection()),
               onExport: _export,
               onExpandBrackets: _expandSelectionToBrackets,
+              onStack: () => unawaited(_stackSelection()),
+              onUnstack: () => unawaited(_unstackSelection()),
             ),
           );
         },

@@ -33,6 +33,8 @@ Future<void> showThumbnailContextMenu({
   VoidCallback? onGeocode,
   VoidCallback? onExport,
   VoidCallback? onExpandBrackets,
+  VoidCallback? onStack,
+  VoidCallback? onUnstack,
 }) async {
   final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
   final position = RelativeRect.fromRect(
@@ -115,6 +117,16 @@ Future<void> showThumbnailContextMenu({
         PopupMenuItem<_MenuAction>(
           value: () async => onExpandBrackets(),
           child: const _MenuRow('Expand selection to bracket', 'G'),
+        ),
+      if (onStack != null)
+        PopupMenuItem<_MenuAction>(
+          value: () async => onStack(),
+          child: const Text('Stack as bracket'),
+        ),
+      if (onUnstack != null)
+        PopupMenuItem<_MenuAction>(
+          value: () async => onUnstack(),
+          child: const Text('Remove from bracket'),
         ),
       if (onRename != null)
         PopupMenuItem<_MenuAction>(

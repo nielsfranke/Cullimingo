@@ -94,6 +94,31 @@ class RotationUndoEntry extends CullUndoEntry {
   String get noun => 'rotation';
 }
 
+/// A manual bracket-stack / unstack change.
+class StackUndoEntry extends CullUndoEntry {
+  /// Captures [before] (photo id → previous stackId) and the applied [after].
+  const StackUndoEntry({
+    required this.before,
+    required this.after,
+    required this.stacking,
+  });
+
+  /// Photo id → stackId before the change.
+  final Map<int, String?> before;
+
+  /// The stackId applied to every photo in [before].
+  final String? after;
+
+  /// True for a stack, false for an unstack — drives the [noun].
+  final bool stacking;
+
+  @override
+  int get photoCount => before.length;
+
+  @override
+  String get noun => stacking ? 'stack' : 'unstack';
+}
+
 /// A bounded undo/redo stack for cull-mark changes. Pure bookkeeping — the
 /// caller applies/reverts entries; this only orders them. A new [push] clears
 /// the redo side (standard editor semantics); the undo side is capped at

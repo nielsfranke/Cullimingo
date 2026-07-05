@@ -75,6 +75,35 @@ mixin _CullSelections on _CullWorkspace {
     );
   }
 
+  /// Manually stacks the current selection into one exposure bracket,
+  /// overriding automatic detection (a correction for a series the detector
+  /// split or missed).
+  Future<void> _stackSelection() async {
+    final n = await ref.read(cullControllerProvider.notifier).stackSelection();
+    if (!mounted) return;
+    _gridFocus.requestFocus();
+    if (n == 0) {
+      _notify('Select 2+ photos to stack', kind: NoticeKind.warning);
+    } else {
+      _notify('Stacked $n photos', kind: NoticeKind.success);
+    }
+  }
+
+  /// Manually removes the current selection from any bracket (a correction for
+  /// frames the detector grouped that shouldn't be).
+  Future<void> _unstackSelection() async {
+    final n = await ref
+        .read(cullControllerProvider.notifier)
+        .unstackSelection();
+    if (!mounted) return;
+    _gridFocus.requestFocus();
+    if (n == 0) {
+      _notify('Select photos to unstack', kind: NoticeKind.warning);
+    } else {
+      _notify('Unstacked $n photos', kind: NoticeKind.success);
+    }
+  }
+
   /// Multiline paste dialog for [_findByList]. Returns the entered text, or
   /// null if cancelled.
   Future<String?> _promptList() {

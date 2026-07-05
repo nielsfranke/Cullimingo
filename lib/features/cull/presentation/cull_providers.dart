@@ -834,6 +834,26 @@ class CullController extends _$CullController {
   Future<void> applyRotation(int quarterTurnsCW) =>
       _rotateAll(state.markTargets.toList(), quarterTurnsCW);
 
+  /// Manually stacks every [CullSelection.markTargets] photo into one exposure
+  /// bracket, overriding automatic detection (a fresh stack id, mirrored to the
+  /// sidecar). Needs ≥ 2 photos; returns the count stacked (0 = nothing done).
+  Future<int> stackSelection() async {
+    final ids = state.markTargets;
+    if (ids.length < 2) return 0;
+    await _setStackAll(ids, _newStackId(), stacking: true);
+    return ids.length;
+  }
+
+  /// Manually removes every [CullSelection.markTargets] photo from any bracket
+  /// (the empty-string override — automatic detection won't re-group it).
+  /// Returns the count unstacked.
+  Future<int> unstackSelection() async {
+    final ids = state.markTargets;
+    if (ids.isEmpty) return 0;
+    await _setStackAll(ids, '', stacking: false);
+    return ids.length;
+  }
+
   /// Undoes the most recent mark change (rating/flag/colour/rotation), batch
   /// or single. Returns a short description for the notice bar ("rating
   /// (3 photos)"), or `null` when there is nothing to undo.
@@ -874,6 +894,9 @@ class CullController extends _$CullController {
         for (final id in photoIds) {
           await _rotateOne(id, -quarterTurnsCW);
         }
+      case StackUndoEntry(:final before):
+        await _db.setStackIds(before);
+        await _meta.writeSidecarsForPhotos(before.keys.toList());
     }
   }
 
@@ -892,6 +915,9 @@ class CullController extends _$CullController {
         for (final id in photoIds) {
           await _rotateOne(id, quarterTurnsCW);
         }
+      case StackUndoEntry(:final before, :final after):
+        await _db.setStackIdAll(before.keys.toList(), after);
+        await _meta.writeSidecarsForPhotos(before.keys.toList());
     }
   }
 
@@ -950,6 +976,31 @@ class CullController extends _$CullController {
       await _rotateOne(id, quarterTurnsCW);
     }
   }
+
+  Future<void> _setStackAll(
+    Set<int> ids,
+    String? stackId, {
+    required bool stacking,
+  }) async {
+    final rows = await _photosByIds(ids);
+    if (rows.isEmpty) return;
+    _history.push(
+      StackUndoEntry(
+        before: {for (final r in rows) r.id: r.stackId},
+        after: stackId,
+        stacking: stacking,
+      ),
+    );
+    final idList = [for (final r in rows) r.id];
+    await _db.setStackIdAll(idList, stackId);
+    await _meta.writeSidecarsForPhotos(idList);
+  }
+
+  // A fresh, unique stack id. Monotonic microsecond clock plus a per-notifier
+  // counter guards against two stacks made in the same microsecond colliding.
+  var _stackSeq = 0;
+  String _newStackId() =>
+      's${DateTime.now().microsecondsSinceEpoch}-${_stackSeq++}';
 
   /// Rotates a photo by [quarterTurnsCW] clockwise quarter-turns (undoable).
   Future<void> rotate(int photoId, int quarterTurnsCW) =>
