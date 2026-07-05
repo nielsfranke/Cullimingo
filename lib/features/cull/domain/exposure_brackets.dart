@@ -136,40 +136,63 @@ bool _withinGap(
 /// expanding a selection grabs both files. Siblings never become the reference
 /// and don't count toward [sizeOf] (the badge shows the exposure count).
 class BracketGroups {
-  /// Builds the index from [photos] (already excluding hidden JPEG siblings),
-  /// with [siblings] mapping a member id to the ids to fold back into its
-  /// bracket.
+  /// Builds the index by **detecting** brackets in [photos] (already excluding
+  /// hidden JPEG siblings), with [siblings] mapping a member id to the ids to
+  /// fold back into its bracket. Used where grouping is derived from EXIF.
   factory BracketGroups(
     List<BracketablePhoto> photos, {
     Map<int, List<int>> siblings = const {},
   }) {
-    final groups = groupExposureBrackets(photos);
     final byId = {for (final p in photos) p.id: p};
+    final siblingIds = {for (final ids in siblings.values) ...ids};
+    final stacks = [
+      for (final group in groupExposureBrackets(photos))
+        [
+          for (final id in group) ...[id, ...?siblings[id]],
+        ],
+    ];
+    return BracketGroups._index(stacks, byId, exclude: siblingIds);
+  }
 
+  /// Builds the index from explicit [stacks] — each a list of member ids that
+  /// share a persisted stack (manual corrections / adopted from XMP). [byId]
+  /// supplies exposure data for reference-frame selection; [exclude] are member
+  /// ids (hidden JPEG siblings) that don't count toward the exposure count and
+  /// can't be the reference.
+  factory BracketGroups.fromStacks(
+    List<List<int>> stacks,
+    Map<int, BracketablePhoto> byId, {
+    Set<int> exclude = const {},
+  }) => BracketGroups._index(stacks, byId, exclude: exclude);
+
+  factory BracketGroups._index(
+    List<List<int>> stacks,
+    Map<int, BracketablePhoto> byId, {
+    Set<int> exclude = const {},
+  }) {
     final memberIds = <int>{};
     final referenceIds = <int>{};
     final groupById = <int, List<int>>{};
     final sizeById = <int, int>{};
+    final kept = <List<int>>[];
     var bracketCount = 0;
 
-    for (final group in groups) {
-      if (group.length < 2) continue;
+    for (final stack in stacks) {
+      if (stack.length < 2) continue;
       bracketCount++;
-      // Fold each primary member's siblings into the bracket's membership.
-      final full = <int>[
-        for (final id in group) ...[id, ...?siblings[id]],
-      ];
-      final reference = _referenceOf(group, byId);
-      for (final id in full) {
+      kept.add(stack);
+      final exposureCount = stack.where((id) => !exclude.contains(id)).length;
+      final reference = _referenceOf(stack, byId, exclude);
+      for (final id in stack) {
         memberIds.add(id);
-        groupById[id] = full;
-        sizeById[id] = group.length; // exposure count, siblings excluded
+        groupById[id] = stack;
+        sizeById[id] = exposureCount;
       }
       referenceIds.add(reference);
     }
 
     return BracketGroups._(
-      groups,
+      kept,
       memberIds,
       referenceIds,
       groupById,
@@ -187,8 +210,7 @@ class BracketGroups {
     this.bracketCount,
   );
 
-  /// All groups, including singletons, in capture order (primary ids only —
-  /// siblings are not laid out separately).
+  /// The bracket stacks (each ≥ 2 members, incl. any folded siblings).
   final List<List<int>> groups;
 
   /// Ids of every frame that belongs to a bracket (incl. folded siblings).
@@ -227,24 +249,68 @@ class BracketGroups {
 /// nearest the middle of the bracket (median signature), ties broken by earlier
 /// capture then lower id — for a symmetric 0/+N/−N set this is the 0 EV frame,
 /// and for a shutter-only bracket it is the middle shutter (the normal shot).
-int _referenceOf(List<int> group, Map<int, BracketablePhoto> byId) {
-  final sigs = [for (final id in group) _signature(byId[id]!)!]..sort();
+///
+/// Robust to manual stacks: [exclude]d members (hidden JPEG siblings) and
+/// members without exposure data can't be the reference. When *no* member has
+/// a usable signature (a hand-made stack of frames with no EXIF), it falls back
+/// to the earliest-captured / lowest-id eligible member.
+int _referenceOf(
+  List<int> group,
+  Map<int, BracketablePhoto> byId,
+  Set<int> exclude,
+) {
+  final eligible = [
+    for (final id in group)
+      if (byId[id] != null && !exclude.contains(id)) id,
+  ];
+  final pool = eligible.isNotEmpty ? eligible : group;
+  final withSig = [
+    for (final id in pool)
+      if (byId[id] != null && _signature(byId[id]!) != null) id,
+  ];
+  if (withSig.isEmpty) {
+    // No exposure data at all — earliest capture, then lowest id.
+    return pool.reduce((a, b) {
+      final pa = byId[a];
+      final pb = byId[b];
+      final ta = pa?.capturedAt;
+      final tb = pb?.capturedAt;
+      if (ta != null && tb != null && !ta.isAtSameMomentAs(tb)) {
+        return ta.isBefore(tb) ? a : b;
+      }
+      return a < b ? a : b;
+    });
+  }
+
+  final sigs = [for (final id in withSig) _signature(byId[id]!)!]..sort();
   final median = sigs[sigs.length ~/ 2];
   int? best;
   var bestDist = double.infinity;
   DateTime? bestAt;
-  for (final id in group) {
+  for (final id in withSig) {
     final p = byId[id]!;
     final dist = (_signature(p)! - median).abs();
-    if (best == null ||
+    final at = p.capturedAt;
+    final better =
+        best == null ||
         dist < bestDist - 1e-9 ||
-        (dist <= bestDist + 1e-9 &&
-            (p.capturedAt!.isBefore(bestAt!) ||
-                (p.capturedAt!.isAtSameMomentAs(bestAt) && id < best)))) {
+        (dist <= bestDist + 1e-9 && _earlier(at, id, bestAt, best));
+    if (better) {
       best = id;
       bestDist = dist;
-      bestAt = p.capturedAt;
+      bestAt = at;
     }
   }
   return best!;
+}
+
+/// Whether ([at], [id]) sorts before ([bestAt], [best]) — earlier capture, then
+/// lower id. Null capture times sort last.
+bool _earlier(DateTime? at, int id, DateTime? bestAt, int best) {
+  if (at != null && bestAt != null && !at.isAtSameMomentAs(bestAt)) {
+    return at.isBefore(bestAt);
+  }
+  if (at != null && bestAt == null) return true;
+  if (at == null && bestAt != null) return false;
+  return id < best;
 }

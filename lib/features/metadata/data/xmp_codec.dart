@@ -31,6 +31,11 @@ String encodeXmp(XmpData data) {
   if (data.flag != PickFlag.none) {
     attrs.write(' cullimingo:flag="${data.flag.name}"');
   }
+  // A manual bracket-stack decision (non-empty id, or "" for a deliberate
+  // unstack). null stays silent so an untouched sidecar is byte-identical.
+  if (data.stackId != null) {
+    attrs.write(' cullimingo:StackId="${_escape(data.stackId!)}"');
+  }
   // Only write a non-trivial orientation — a normal (1) photo needs no override
   // and staying silent keeps untouched sidecars byte-identical to before.
   final orientation = data.orientation;
@@ -726,6 +731,8 @@ XmpData decodeXmp(String source) {
     dateCreated: DateTime.tryParse(simple('DateCreated')),
     orientation: _orientationFromXmp(attr('Orientation')),
     crop: _cropFromXmp(attr),
+    // Preserves the null (absent) / "" (unstacked) / id (stacked) trichotomy.
+    stackId: attr('StackId'),
   );
 }
 

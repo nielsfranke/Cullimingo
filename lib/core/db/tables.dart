@@ -191,6 +191,14 @@ class Photos extends Table {
   /// not yet EXIF-scanned, 0.0 = scanned but the tag was absent (0 s is never a
   /// real shutter speed), which is what lets the legacy backfill run once.
   RealColumn get exposureTime => real().nullable()();
+
+  /// Manual exposure-bracket stack override, round-tripped via `cullimingo:
+  /// StackId` in XMP. **NULL** = let automatic detection decide (the default);
+  /// an **empty string** = the user manually removed this photo from any stack;
+  /// a **non-empty id** = the user manually grouped this photo into that stack.
+  /// Automatic detection only ever sees NULL photos, so a manual decision is
+  /// never re-grouped away.
+  TextColumn get stackId => text().nullable()();
 }
 
 /// A named, persisted selection of photos within one import (`BUILD_PLAN.md`

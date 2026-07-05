@@ -20,6 +20,7 @@ Photo _photo({
   String? camera,
   double? exposureBias,
   double? exposureTime,
+  String? stackId,
 }) {
   return Photo(
     id: id,
@@ -42,6 +43,7 @@ Photo _photo({
     isRaw: isRaw,
     exposureBias: exposureBias,
     exposureTime: exposureTime,
+    stackId: stackId,
   );
 }
 
@@ -255,5 +257,57 @@ void main() {
         );
       });
     });
+  });
+
+  group('bracketGroupsProvider stackId overrides', () {
+    Future<ProviderContainer> pump(List<Photo> photos) async {
+      final container = ProviderContainer(
+        overrides: [photosProvider.overrideWith((ref) => Stream.value(photos))],
+      );
+      addTearDown(container.dispose);
+      container.listen(photosProvider, (_, _) {});
+      await container.read(photosProvider.future);
+      return container;
+    }
+
+    test('a shared non-empty stackId forms a manual stack', () async {
+      // Three unrelated photos (no exposure data, no capture time) the user
+      // hand-stacked under one id.
+      final c = await pump([
+        _photo(stackId: 'm1'),
+        _photo(id: 2, stackId: 'm1'),
+        _photo(id: 3, stackId: 'm1'),
+        _photo(id: 4), // outside the stack
+      ]);
+      final b = c.read(bracketGroupsProvider);
+      expect(b.bracketCount, 1);
+      expect(b.memberIds, {1, 2, 3});
+      expect(b.groupOf(1), containsAll([1, 2, 3]));
+      expect(b.isReference(4), isFalse);
+    });
+
+    test(
+      'an empty stackId removes a frame from its detected bracket',
+      () async {
+        DateTime at(int s) =>
+            DateTime(2026, 5, 29, 12, 44).add(Duration(seconds: s));
+        final c = await pump([
+          _photo(camera: 'Fuji', capturedAt: at(0), exposureBias: 0),
+          _photo(id: 2, camera: 'Fuji', capturedAt: at(1), exposureBias: 3),
+          // Manually unstacked → must not join the detected bracket.
+          _photo(
+            id: 3,
+            camera: 'Fuji',
+            capturedAt: at(2),
+            exposureBias: -3,
+            stackId: '',
+          ),
+        ]);
+        final b = c.read(bracketGroupsProvider);
+        expect(b.bracketCount, 1);
+        expect(b.memberIds, {1, 2});
+        expect(b.groupOf(3), [3]); // stands alone
+      },
+    );
   });
 }

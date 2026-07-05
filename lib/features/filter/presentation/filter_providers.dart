@@ -149,41 +149,70 @@ final rawJpegPairsProvider = Provider<RawJpegPairs>((ref) {
 
 /// Exposure-bracket grouping over the current import's photos (§8). Classic
 /// provider — it reads the drift-generated `Photo` type via [photosProvider].
-/// The hidden JPEG side of a RAW+JPEG pair is kept out of the grouping input (a
-/// duplicated exposure would trip the repeat-boundary rule) and folded back in
-/// afterwards so expanding a selection still grabs both files.
+///
+/// Membership is a composite of two sources so a manual correction survives a
+/// re-detection: a photo whose [Photo.stackId] is set to a non-empty id joins
+/// that **manual** stack; a photo whose stackId is the empty string was
+/// manually unstacked and stands alone; every photo with a NULL stackId is fed
+/// to automatic detection. The hidden JPEG side of a RAW+JPEG pair is kept out
+/// of the detection input (a duplicated exposure would trip the repeat-boundary
+/// rule) and folded back in afterwards so expanding a selection grabs both
+/// files.
 final bracketGroupsProvider = Provider<BracketGroups>((ref) {
   final photos = ref.watch(photosProvider).value ?? const <Photo>[];
   final hiddenJpeg = ref.watch(rawJpegPairsProvider).hiddenJpegIds;
 
-  // A RAW's hidden JPEG sibling shares its normalized basename — map each
-  // grouping-visible photo to the hidden siblings that should rejoin its stack.
-  final visible = [
+  final byId = <int, BracketablePhoto>{
     for (final p in photos)
-      if (!hiddenJpeg.contains(p.id)) p,
-  ];
-  final hiddenByName = <String, List<int>>{};
-  for (final p in photos) {
-    if (hiddenJpeg.contains(p.id)) {
-      hiddenByName.putIfAbsent(normalizeName(p.path), () => []).add(p.id);
-    }
-  }
-  final siblings = <int, List<int>>{};
-  for (final p in visible) {
-    final ids = hiddenByName[normalizeName(p.path)];
-    if (ids != null) siblings[p.id] = ids;
-  }
-
-  return BracketGroups([
-    for (final p in visible)
-      (
+      p.id: (
         id: p.id,
         capturedAt: p.capturedAt,
         camera: p.camera,
         exposureBias: p.exposureBias,
         exposureTime: p.exposureTime,
       ),
-  ], siblings: siblings);
+  };
+
+  // Manual stacks: photos with a non-empty stackId, grouped by that id.
+  final manualById = <String, List<int>>{};
+  final autoInput = <Photo>[];
+  for (final p in photos) {
+    final sid = p.stackId;
+    if (sid == null) {
+      autoInput.add(p); // NULL → automatic detection decides
+    } else if (sid.isNotEmpty) {
+      manualById.putIfAbsent(sid, () => []).add(p.id);
+    }
+    // Empty string → manually unstacked: excluded from both (a singleton).
+  }
+
+  // Automatic detection over the NULL-stackId photos, minus the hidden JPEG
+  // side of a pair, folding siblings back in afterwards.
+  final autoVisible = [
+    for (final p in autoInput)
+      if (!hiddenJpeg.contains(p.id)) p,
+  ];
+  final hiddenByName = <String, List<int>>{};
+  for (final p in autoInput) {
+    if (hiddenJpeg.contains(p.id)) {
+      hiddenByName.putIfAbsent(normalizeName(p.path), () => []).add(p.id);
+    }
+  }
+  final pathById = {for (final p in autoVisible) p.id: p.path};
+  final autoStacks = [
+    for (final group in groupExposureBrackets([
+      for (final p in autoVisible) byId[p.id]!,
+    ]))
+      [
+        for (final id in group) ...[
+          id,
+          ...?hiddenByName[normalizeName(pathById[id]!)],
+        ],
+      ],
+  ];
+
+  final stacks = [...manualById.values, ...autoStacks];
+  return BracketGroups.fromStacks(stacks, byId, exclude: hiddenJpeg);
 }, name: 'bracketGroups');
 
 /// On-demand perceptual-hash similarity groups (§8), **per import** so running

@@ -60,6 +60,26 @@ void main() {
       );
       expect(encodeXmp(const XmpData()), isNot(contains('tiff:Orientation')));
     });
+
+    test(
+      'writes cullimingo:StackId for a manual decision, silent when null',
+      () {
+        expect(
+          encodeXmp(const XmpData(stackId: 's123')),
+          contains('cullimingo:StackId="s123"'),
+        );
+        // Empty string is a deliberate "unstacked" and is still written.
+        expect(
+          encodeXmp(const XmpData(stackId: '')),
+          contains('cullimingo:StackId=""'),
+        );
+        // null (no manual decision) stays silent.
+        expect(
+          encodeXmp(const XmpData()),
+          isNot(contains('cullimingo:StackId')),
+        );
+      },
+    );
   });
 
   group('decodeXmp', () {
@@ -76,6 +96,14 @@ void main() {
       expect(back.color, ColorLabel.green);
       expect(back.flag, PickFlag.reject);
       expect(back.keywords, ['x', 'y']);
+    });
+
+    test('round-trips the manual stack id (incl. the unstacked sentinel)', () {
+      expect(decodeXmp(encodeXmp(const XmpData(stackId: 's7'))).stackId, 's7');
+      // "" (manually unstacked) must survive as "", not collapse to null.
+      expect(decodeXmp(encodeXmp(const XmpData(stackId: ''))).stackId, '');
+      // No attribute at all decodes to null (no manual decision).
+      expect(decodeXmp(encodeXmp(const XmpData())).stackId, isNull);
     });
 
     test('round-trips subject codes as an Iptc4xmpCore:SubjectCode bag', () {

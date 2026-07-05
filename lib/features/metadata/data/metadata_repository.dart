@@ -105,6 +105,7 @@ class MetadataRepository {
               iptc: photo.iptc,
               dateCreated: photo.capturedAt,
               orientation: orientation,
+              stackId: photo.stackId,
             ),
           );
           mtimes[photo.id] = await _sidecarMtime(photo.path);
@@ -205,6 +206,8 @@ class MetadataRepository {
             cropRight: Value(xmp.crop?.right),
             cropBottom: Value(xmp.crop?.bottom),
             cropAngle: Value(xmp.crop?.angle),
+            // Adopt a manual bracket-stack decision the sidecar carries.
+            stackId: Value(xmp.stackId),
           ),
           where: (t) => t.id.equals(targets[i].id),
         );
@@ -303,6 +306,7 @@ class MetadataRepository {
         cropRight: Value(xmp.crop?.right),
         cropBottom: Value(xmp.crop?.bottom),
         cropAngle: Value(xmp.crop?.angle),
+        stackId: Value(xmp.stackId),
       ),
     );
   }

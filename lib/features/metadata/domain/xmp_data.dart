@@ -20,6 +20,7 @@ class XmpData {
     this.dateCreated,
     this.orientation,
     this.crop,
+    this.stackId,
   });
 
   /// Star rating 0–5 (`xmp:Rating`).
@@ -51,4 +52,10 @@ class XmpData {
   /// Non-destructive Lightroom/Camera-Raw crop (`crs:`), when the source has
   /// one. Read-only — surfaced in the inspector + loupe, never written.
   final CropRect? crop;
+
+  /// Manual exposure-bracket stack override (private `cullimingo:StackId`).
+  /// Only the user's *manual* decisions travel in XMP (automatic detection
+  /// re-runs on import): a non-empty id = manually stacked; the empty string =
+  /// manually unstacked; null = no manual decision (don't write it).
+  final String? stackId;
 }

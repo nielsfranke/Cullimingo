@@ -741,6 +741,17 @@ class $PhotosTable extends Photos with TableInfo<$PhotosTable, Photo> {
     type: DriftSqlType.double,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _stackIdMeta = const VerificationMeta(
+    'stackId',
+  );
+  @override
+  late final GeneratedColumn<String> stackId = GeneratedColumn<String>(
+    'stack_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -776,6 +787,7 @@ class $PhotosTable extends Photos with TableInfo<$PhotosTable, Photo> {
     isRaw,
     exposureBias,
     exposureTime,
+    stackId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -985,6 +997,12 @@ class $PhotosTable extends Photos with TableInfo<$PhotosTable, Photo> {
         ),
       );
     }
+    if (data.containsKey('stack_id')) {
+      context.handle(
+        _stackIdMeta,
+        stackId.isAcceptableOrUnknown(data['stack_id']!, _stackIdMeta),
+      );
+    }
     return context;
   }
 
@@ -1134,6 +1152,10 @@ class $PhotosTable extends Photos with TableInfo<$PhotosTable, Photo> {
         DriftSqlType.double,
         data['${effectivePrefix}exposure_time'],
       ),
+      stackId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}stack_id'],
+      ),
     );
   }
 
@@ -1266,6 +1288,14 @@ class Photo extends DataClass implements Insertable<Photo> {
   /// not yet EXIF-scanned, 0.0 = scanned but the tag was absent (0 s is never a
   /// real shutter speed), which is what lets the legacy backfill run once.
   final double? exposureTime;
+
+  /// Manual exposure-bracket stack override, round-tripped via `cullimingo:
+  /// StackId` in XMP. **NULL** = let automatic detection decide (the default);
+  /// an **empty string** = the user manually removed this photo from any stack;
+  /// a **non-empty id** = the user manually grouped this photo into that stack.
+  /// Automatic detection only ever sees NULL photos, so a manual decision is
+  /// never re-grouped away.
+  final String? stackId;
   const Photo({
     required this.id,
     this.importId,
@@ -1300,6 +1330,7 @@ class Photo extends DataClass implements Insertable<Photo> {
     required this.isRaw,
     this.exposureBias,
     this.exposureTime,
+    this.stackId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1385,6 +1416,9 @@ class Photo extends DataClass implements Insertable<Photo> {
     if (!nullToAbsent || exposureTime != null) {
       map['exposure_time'] = Variable<double>(exposureTime);
     }
+    if (!nullToAbsent || stackId != null) {
+      map['stack_id'] = Variable<String>(stackId);
+    }
     return map;
   }
 
@@ -1457,6 +1491,9 @@ class Photo extends DataClass implements Insertable<Photo> {
       exposureTime: exposureTime == null && nullToAbsent
           ? const Value.absent()
           : Value(exposureTime),
+      stackId: stackId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stackId),
     );
   }
 
@@ -1503,6 +1540,7 @@ class Photo extends DataClass implements Insertable<Photo> {
       isRaw: serializer.fromJson<bool>(json['isRaw']),
       exposureBias: serializer.fromJson<double?>(json['exposureBias']),
       exposureTime: serializer.fromJson<double?>(json['exposureTime']),
+      stackId: serializer.fromJson<String?>(json['stackId']),
     );
   }
   @override
@@ -1544,6 +1582,7 @@ class Photo extends DataClass implements Insertable<Photo> {
       'isRaw': serializer.toJson<bool>(isRaw),
       'exposureBias': serializer.toJson<double?>(exposureBias),
       'exposureTime': serializer.toJson<double?>(exposureTime),
+      'stackId': serializer.toJson<String?>(stackId),
     };
   }
 
@@ -1581,6 +1620,7 @@ class Photo extends DataClass implements Insertable<Photo> {
     bool? isRaw,
     Value<double?> exposureBias = const Value.absent(),
     Value<double?> exposureTime = const Value.absent(),
+    Value<String?> stackId = const Value.absent(),
   }) => Photo(
     id: id ?? this.id,
     importId: importId.present ? importId.value : this.importId,
@@ -1615,6 +1655,7 @@ class Photo extends DataClass implements Insertable<Photo> {
     isRaw: isRaw ?? this.isRaw,
     exposureBias: exposureBias.present ? exposureBias.value : this.exposureBias,
     exposureTime: exposureTime.present ? exposureTime.value : this.exposureTime,
+    stackId: stackId.present ? stackId.value : this.stackId,
   );
   Photo copyWithCompanion(PhotosCompanion data) {
     return Photo(
@@ -1673,6 +1714,7 @@ class Photo extends DataClass implements Insertable<Photo> {
       exposureTime: data.exposureTime.present
           ? data.exposureTime.value
           : this.exposureTime,
+      stackId: data.stackId.present ? data.stackId.value : this.stackId,
     );
   }
 
@@ -1711,7 +1753,8 @@ class Photo extends DataClass implements Insertable<Photo> {
           ..write('previewCached: $previewCached, ')
           ..write('isRaw: $isRaw, ')
           ..write('exposureBias: $exposureBias, ')
-          ..write('exposureTime: $exposureTime')
+          ..write('exposureTime: $exposureTime, ')
+          ..write('stackId: $stackId')
           ..write(')'))
         .toString();
   }
@@ -1751,6 +1794,7 @@ class Photo extends DataClass implements Insertable<Photo> {
     isRaw,
     exposureBias,
     exposureTime,
+    stackId,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -1788,7 +1832,8 @@ class Photo extends DataClass implements Insertable<Photo> {
           other.previewCached == this.previewCached &&
           other.isRaw == this.isRaw &&
           other.exposureBias == this.exposureBias &&
-          other.exposureTime == this.exposureTime);
+          other.exposureTime == this.exposureTime &&
+          other.stackId == this.stackId);
 }
 
 class PhotosCompanion extends UpdateCompanion<Photo> {
@@ -1825,6 +1870,7 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
   final Value<bool> isRaw;
   final Value<double?> exposureBias;
   final Value<double?> exposureTime;
+  final Value<String?> stackId;
   const PhotosCompanion({
     this.id = const Value.absent(),
     this.importId = const Value.absent(),
@@ -1859,6 +1905,7 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
     this.isRaw = const Value.absent(),
     this.exposureBias = const Value.absent(),
     this.exposureTime = const Value.absent(),
+    this.stackId = const Value.absent(),
   });
   PhotosCompanion.insert({
     this.id = const Value.absent(),
@@ -1894,6 +1941,7 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
     this.isRaw = const Value.absent(),
     this.exposureBias = const Value.absent(),
     this.exposureTime = const Value.absent(),
+    this.stackId = const Value.absent(),
   }) : path = Value(path),
        mtime = Value(mtime);
   static Insertable<Photo> custom({
@@ -1930,6 +1978,7 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
     Expression<bool>? isRaw,
     Expression<double>? exposureBias,
     Expression<double>? exposureTime,
+    Expression<String>? stackId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1965,6 +2014,7 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
       if (isRaw != null) 'is_raw': isRaw,
       if (exposureBias != null) 'exposure_bias': exposureBias,
       if (exposureTime != null) 'exposure_time': exposureTime,
+      if (stackId != null) 'stack_id': stackId,
     });
   }
 
@@ -2002,6 +2052,7 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
     Value<bool>? isRaw,
     Value<double?>? exposureBias,
     Value<double?>? exposureTime,
+    Value<String?>? stackId,
   }) {
     return PhotosCompanion(
       id: id ?? this.id,
@@ -2037,6 +2088,7 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
       isRaw: isRaw ?? this.isRaw,
       exposureBias: exposureBias ?? this.exposureBias,
       exposureTime: exposureTime ?? this.exposureTime,
+      stackId: stackId ?? this.stackId,
     );
   }
 
@@ -2150,6 +2202,9 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
     if (exposureTime.present) {
       map['exposure_time'] = Variable<double>(exposureTime.value);
     }
+    if (stackId.present) {
+      map['stack_id'] = Variable<String>(stackId.value);
+    }
     return map;
   }
 
@@ -2188,7 +2243,8 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
           ..write('previewCached: $previewCached, ')
           ..write('isRaw: $isRaw, ')
           ..write('exposureBias: $exposureBias, ')
-          ..write('exposureTime: $exposureTime')
+          ..write('exposureTime: $exposureTime, ')
+          ..write('stackId: $stackId')
           ..write(')'))
         .toString();
   }
@@ -3004,6 +3060,7 @@ typedef $$PhotosTableCreateCompanionBuilder =
       Value<bool> isRaw,
       Value<double?> exposureBias,
       Value<double?> exposureTime,
+      Value<String?> stackId,
     });
 typedef $$PhotosTableUpdateCompanionBuilder =
     PhotosCompanion Function({
@@ -3040,6 +3097,7 @@ typedef $$PhotosTableUpdateCompanionBuilder =
       Value<bool> isRaw,
       Value<double?> exposureBias,
       Value<double?> exposureTime,
+      Value<String?> stackId,
     });
 
 final class $$PhotosTableReferences
@@ -3237,6 +3295,11 @@ class $$PhotosTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<String> get stackId => $composableBuilder(
+    column: $table.stackId,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$ImportsTableFilterComposer get importId {
     final $$ImportsTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -3430,6 +3493,11 @@ class $$PhotosTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get stackId => $composableBuilder(
+    column: $table.stackId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ImportsTableOrderingComposer get importId {
     final $$ImportsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -3582,6 +3650,9 @@ class $$PhotosTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get stackId =>
+      $composableBuilder(column: $table.stackId, builder: (column) => column);
+
   $$ImportsTableAnnotationComposer get importId {
     final $$ImportsTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -3667,6 +3738,7 @@ class $$PhotosTableTableManager
                 Value<bool> isRaw = const Value.absent(),
                 Value<double?> exposureBias = const Value.absent(),
                 Value<double?> exposureTime = const Value.absent(),
+                Value<String?> stackId = const Value.absent(),
               }) => PhotosCompanion(
                 id: id,
                 importId: importId,
@@ -3701,6 +3773,7 @@ class $$PhotosTableTableManager
                 isRaw: isRaw,
                 exposureBias: exposureBias,
                 exposureTime: exposureTime,
+                stackId: stackId,
               ),
           createCompanionCallback:
               ({
@@ -3737,6 +3810,7 @@ class $$PhotosTableTableManager
                 Value<bool> isRaw = const Value.absent(),
                 Value<double?> exposureBias = const Value.absent(),
                 Value<double?> exposureTime = const Value.absent(),
+                Value<String?> stackId = const Value.absent(),
               }) => PhotosCompanion.insert(
                 id: id,
                 importId: importId,
@@ -3771,6 +3845,7 @@ class $$PhotosTableTableManager
                 isRaw: isRaw,
                 exposureBias: exposureBias,
                 exposureTime: exposureTime,
+                stackId: stackId,
               ),
           withReferenceMapper: (p0) => p0
               .map(
