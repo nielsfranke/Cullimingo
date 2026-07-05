@@ -6,6 +6,23 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 ## 1.1.0 — 2026-07-05
 
 ### Added
+- **Exposure-bracket workflow.** Cullimingo now understands bracketed shots:
+  - **Automatic detection** of exposure brackets from EXIF, with a
+    shutter-aware time gap that keeps long-exposure + NR frames together and
+    splits back-to-back brackets. The scan now also reads exposure compensation
+    and shutter speed (with a LibRaw fallback that recovers them from Fuji
+    `.RAF` files the pure-Dart reader can't open).
+  - **Collapse to one frame:** a **Stack brackets** filter chip (shown only when
+    the folder has brackets) hides the ±EV siblings so the grid shows one cell
+    per bracket — its reference (normal-exposure) frame, badged with the frame
+    count.
+  - **Expand selection to bracket (`G`):** after client picks come back (a
+    ⌘F paste-list or a ContactSheet pull), grow the selection to every ±EV
+    sibling before export. Optional settings auto-propagate ratings/flags/
+    colours to the whole bracket and auto-expand pulled-in client picks.
+  - **Manual corrections:** **Stack as bracket** / **Remove from bracket** in
+    the right-click menu override detection, persist, and round-trip through the
+    XMP sidecar so they survive re-import.
 - **Export beside the originals:** the export dialog can now write each photo
   into a subfolder next to its own source file (default `Exports`), alongside
   the existing "choose one folder" mode. Blank subfolder writes straight
