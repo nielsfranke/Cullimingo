@@ -3,6 +3,28 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## 1.1.0 — 2026-07-05
+
+### Added
+- **Export beside the originals:** the export dialog can now write each photo
+  into a subfolder next to its own source file (default `Exports`), alongside
+  the existing "choose one folder" mode. Blank subfolder writes straight
+  alongside.
+- **ContactSheet from the right-click menu:** when ContactSheet is set up, the
+  thumbnail (and loupe) context menu offers **Send to ContactSheet…** and
+  **Pull marks from ContactSheet…**, opening the dialog straight into the right
+  mode.
+
+### Changed
+- **Calmer first launch:** the welcome dialog now shows just the essential keys
+  to get culling — move, rate, pick/reject, colour, select, loupe — with a note
+  to press `?` any time for the full list, instead of dumping the whole keymap.
+
+### Fixed
+- **Export naming beside originals:** identically-named files in different
+  source folders no longer pick up a needless `_2` suffix — they land in
+  separate destinations and never actually collide.
+
 ## 1.0.2 — 2026-07-04
 
 ### Fixed
