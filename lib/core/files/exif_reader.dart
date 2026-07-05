@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cullimingo/core/files/exif_values.dart';
 import 'package:cullimingo/core/files/image_dimensions.dart';
@@ -91,6 +92,26 @@ Future<PhotoExif> readPhotoExif(File file) async {
   }
   if (tags.isEmpty && width == null && height == null) return const PhotoExif();
 
+  return _fromTags(tags, width: width, height: height);
+}
+
+/// Reads [PhotoExif] from in-memory [bytes] — used to pull EXIF out of a RAW's
+/// embedded preview JPEG (extracted by LibRaw) for container formats like Fuji
+/// `.RAF` whose EXIF the file-based reader can't reach. Pixel dimensions are
+/// deliberately *not* returned: the preview is a downscaled render, so its size
+/// isn't the full image's. Returns an empty result on any error.
+Future<PhotoExif> readPhotoExifBytes(Uint8List bytes) async {
+  Map<String, IfdTag> tags;
+  try {
+    tags = await readExifFromBytes(bytes);
+  } on Object {
+    return const PhotoExif();
+  }
+  if (tags.isEmpty) return const PhotoExif();
+  return _fromTags(tags);
+}
+
+PhotoExif _fromTags(Map<String, IfdTag> tags, {int? width, int? height}) {
   return PhotoExif(
     capturedAt: _parseExifDate(
       tags['EXIF DateTimeOriginal']?.printable ??

@@ -182,26 +182,34 @@ Future<List<ScannedExif>> _readExif(
     var exif = await readPhotoExif(File(path));
 
     // Fuji `.RAF` (and similar wrapped containers) hide their EXIF from the
-    // pure-Dart reader, so capture time / camera / shutter come back null.
-    // LibRaw parses them natively — fill only the gaps so TIFF-based raws
-    // (DNG/ARW/CR2/NEF) keep their richer exif fields (incl. exposure bias).
+    // pure-Dart reader, so capture time / camera / bias / shutter come back
+    // null. Their embedded preview JPEG *does* carry standard EXIF (incl. the
+    // exposure bias that back-to-back bracket detection needs), so read that;
+    // fall back to LibRaw's header fields if a preview has no EXIF. TIFF-based
+    // raws (DNG/ARW/CR2/NEF) satisfy the direct read and skip all of this.
     if (isRawPath(path) &&
         (exif.capturedAt == null ||
             exif.exposureTime == null ||
+            exif.exposureBias == null ||
             exif.camera == null)) {
       final bindings = libraw();
       if (bindings != null) {
+        final previewBytes = extractRawThumbnail(bindings, path);
+        final preview = previewBytes == null
+            ? const PhotoExif()
+            : await readPhotoExifBytes(previewBytes);
         final raw = readRawMetadata(bindings, path);
         exif = PhotoExif(
-          capturedAt: exif.capturedAt ?? raw.capturedAt,
-          camera: exif.camera ?? raw.camera,
+          capturedAt: exif.capturedAt ?? preview.capturedAt ?? raw.capturedAt,
+          camera: exif.camera ?? preview.camera ?? raw.camera,
           width: exif.width,
           height: exif.height,
           latitude: exif.latitude,
           longitude: exif.longitude,
           orientation: exif.orientation,
-          exposureBias: exif.exposureBias,
-          exposureTime: exif.exposureTime ?? raw.exposureTime,
+          exposureBias: exif.exposureBias ?? preview.exposureBias,
+          exposureTime:
+              exif.exposureTime ?? preview.exposureTime ?? raw.exposureTime,
         );
       }
     }
