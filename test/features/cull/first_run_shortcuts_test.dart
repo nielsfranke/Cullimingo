@@ -83,6 +83,10 @@ void main() {
 
     expect(find.text('Welcome to Cullimingo'), findsOneWidget);
     expect(find.text('Got it'), findsOneWidget);
+    // Slimmed to essentials: the "Add to selection" essential shows, but the
+    // deep reference rows (e.g. the "New tab" fixed shortcut) stay behind `?`.
+    expect(find.text('Add to selection'), findsOneWidget);
+    expect(find.text('New tab'), findsNothing);
     expect(container.read(shortcutsHintSeenProvider), isTrue);
 
     await tester.tap(find.text('Got it'));

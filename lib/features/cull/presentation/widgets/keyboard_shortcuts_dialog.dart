@@ -90,53 +90,38 @@ class _KeyboardShortcutsDialog extends ConsumerWidget {
     final shortcuts = ref.watch(cullShortcutsControllerProvider);
     return AlertDialog(
       title: Text(firstRun ? 'Welcome to Cullimingo' : 'Keyboard shortcuts'),
-      // Two balanced columns so the list reads at a glance instead of scrolling
-      // forever: rebindable cull keys on the left, view/select + fixed
-      // navigation on the right.
+      // First run: a short essentials list so a newcomer isn't buried under the
+      // full keymap on launch — the whole list is one `?` away. The `?` cheat
+      // sheet stays the two-column reference (rebindable cull keys left,
+      // view/select + fixed navigation right).
       content: SizedBox(
-        width: 680,
+        width: firstRun ? 420 : 680,
         child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (firstRun) ...[
-                const Text(
-                  'Culling here is keyboard-first. These are the keys — press '
-                  '? any time to see this list again, and rebind anything '
-                  'under Settings.',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 13,
-                  ),
+          child: firstRun
+              ? _firstRunEssentials(shortcuts)
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Left: rebindable cull keys (short — a narrow key column).
+                    Expanded(
+                      child: _shortcutColumn(
+                        shortcuts,
+                        groups: kShortcutActionGroups,
+                        keyWidth: 108,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xl),
+                    // Right: fixed navigation/app keys (long ⌘/Ctrl combos).
+                    Expanded(
+                      child: _shortcutColumn(
+                        shortcuts,
+                        groups: const [],
+                        includeFixed: true,
+                        keyWidth: 188,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Left: rebindable cull keys (short — a narrow key column).
-                  Expanded(
-                    child: _shortcutColumn(
-                      shortcuts,
-                      groups: kShortcutActionGroups,
-                      keyWidth: 108,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xl),
-                  // Right: fixed navigation/app keys (long ⌘/Ctrl combos).
-                  Expanded(
-                    child: _shortcutColumn(
-                      shortcuts,
-                      groups: const [],
-                      includeFixed: true,
-                      keyWidth: 188,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
         ),
       ),
       actions: firstRun
@@ -159,6 +144,47 @@ class _KeyboardShortcutsDialog extends ConsumerWidget {
                 child: const Text('Close'),
               ),
             ],
+    );
+  }
+
+  // The trimmed first-run welcome: just enough keys to start culling, using
+  // the live bindings. Everything else (and rebinding) is behind `?`.
+  Widget _firstRunEssentials(CullShortcuts shortcuts) {
+    String k(CullAction a) => keyDisplayLabel(shortcuts.keyFor(a));
+    final rows = <({String keys, String does})>[
+      (keys: '← ↑ → ↓', does: 'Move between photos'),
+      (
+        keys: '${k(CullAction.rate1)} – ${k(CullAction.rate5)}',
+        does: 'Rate 1–5 stars',
+      ),
+      (
+        keys: '${k(CullAction.pick)}   ${k(CullAction.reject)}',
+        does: 'Pick / reject',
+      ),
+      (
+        keys: '${k(CullAction.colorRed)} – ${k(CullAction.colorBlue)}',
+        does: 'Colour labels',
+      ),
+      (keys: k(CullAction.select), does: 'Add to selection'),
+      (keys: k(CullAction.loupe), does: 'Open the loupe'),
+    ];
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Culling here is keyboard-first. The essentials to get going:',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        for (final r in rows) _Row(keys: r.keys, does: r.does, keyWidth: 108),
+        const SizedBox(height: AppSpacing.lg),
+        const Text(
+          'Press ? any time for the full list — and rebind anything under '
+          'Settings.',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+        ),
+      ],
     );
   }
 
