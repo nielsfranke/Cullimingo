@@ -72,6 +72,11 @@ unsigned. See [DISTRIBUTION.md](DISTRIBUTION.md) for the details.
   + batch marking, right-click palette, tabs for multiple folders.
 - **Loupe & compare** — full-screen loupe (zoom/pan, neighbour prefetch) and a
   2-up / n-up compare view, both keyboard-cullable.
+- **Exposure brackets** — auto-detected from EXIF and collapsed to one cell per
+  bracket in the grid (the reference frame badged with its count). Expand a
+  selection to every ±EV sibling with `G` — so client picks re-attach their
+  brackets before export — plus optional mark-the-whole-bracket, and manual
+  stack / unstack that round-trips via XMP.
 - **Real filtering & selections** — quick-filter bar (rating / flag / colour /
   keyworded / selected, live counts), saved named selections, and ⌘F find by a
   pasted filename list. Import a Picdrop/CSV list to select the matching RAWs.
@@ -86,8 +91,9 @@ unsigned. See [DISTRIBUTION.md](DISTRIBUTION.md) for the details.
   IPTC Subject Code / Media Topics, and offline GPS→city reverse geocoding.
   Exports embed IPTC as both XMP and legacy IIM.
 - **Export** — non-modal background export (bounded-concurrency isolate pool):
-  resize / quality / sharpen / rename template / size cap, keep culling while it
-  runs. RAW exports use the embedded preview.
+  resize / quality / sharpen / rename template / size cap, into one folder or
+  beside each original — keep culling while it runs. RAW exports use the
+  embedded preview.
 - **Hand-off** — drag originals straight to Finder, verified copy / move the
   selection (with XMP sidecars) to any folder, send it to your own editors
   (Capture One / Lightroom / Photoshop / GIMP / …) via the right-click menu or
@@ -115,6 +121,7 @@ is culled by its poster frame; playback hands off to your **system player**
 | `P` / `X` | pick / reject |
 | `6 7 8 9` | colour: red / yellow / green / blue · `Backspace` purple |
 | `Space` | select · ⌘/Ctrl-click toggle · Shift-click range |
+| `G` | expand the selection to its exposure bracket |
 | `Enter` / `F` | loupe · `C` compare · `B` burst |
 | `I` | metadata inspector · `K` keywords |
 | ⌘/Ctrl `O` `T` `W` `A` `F` `S` `E` `R` | open · new tab · close tab · select all · find · export · send to primary editor · refresh |
