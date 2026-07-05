@@ -179,6 +179,18 @@ class Photos extends Table {
 
   /// True for RAW files (embedded-preview path); false for plain JPEG/PNG.
   BoolColumn get isRaw => boolean().withDefault(const Constant(false))();
+
+  /// Exposure compensation in EV (`EXIF ExposureBiasValue`), when the file
+  /// exposes it. Feeds exposure-bracket detection. Null when the tag is absent
+  /// or unreadable (e.g. Fuji `.RAF`, which falls back to [exposureTime]).
+  RealColumn get exposureBias => real().nullable()();
+
+  /// Shutter speed in seconds (`EXIF ExposureTime` / LibRaw `shutter`). Bracket
+  /// detection uses it both as the varying signal (when [exposureBias] is
+  /// absent) and to size the shutter-aware time-gap tolerance. Sentinel: NULL =
+  /// not yet EXIF-scanned, 0.0 = scanned but the tag was absent (0 s is never a
+  /// real shutter speed), which is what lets the legacy backfill run once.
+  RealColumn get exposureTime => real().nullable()();
 }
 
 /// A named, persisted selection of photos within one import (`BUILD_PLAN.md`

@@ -125,25 +125,25 @@ abstract class _$SidecarSync extends $Notifier<int> {
 
 /// The most recent failed sidecar-write batch. A photo's marks hit the DB (and
 /// the grid) instantly, then mirror to its `.xmp`; when that write fails (a
-/// read-only volume, a full disk, a removed drive) the count surfaces here — a
-/// monotonic [seq] so two identical-sized failures each still notify — and the
-/// page warns instead of the failure being silently invisible.
+/// read-only volume, a full disk, a removed drive) the count surfaces here —
+/// with a monotonic `seq` so two identical-sized failures each still notify —
+/// and the page warns instead of the failure being silently invisible.
 
 @ProviderFor(SidecarWriteError)
 final sidecarWriteErrorProvider = SidecarWriteErrorProvider._();
 
 /// The most recent failed sidecar-write batch. A photo's marks hit the DB (and
 /// the grid) instantly, then mirror to its `.xmp`; when that write fails (a
-/// read-only volume, a full disk, a removed drive) the count surfaces here — a
-/// monotonic [seq] so two identical-sized failures each still notify — and the
-/// page warns instead of the failure being silently invisible.
+/// read-only volume, a full disk, a removed drive) the count surfaces here —
+/// with a monotonic `seq` so two identical-sized failures each still notify —
+/// and the page warns instead of the failure being silently invisible.
 final class SidecarWriteErrorProvider
     extends $NotifierProvider<SidecarWriteError, ({int count, int seq})> {
   /// The most recent failed sidecar-write batch. A photo's marks hit the DB (and
   /// the grid) instantly, then mirror to its `.xmp`; when that write fails (a
-  /// read-only volume, a full disk, a removed drive) the count surfaces here — a
-  /// monotonic [seq] so two identical-sized failures each still notify — and the
-  /// page warns instead of the failure being silently invisible.
+  /// read-only volume, a full disk, a removed drive) the count surfaces here —
+  /// with a monotonic `seq` so two identical-sized failures each still notify —
+  /// and the page warns instead of the failure being silently invisible.
   SidecarWriteErrorProvider._()
     : super(
         from: null,
@@ -175,9 +175,9 @@ String _$sidecarWriteErrorHash() => r'8359363a06f8c338ae7d4578721ea4ef950b6716';
 
 /// The most recent failed sidecar-write batch. A photo's marks hit the DB (and
 /// the grid) instantly, then mirror to its `.xmp`; when that write fails (a
-/// read-only volume, a full disk, a removed drive) the count surfaces here — a
-/// monotonic [seq] so two identical-sized failures each still notify — and the
-/// page warns instead of the failure being silently invisible.
+/// read-only volume, a full disk, a removed drive) the count surfaces here —
+/// with a monotonic `seq` so two identical-sized failures each still notify —
+/// and the page warns instead of the failure being silently invisible.
 
 abstract class _$SidecarWriteError extends $Notifier<({int count, int seq})> {
   ({int count, int seq}) build();

@@ -123,6 +123,10 @@ class LibraryRepository {
     if (removedPaths.isNotEmpty) {
       await db.deletePhotosByPaths(importId, removedPaths);
     }
+    // Backfill exposure fields for rows imported before the v8 schema. Runs
+    // once per legacy row (sentinel-guarded), so a reopened shoot picks up
+    // bracket detection without a manual re-import.
+    await _backfillExposure(existing);
     return (newFiles.length, removedPaths.length);
   }
 
@@ -148,6 +152,37 @@ class LibraryRepository {
             latitude: Value(e.latitude),
             longitude: Value(e.longitude),
             orientation: Value(e.orientation ?? 1),
+            exposureBias: Value(e.exposureBias),
+            // 0.0 sentinel = "scanned, no shutter tag" so the legacy backfill
+            // (which keys off NULL) never re-scans this row again.
+            exposureTime: Value(e.exposureTime ?? 0),
+          ),
+          where: (t) => t.path.equals(e.path),
+        );
+      }
+    });
+  }
+
+  /// One-time backfill of the exposure columns for photos imported before the
+  /// v8 schema (their [Photo.exposureTime] is still NULL). Touches *only* the
+  /// two exposure columns so it never clobbers capture time / camera / GPS that
+  /// a later manual edit or sidecar sync may have refined. Runs at most once
+  /// per row thanks to the 0.0 sentinel written below.
+  Future<void> _backfillExposure(List<Photo> existing) async {
+    final stale = existing
+        .where((row) => row.exposureTime == null && !isVideoPath(row.path))
+        .map((row) => row.path)
+        .toList();
+    if (stale.isEmpty) return;
+    final exif = await scanExif(stale);
+    if (exif.isEmpty) return;
+    await db.batch((b) {
+      for (final e in exif) {
+        b.update(
+          db.photos,
+          PhotosCompanion(
+            exposureBias: Value(e.exposureBias),
+            exposureTime: Value(e.exposureTime ?? 0),
           ),
           where: (t) => t.path.equals(e.path),
         );

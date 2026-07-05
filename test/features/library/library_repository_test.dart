@@ -5,6 +5,7 @@ import 'package:cullimingo/features/library/data/library_repository.dart';
 import 'package:cullimingo/features/metadata/data/metadata_repository.dart';
 import 'package:cullimingo/features/metadata/data/xmp_sidecar.dart';
 import 'package:cullimingo/features/metadata/domain/xmp_data.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
@@ -100,6 +101,66 @@ void main() {
     final plain = photos.singleWhere((ph) => ph.path.endsWith('plain.jpg'));
     expect(plain.latitude, isNull);
     expect(plain.longitude, isNull);
+  });
+
+  void writeJpegWithExposure(String name, {num? bias, num? shutter}) {
+    final image = img.Image(width: 8, height: 8);
+    image.exif.imageIfd['Make'] = 'Sony';
+    if (bias != null) {
+      image.exif.exifIfd['ExposureBiasValue'] = img.IfdValueSRational(
+        bias.round(),
+        1,
+      );
+    }
+    if (shutter != null) {
+      image.exif.exifIfd['ExposureTime'] = img.IfdValueRational(
+        1,
+        shutter ~/ 1,
+      );
+    }
+    File(p.join(tmp.path, name)).writeAsBytesSync(img.encodeJpg(image));
+  }
+
+  test('backfills exposure bias and shutter into the photo row', () async {
+    writeJpegWithExposure('bracket.jpg', bias: -2, shutter: 200);
+    writeJpeg('noexif.jpg');
+
+    final importId = await repo.importFolder(tmp.path);
+    final photos = await repo.watchImport(importId).first;
+
+    final b = photos.singleWhere((ph) => ph.path.endsWith('bracket.jpg'));
+    expect(b.exposureBias, -2.0);
+    expect(b.exposureTime, closeTo(1 / 200, 0.000001));
+    // A photo with no exposure tag is still marked scanned (0.0 sentinel), so
+    // the legacy backfill never revisits it.
+    final n = photos.singleWhere((ph) => ph.path.endsWith('noexif.jpg'));
+    expect(n.exposureBias, isNull);
+    expect(n.exposureTime, 0.0);
+  });
+
+  test('refreshImport backfills exposure for pre-v8 rows', () async {
+    writeJpegWithExposure('legacy.jpg', bias: 1, shutter: 60);
+    final importId = await repo.importFolder(tmp.path);
+
+    // Simulate a row imported before the v8 columns existed: NULL exposureTime.
+    await (db.update(
+      db.photos,
+    )..where((t) => t.path.equals(p.join(tmp.path, 'legacy.jpg')))).write(
+      const PhotosCompanion(
+        exposureBias: Value(null),
+        exposureTime: Value(null),
+      ),
+    );
+    expect(
+      (await repo.watchImport(importId).first).single.exposureTime,
+      isNull,
+    );
+
+    await repo.refreshImport(importId, tmp.path);
+
+    final row = (await repo.watchImport(importId).first).single;
+    expect(row.exposureBias, 1.0);
+    expect(row.exposureTime, closeTo(1 / 60, 0.000001));
   });
 
   test('orders by EXIF capture time, not filename', () async {

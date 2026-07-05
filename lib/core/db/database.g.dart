@@ -719,6 +719,28 @@ class $PhotosTable extends Photos with TableInfo<$PhotosTable, Photo> {
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _exposureBiasMeta = const VerificationMeta(
+    'exposureBias',
+  );
+  @override
+  late final GeneratedColumn<double> exposureBias = GeneratedColumn<double>(
+    'exposure_bias',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _exposureTimeMeta = const VerificationMeta(
+    'exposureTime',
+  );
+  @override
+  late final GeneratedColumn<double> exposureTime = GeneratedColumn<double>(
+    'exposure_time',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -752,6 +774,8 @@ class $PhotosTable extends Photos with TableInfo<$PhotosTable, Photo> {
     xmpConflict,
     previewCached,
     isRaw,
+    exposureBias,
+    exposureTime,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -943,6 +967,24 @@ class $PhotosTable extends Photos with TableInfo<$PhotosTable, Photo> {
         isRaw.isAcceptableOrUnknown(data['is_raw']!, _isRawMeta),
       );
     }
+    if (data.containsKey('exposure_bias')) {
+      context.handle(
+        _exposureBiasMeta,
+        exposureBias.isAcceptableOrUnknown(
+          data['exposure_bias']!,
+          _exposureBiasMeta,
+        ),
+      );
+    }
+    if (data.containsKey('exposure_time')) {
+      context.handle(
+        _exposureTimeMeta,
+        exposureTime.isAcceptableOrUnknown(
+          data['exposure_time']!,
+          _exposureTimeMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1084,6 +1126,14 @@ class $PhotosTable extends Photos with TableInfo<$PhotosTable, Photo> {
         DriftSqlType.bool,
         data['${effectivePrefix}is_raw'],
       )!,
+      exposureBias: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}exposure_bias'],
+      ),
+      exposureTime: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}exposure_time'],
+      ),
     );
   }
 
@@ -1204,6 +1254,18 @@ class Photo extends DataClass implements Insertable<Photo> {
 
   /// True for RAW files (embedded-preview path); false for plain JPEG/PNG.
   final bool isRaw;
+
+  /// Exposure compensation in EV (`EXIF ExposureBiasValue`), when the file
+  /// exposes it. Feeds exposure-bracket detection. Null when the tag is absent
+  /// or unreadable (e.g. Fuji `.RAF`, which falls back to [exposureTime]).
+  final double? exposureBias;
+
+  /// Shutter speed in seconds (`EXIF ExposureTime` / LibRaw `shutter`). Bracket
+  /// detection uses it both as the varying signal (when [exposureBias] is
+  /// absent) and to size the shutter-aware time-gap tolerance. Sentinel: NULL =
+  /// not yet EXIF-scanned, 0.0 = scanned but the tag was absent (0 s is never a
+  /// real shutter speed), which is what lets the legacy backfill run once.
+  final double? exposureTime;
   const Photo({
     required this.id,
     this.importId,
@@ -1236,6 +1298,8 @@ class Photo extends DataClass implements Insertable<Photo> {
     required this.xmpConflict,
     required this.previewCached,
     required this.isRaw,
+    this.exposureBias,
+    this.exposureTime,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1315,6 +1379,12 @@ class Photo extends DataClass implements Insertable<Photo> {
     map['xmp_conflict'] = Variable<bool>(xmpConflict);
     map['preview_cached'] = Variable<bool>(previewCached);
     map['is_raw'] = Variable<bool>(isRaw);
+    if (!nullToAbsent || exposureBias != null) {
+      map['exposure_bias'] = Variable<double>(exposureBias);
+    }
+    if (!nullToAbsent || exposureTime != null) {
+      map['exposure_time'] = Variable<double>(exposureTime);
+    }
     return map;
   }
 
@@ -1381,6 +1451,12 @@ class Photo extends DataClass implements Insertable<Photo> {
       xmpConflict: Value(xmpConflict),
       previewCached: Value(previewCached),
       isRaw: Value(isRaw),
+      exposureBias: exposureBias == null && nullToAbsent
+          ? const Value.absent()
+          : Value(exposureBias),
+      exposureTime: exposureTime == null && nullToAbsent
+          ? const Value.absent()
+          : Value(exposureTime),
     );
   }
 
@@ -1425,6 +1501,8 @@ class Photo extends DataClass implements Insertable<Photo> {
       xmpConflict: serializer.fromJson<bool>(json['xmpConflict']),
       previewCached: serializer.fromJson<bool>(json['previewCached']),
       isRaw: serializer.fromJson<bool>(json['isRaw']),
+      exposureBias: serializer.fromJson<double?>(json['exposureBias']),
+      exposureTime: serializer.fromJson<double?>(json['exposureTime']),
     );
   }
   @override
@@ -1464,6 +1542,8 @@ class Photo extends DataClass implements Insertable<Photo> {
       'xmpConflict': serializer.toJson<bool>(xmpConflict),
       'previewCached': serializer.toJson<bool>(previewCached),
       'isRaw': serializer.toJson<bool>(isRaw),
+      'exposureBias': serializer.toJson<double?>(exposureBias),
+      'exposureTime': serializer.toJson<double?>(exposureTime),
     };
   }
 
@@ -1499,6 +1579,8 @@ class Photo extends DataClass implements Insertable<Photo> {
     bool? xmpConflict,
     bool? previewCached,
     bool? isRaw,
+    Value<double?> exposureBias = const Value.absent(),
+    Value<double?> exposureTime = const Value.absent(),
   }) => Photo(
     id: id ?? this.id,
     importId: importId.present ? importId.value : this.importId,
@@ -1531,6 +1613,8 @@ class Photo extends DataClass implements Insertable<Photo> {
     xmpConflict: xmpConflict ?? this.xmpConflict,
     previewCached: previewCached ?? this.previewCached,
     isRaw: isRaw ?? this.isRaw,
+    exposureBias: exposureBias.present ? exposureBias.value : this.exposureBias,
+    exposureTime: exposureTime.present ? exposureTime.value : this.exposureTime,
   );
   Photo copyWithCompanion(PhotosCompanion data) {
     return Photo(
@@ -1583,6 +1667,12 @@ class Photo extends DataClass implements Insertable<Photo> {
           ? data.previewCached.value
           : this.previewCached,
       isRaw: data.isRaw.present ? data.isRaw.value : this.isRaw,
+      exposureBias: data.exposureBias.present
+          ? data.exposureBias.value
+          : this.exposureBias,
+      exposureTime: data.exposureTime.present
+          ? data.exposureTime.value
+          : this.exposureTime,
     );
   }
 
@@ -1619,7 +1709,9 @@ class Photo extends DataClass implements Insertable<Photo> {
           ..write('marksMtime: $marksMtime, ')
           ..write('xmpConflict: $xmpConflict, ')
           ..write('previewCached: $previewCached, ')
-          ..write('isRaw: $isRaw')
+          ..write('isRaw: $isRaw, ')
+          ..write('exposureBias: $exposureBias, ')
+          ..write('exposureTime: $exposureTime')
           ..write(')'))
         .toString();
   }
@@ -1657,6 +1749,8 @@ class Photo extends DataClass implements Insertable<Photo> {
     xmpConflict,
     previewCached,
     isRaw,
+    exposureBias,
+    exposureTime,
   ]);
   @override
   bool operator ==(Object other) =>
@@ -1692,7 +1786,9 @@ class Photo extends DataClass implements Insertable<Photo> {
           other.marksMtime == this.marksMtime &&
           other.xmpConflict == this.xmpConflict &&
           other.previewCached == this.previewCached &&
-          other.isRaw == this.isRaw);
+          other.isRaw == this.isRaw &&
+          other.exposureBias == this.exposureBias &&
+          other.exposureTime == this.exposureTime);
 }
 
 class PhotosCompanion extends UpdateCompanion<Photo> {
@@ -1727,6 +1823,8 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
   final Value<bool> xmpConflict;
   final Value<bool> previewCached;
   final Value<bool> isRaw;
+  final Value<double?> exposureBias;
+  final Value<double?> exposureTime;
   const PhotosCompanion({
     this.id = const Value.absent(),
     this.importId = const Value.absent(),
@@ -1759,6 +1857,8 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
     this.xmpConflict = const Value.absent(),
     this.previewCached = const Value.absent(),
     this.isRaw = const Value.absent(),
+    this.exposureBias = const Value.absent(),
+    this.exposureTime = const Value.absent(),
   });
   PhotosCompanion.insert({
     this.id = const Value.absent(),
@@ -1792,6 +1892,8 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
     this.xmpConflict = const Value.absent(),
     this.previewCached = const Value.absent(),
     this.isRaw = const Value.absent(),
+    this.exposureBias = const Value.absent(),
+    this.exposureTime = const Value.absent(),
   }) : path = Value(path),
        mtime = Value(mtime);
   static Insertable<Photo> custom({
@@ -1826,6 +1928,8 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
     Expression<bool>? xmpConflict,
     Expression<bool>? previewCached,
     Expression<bool>? isRaw,
+    Expression<double>? exposureBias,
+    Expression<double>? exposureTime,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -1859,6 +1963,8 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
       if (xmpConflict != null) 'xmp_conflict': xmpConflict,
       if (previewCached != null) 'preview_cached': previewCached,
       if (isRaw != null) 'is_raw': isRaw,
+      if (exposureBias != null) 'exposure_bias': exposureBias,
+      if (exposureTime != null) 'exposure_time': exposureTime,
     });
   }
 
@@ -1894,6 +2000,8 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
     Value<bool>? xmpConflict,
     Value<bool>? previewCached,
     Value<bool>? isRaw,
+    Value<double?>? exposureBias,
+    Value<double?>? exposureTime,
   }) {
     return PhotosCompanion(
       id: id ?? this.id,
@@ -1927,6 +2035,8 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
       xmpConflict: xmpConflict ?? this.xmpConflict,
       previewCached: previewCached ?? this.previewCached,
       isRaw: isRaw ?? this.isRaw,
+      exposureBias: exposureBias ?? this.exposureBias,
+      exposureTime: exposureTime ?? this.exposureTime,
     );
   }
 
@@ -2034,6 +2144,12 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
     if (isRaw.present) {
       map['is_raw'] = Variable<bool>(isRaw.value);
     }
+    if (exposureBias.present) {
+      map['exposure_bias'] = Variable<double>(exposureBias.value);
+    }
+    if (exposureTime.present) {
+      map['exposure_time'] = Variable<double>(exposureTime.value);
+    }
     return map;
   }
 
@@ -2070,7 +2186,9 @@ class PhotosCompanion extends UpdateCompanion<Photo> {
           ..write('marksMtime: $marksMtime, ')
           ..write('xmpConflict: $xmpConflict, ')
           ..write('previewCached: $previewCached, ')
-          ..write('isRaw: $isRaw')
+          ..write('isRaw: $isRaw, ')
+          ..write('exposureBias: $exposureBias, ')
+          ..write('exposureTime: $exposureTime')
           ..write(')'))
         .toString();
   }
@@ -2884,6 +3002,8 @@ typedef $$PhotosTableCreateCompanionBuilder =
       Value<bool> xmpConflict,
       Value<bool> previewCached,
       Value<bool> isRaw,
+      Value<double?> exposureBias,
+      Value<double?> exposureTime,
     });
 typedef $$PhotosTableUpdateCompanionBuilder =
     PhotosCompanion Function({
@@ -2918,6 +3038,8 @@ typedef $$PhotosTableUpdateCompanionBuilder =
       Value<bool> xmpConflict,
       Value<bool> previewCached,
       Value<bool> isRaw,
+      Value<double?> exposureBias,
+      Value<double?> exposureTime,
     });
 
 final class $$PhotosTableReferences
@@ -3105,6 +3227,16 @@ class $$PhotosTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<double> get exposureBias => $composableBuilder(
+    column: $table.exposureBias,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get exposureTime => $composableBuilder(
+    column: $table.exposureTime,
+    builder: (column) => ColumnFilters(column),
+  );
+
   $$ImportsTableFilterComposer get importId {
     final $$ImportsTableFilterComposer composer = $composerBuilder(
       composer: this,
@@ -3288,6 +3420,16 @@ class $$PhotosTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get exposureBias => $composableBuilder(
+    column: $table.exposureBias,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get exposureTime => $composableBuilder(
+    column: $table.exposureTime,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   $$ImportsTableOrderingComposer get importId {
     final $$ImportsTableOrderingComposer composer = $composerBuilder(
       composer: this,
@@ -3430,6 +3572,16 @@ class $$PhotosTableAnnotationComposer
   GeneratedColumn<bool> get isRaw =>
       $composableBuilder(column: $table.isRaw, builder: (column) => column);
 
+  GeneratedColumn<double> get exposureBias => $composableBuilder(
+    column: $table.exposureBias,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get exposureTime => $composableBuilder(
+    column: $table.exposureTime,
+    builder: (column) => column,
+  );
+
   $$ImportsTableAnnotationComposer get importId {
     final $$ImportsTableAnnotationComposer composer = $composerBuilder(
       composer: this,
@@ -3513,6 +3665,8 @@ class $$PhotosTableTableManager
                 Value<bool> xmpConflict = const Value.absent(),
                 Value<bool> previewCached = const Value.absent(),
                 Value<bool> isRaw = const Value.absent(),
+                Value<double?> exposureBias = const Value.absent(),
+                Value<double?> exposureTime = const Value.absent(),
               }) => PhotosCompanion(
                 id: id,
                 importId: importId,
@@ -3545,6 +3699,8 @@ class $$PhotosTableTableManager
                 xmpConflict: xmpConflict,
                 previewCached: previewCached,
                 isRaw: isRaw,
+                exposureBias: exposureBias,
+                exposureTime: exposureTime,
               ),
           createCompanionCallback:
               ({
@@ -3579,6 +3735,8 @@ class $$PhotosTableTableManager
                 Value<bool> xmpConflict = const Value.absent(),
                 Value<bool> previewCached = const Value.absent(),
                 Value<bool> isRaw = const Value.absent(),
+                Value<double?> exposureBias = const Value.absent(),
+                Value<double?> exposureTime = const Value.absent(),
               }) => PhotosCompanion.insert(
                 id: id,
                 importId: importId,
@@ -3611,6 +3769,8 @@ class $$PhotosTableTableManager
                 xmpConflict: xmpConflict,
                 previewCached: previewCached,
                 isRaw: isRaw,
+                exposureBias: exposureBias,
+                exposureTime: exposureTime,
               ),
           withReferenceMapper: (p0) => p0
               .map(
