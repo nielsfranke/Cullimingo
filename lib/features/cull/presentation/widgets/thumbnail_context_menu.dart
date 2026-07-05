@@ -35,6 +35,7 @@ Future<void> showThumbnailContextMenu({
   VoidCallback? onExpandBrackets,
   VoidCallback? onStack,
   VoidCallback? onUnstack,
+  ValueChanged<bool>? onContactSheet,
 }) async {
   final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
   final position = RelativeRect.fromRect(
@@ -146,6 +147,19 @@ Future<void> showThumbnailContextMenu({
           value: () async => onExport(),
           child: const _MenuRow('Export…', 'S'),
         ),
+      // ContactSheet round-trip — only when the integration is configured
+      // (the caller passes a non-null callback in that case, §7b).
+      if (onContactSheet != null) ...[
+        const PopupMenuDivider(),
+        PopupMenuItem<_MenuAction>(
+          value: () async => onContactSheet(false),
+          child: const Text('Send to ContactSheet…'),
+        ),
+        PopupMenuItem<_MenuAction>(
+          value: () async => onContactSheet(true),
+          child: const Text('Pull marks from ContactSheet…'),
+        ),
+      ],
       const PopupMenuDivider(),
       PopupMenuItem<_MenuAction>(
         value: () => openExternally(photo.path),

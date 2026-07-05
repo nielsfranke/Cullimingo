@@ -18,6 +18,7 @@ import 'package:cullimingo/features/cull/presentation/widgets/thumbnail_context_
 import 'package:cullimingo/features/filter/presentation/filter_providers.dart';
 import 'package:cullimingo/features/handoff/data/transfer_service.dart';
 import 'package:cullimingo/features/handoff/domain/external_editor.dart';
+import 'package:cullimingo/features/handoff/presentation/send_to_providers.dart';
 import 'package:cullimingo/features/inspector/presentation/inspector_panel.dart';
 import 'package:cullimingo/features/inspector/presentation/inspector_providers.dart';
 import 'package:cullimingo/features/metadata/domain/crop_rect.dart';
@@ -51,6 +52,7 @@ class LoupeView extends ConsumerStatefulWidget {
     this.onApplyTemplate,
     this.onGeocode,
     this.onExport,
+    this.onContactSheet,
     super.key,
   });
 
@@ -77,6 +79,10 @@ class LoupeView extends ConsumerStatefulWidget {
 
   /// Exports the shown photo (right-click menu). Null disables it.
   final VoidCallback? onExport;
+
+  /// Opens the ContactSheet dialog for the shown photo; the bool is pull mode
+  /// (true = fetch marks, false = send). Only offered when configured (§7b).
+  final ValueChanged<bool>? onContactSheet;
 
   @override
   ConsumerState<LoupeView> createState() => _LoupeViewState();
@@ -713,6 +719,9 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
       onApplyTemplate: widget.onApplyTemplate,
       onGeocode: widget.onGeocode,
       onExport: widget.onExport,
+      onContactSheet: (ref.read(contactSheetConfiguredProvider).value ?? false)
+          ? widget.onContactSheet
+          : null,
     );
   }
 

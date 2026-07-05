@@ -107,10 +107,12 @@ class ContactSheetRequest {
 Future<ContactSheetAction?> showContactSheetDialog(
   BuildContext context, {
   required List<ExportSource> sources,
+  bool initialPullMode = false,
 }) {
   return showDialog<ContactSheetAction>(
     context: context,
-    builder: (_) => _ContactSheetDialog(sources: sources),
+    builder: (_) =>
+        _ContactSheetDialog(sources: sources, initialPullMode: initialPullMode),
   );
 }
 
@@ -121,9 +123,15 @@ const List<({String label, int value})> _sizeChoices = [
 ];
 
 class _ContactSheetDialog extends ConsumerStatefulWidget {
-  const _ContactSheetDialog({required this.sources});
+  const _ContactSheetDialog({
+    required this.sources,
+    this.initialPullMode = false,
+  });
 
   final List<ExportSource> sources;
+
+  /// Open straight into Pull (fetch marks) rather than Send (upload).
+  final bool initialPullMode;
 
   @override
   ConsumerState<_ContactSheetDialog> createState() =>
@@ -138,8 +146,9 @@ class _ContactSheetDialogState extends ConsumerState<_ContactSheetDialog> {
   int _sizeValue = 2048;
   int _quality = 85;
 
-  // false = send (upload), true = pull (fetch client marks).
-  bool _pullMode = false;
+  // false = send (upload), true = pull (fetch client marks). Seeded from the
+  // caller so a right-click "Pull marks…" opens straight into pull mode.
+  late bool _pullMode = widget.initialPullMode;
 
   // Pull side: also import collections as saved selections.
   bool _importCollections = true;

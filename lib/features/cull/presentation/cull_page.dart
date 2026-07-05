@@ -366,6 +366,8 @@ class _CullPageState extends ConsumerState<CullPage>
                     onApplyTemplate: () => unawaited(_applyTemplate()),
                     onGeocode: () => unawaited(_geocodeSelection()),
                     onExport: _export,
+                    onContactSheet: (pull) =>
+                        unawaited(_openContactSheet(pullMode: pull)),
                   ),
                 ),
               // Fullscreen compare overlay (§8).
@@ -461,6 +463,8 @@ class _CullPageState extends ConsumerState<CullPage>
               onExpandBrackets: _expandSelectionToBrackets,
               onStack: () => unawaited(_stackSelection()),
               onUnstack: () => unawaited(_unstackSelection()),
+              onContactSheet: (pull) =>
+                  unawaited(_openContactSheet(pullMode: pull)),
             ),
           );
         },

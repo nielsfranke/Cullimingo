@@ -585,11 +585,18 @@ mixin _CullJobs on _CullSelections {
   }
 
   /// Opens the ContactSheet dialog (§7b) — send (upload) or pull (marks). Both
-  /// run non-modally with the floating progress card.
-  Future<void> _openContactSheet() async {
+  /// run non-modally with the floating progress card. [pullMode] opens straight
+  /// into pull (used by the right-click "Pull marks…" entry).
+  Future<void> _openContactSheet({bool pullMode = false}) async {
     final sources = _exportSources();
-    final action = await showContactSheetDialog(context, sources: sources);
+    final action = await showContactSheetDialog(
+      context,
+      sources: sources,
+      initialPullMode: pullMode,
+    );
     if (!mounted) return;
+    // The connection may have just been configured — refresh the menu gate.
+    ref.invalidate(contactSheetConfiguredProvider);
     _gridFocus.requestFocus();
     switch (action) {
       case ContactSheetSend(:final request):

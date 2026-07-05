@@ -10,6 +10,7 @@ import 'package:cullimingo/features/cull/presentation/widgets/thumbnail_context_
 import 'package:cullimingo/features/filter/presentation/filter_providers.dart';
 import 'package:cullimingo/features/handoff/data/transfer_service.dart';
 import 'package:cullimingo/features/handoff/domain/external_editor.dart';
+import 'package:cullimingo/features/handoff/presentation/send_to_providers.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -35,6 +36,7 @@ class GridCell extends ConsumerWidget {
     this.onExpandBrackets,
     this.onStack,
     this.onUnstack,
+    this.onContactSheet,
     super.key,
   });
 
@@ -83,6 +85,11 @@ class GridCell extends ConsumerWidget {
   /// Removes the selection from any bracket. Null disables it (only shown on a
   /// bracket member).
   final VoidCallback? onUnstack;
+
+  /// Opens the ContactSheet dialog for the selection; the bool is pull mode
+  /// (true = fetch client marks, false = send/upload). The menu only offers it
+  /// when the integration is configured (§7b).
+  final ValueChanged<bool>? onContactSheet;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -296,6 +303,12 @@ class GridCell extends ConsumerWidget {
           onUnstack:
               ref.read(bracketGroupsProvider).memberIds.contains(shown.id)
               ? onUnstack
+              : null,
+          // Only when the ContactSheet integration is set up (warm provider,
+          // gated on the base URL so no keychain prompt just to open a menu).
+          onContactSheet:
+              (ref.read(contactSheetConfiguredProvider).value ?? false)
+              ? onContactSheet
               : null,
         );
       } finally {

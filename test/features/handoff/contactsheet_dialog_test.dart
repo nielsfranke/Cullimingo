@@ -50,6 +50,7 @@ void main() {
   Future<ContactSheetAction? Function()> pumpAndOpen(
     WidgetTester tester, {
     List<ExportSource>? sources,
+    bool pullMode = false,
   }) async {
     ContactSheetAction? result;
     await tester.pumpWidget(
@@ -62,6 +63,7 @@ void main() {
                 onPressed: () async => result = await showContactSheetDialog(
                   context,
                   sources: sources ?? [_src('/s/a.JPG')],
+                  initialPullMode: pullMode,
                 ),
                 child: const Text('open'),
               ),
@@ -143,6 +145,15 @@ void main() {
       'quality': 85,
       'importCollections': true,
     });
+  });
+
+  testWidgets('initialPullMode opens straight into pull mode', (tester) async {
+    await pumpAndOpen(tester, pullMode: true);
+
+    // The primary action reads "Pull marks" (not "Send 1") — pull is active
+    // from the right-click "Pull marks…" entry, no toggle needed.
+    expect(find.widgetWithText(FilledButton, 'Pull marks'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Send 1'), findsNothing);
   });
 
   testWidgets('Send is disabled until server + gallery are provided', (
