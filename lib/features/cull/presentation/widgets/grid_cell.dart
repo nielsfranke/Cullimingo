@@ -96,6 +96,14 @@ class GridCell extends ConsumerWidget {
     final paired = ref.watch(
       rawJpegPairsProvider.select((p) => p.isPaired(photo.id)),
     );
+    // Badge the reference (normal-exposure) frame of an exposure bracket with
+    // its frame count; the other members carry no badge (they hide when the
+    // stack is collapsed).
+    final bracketSize = ref.watch(
+      bracketGroupsProvider.select(
+        (b) => b.isReference(photo.id) ? b.sizeOf(photo.id) : 0,
+      ),
+    );
 
     // Drag a cell out to Finder/Desktop to copy the original file(s) (§7
     // hand-off). Dragging a selected photo carries the whole selection; an
@@ -138,6 +146,7 @@ class GridCell extends ConsumerWidget {
                 burstSize: burstSize,
                 groupColor: groupColor,
                 paired: paired,
+                bracketSize: bracketSize,
                 // Hover actions act on *this* photo: rotate it directly; the
                 // metadata button selects it first, then opens the editor.
                 onRotateLeft: () => unawaited(

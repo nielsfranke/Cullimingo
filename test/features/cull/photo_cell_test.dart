@@ -75,6 +75,36 @@ void main() {
     expect(find.byIcon(Icons.notes_rounded), findsOneWidget);
   });
 
+  testWidgets('the reference frame shows a bracket badge with its count', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 200,
+            height: 200,
+            child: PhotoCell(
+              photo: _photo(),
+              thumbnail: null,
+              cellWidth: 200,
+              bracketSize: 3,
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.byIcon(Icons.layers_rounded), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+  });
+
+  testWidgets('no bracket badge on a non-reference / non-bracket frame', (
+    tester,
+  ) async {
+    await _pumpCell(tester, _photo()); // bracketSize defaults to 0
+    expect(find.byIcon(Icons.layers_rounded), findsNothing);
+  });
+
   testWidgets('a cropped photo shows the crop badge', (tester) async {
     await _pumpCell(tester, _photo(hasCrop: true));
     expect(find.byIcon(Icons.crop_rounded), findsOneWidget);

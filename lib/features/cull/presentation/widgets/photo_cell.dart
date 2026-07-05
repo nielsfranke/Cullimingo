@@ -28,6 +28,7 @@ class PhotoCell extends StatefulWidget {
     this.burstSize = 1,
     this.groupColor,
     this.paired = false,
+    this.bracketSize = 0,
     this.onRotateLeft,
     this.onRotateRight,
     this.onEditMetadata,
@@ -57,6 +58,10 @@ class PhotoCell extends StatefulWidget {
   /// Whether this photo is one side of a RAW+JPEG pair (§8) — shows a small
   /// "RAW+JPG" badge so the pairing is visible in the grid.
   final bool paired;
+
+  /// Exposure count of this photo's bracket when it is the reference (normal)
+  /// frame (§8); >1 shows a layered-stack badge. 0 on every other frame.
+  final int bracketSize;
 
   /// Whether this cell has keyboard focus (accent border).
   final bool focused;
@@ -222,6 +227,40 @@ class _PhotoCellState extends State<PhotoCell> {
                   const SizedBox(width: 3),
                   Text(
                     '${widget.burstSize}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        // Exposure-bracket badge (§8): on the reference frame only, top-right,
+        // pushed below the burst badge when this frame is also a burst member
+        // (rare — long-exposure brackets aren't rapid-succession bursts).
+        if (widget.bracketSize > 1)
+          Positioned(
+            top: widget.burstSize > 1 ? 26 : AppSpacing.xs,
+            right: AppSpacing.xs,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.layers_rounded,
+                    size: 12,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 3),
+                  Text(
+                    '${widget.bracketSize}',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 11,
