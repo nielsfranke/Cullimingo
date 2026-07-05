@@ -275,7 +275,11 @@ class _ExportDialogState extends State<_ExportDialog> {
 
   /// The output path of the first photo, as a live preview.
   String get _previewName {
-    final plan = buildExportPlan(widget.sources, _effectivePreset);
+    final plan = buildExportPlan(
+      widget.sources,
+      _effectivePreset,
+      perSourceDir: _useNextToOriginals,
+    );
     return plan.isEmpty ? '—' : plan.first.relPath;
   }
 
@@ -299,7 +303,7 @@ class _ExportDialogState extends State<_ExportDialog> {
     final root = needsFolder ? _resolvedDestination() : null;
     if (needsFolder && root == null) return;
     final preset = _effectivePreset;
-    final plan = buildExportPlan(widget.sources, preset);
+    final plan = buildExportPlan(widget.sources, preset, perSourceDir: nextTo);
     final blob = _asLastExport();
     unawaited(
       AppSettings.load().then((s) async {

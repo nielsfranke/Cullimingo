@@ -69,17 +69,26 @@ class ExportItem {
 /// Pure: orders by capture time then path (stable, matching the grid), assigns
 /// the `{seq}` token, forces the output extension to the preset's format, and
 /// de-duplicates output paths with `_2`, `_3`, … so two sources never collide.
+///
+/// [perSourceDir] scopes that de-duplication to each source's own directory —
+/// for the "same folder as originals" export, where two identically-named
+/// files in *different* folders land in different destinations and so never
+/// actually collide. Left false (the default) they share one destination root,
+/// so any name clash is de-duped globally.
 List<ExportItem> buildExportPlan(
   List<ExportSource> sources,
-  ExportPreset preset,
-) {
+  ExportPreset preset, {
+  bool perSourceDir = false,
+}) {
   final ordered = [...sources]
     ..sort((a, b) {
       final byTime = a.capturedAt.compareTo(b.capturedAt);
       return byTime != 0 ? byTime : a.path.compareTo(b.path);
     });
 
-  final taken = <String>{};
+  // One taken-name bucket per destination folder. A shared root is a single
+  // bucket (key ''); next-to-originals buckets by the source's directory.
+  final takenByBucket = <String, Set<String>>{};
   final items = <ExportItem>[];
   var sequence = 1;
   for (final source in ordered) {
@@ -92,6 +101,8 @@ List<ExportItem> buildExportPlan(
         shoot: preset.shoot,
       ),
     );
+    final bucket = perSourceDir ? p.dirname(source.path) : '';
+    final taken = takenByBucket.putIfAbsent(bucket, () => <String>{});
     final relPath = _dedupe(
       p.setExtension(templated, '.${preset.format.extension}'),
       taken,

@@ -39,6 +39,35 @@ void main() {
       expect(plan.map((i) => i.relPath), ['DSC_0001.jpg', 'DSC_0001_2.jpg']);
     });
 
+    test(
+      'perSourceDir keeps identical names in different folders un-suffixed',
+      () {
+        // Same output name, but different source folders → different
+        // destinations under next-to-originals, so neither is suffixed.
+        final plan = buildExportPlan(
+          [
+            _src('/a/DSC_0001.ARW', DateTime(2026, 6, 1, 10)),
+            _src('/b/DSC_0001.ARW', DateTime(2026, 6, 1, 10, 1)),
+          ],
+          const ExportPreset(),
+          perSourceDir: true,
+        );
+        expect(plan.map((i) => i.relPath), ['DSC_0001.jpg', 'DSC_0001.jpg']);
+      },
+    );
+
+    test('perSourceDir still de-dupes a real clash within one folder', () {
+      final plan = buildExportPlan(
+        [
+          _src('/a/DSC_0001.ARW', DateTime(2026, 6, 1, 10)),
+          _src('/a/DSC_0001.JPG', DateTime(2026, 6, 1, 10, 1)),
+        ],
+        const ExportPreset(),
+        perSourceDir: true,
+      );
+      expect(plan.map((i) => i.relPath), ['DSC_0001.jpg', 'DSC_0001_2.jpg']);
+    });
+
     test('applies a folder template and the {seq} token', () {
       final plan = buildExportPlan(
         [
