@@ -135,5 +135,82 @@ void main() {
     // The menu is still open, now targeting photo 2.
     expect(find.text(revealInFileManagerLabel), findsOneWidget);
     expect(container.read(cullControllerProvider).selectedIds, {ids[1]});
+
+    // Close it (tap the barrier, away from the menu itself): the chain's
+    // `_showContextMenuChain` loop only unregisters its global secondary-click
+    // route once its menu actually closes — leaving it open here would leak
+    // that route into whichever test runs next in this file.
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets(
+    'right-click inside an existing multi-selection keeps the selection',
+    (tester) async {
+      final (db, container, importId) = await pumpGrid(tester);
+      final photos = await tester.runAsync(
+        () => db.watchPhotosForImport(importId).first,
+      );
+      final ids = photos!.map((p) => p.id).toList();
+
+      // Select both photos directly (mirrors a Shift/Ctrl-click multi-select),
+      // then right-click one of the already-selected cells.
+      container.read(cullControllerProvider.notifier)
+        ..selectOnly(ids[0])
+        ..toggleSelect(ids[1]);
+      expect(container.read(cullControllerProvider).selectedIds, ids.toSet());
+
+      await tester.tap(find.byType(PhotoCell).first, buttons: kSecondaryButton);
+      await tester.pumpAndSettle();
+
+      // The multi-selection must survive the right-click (bug: it used to
+      // collapse to just the clicked cell before the context menu opened).
+      expect(container.read(cullControllerProvider).selectedIds, ids.toSet());
+      // (Two matches are expected: the toolbar's library-count label happens
+      // to read the same for this 2-photo fixture, plus the menu's own
+      // selection-count header.)
+      expect(find.text('2 photos'), findsNWidgets(2));
+
+      // Close it — see the cleanup note in the previous test.
+      await tester.tapAt(const Offset(20, 20));
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets('Delete… on a multi-selection asks before deleting all of it', (
+    tester,
+  ) async {
+    final (db, container, importId) = await pumpGrid(tester);
+    final photos = await tester.runAsync(
+      () => db.watchPhotosForImport(importId).first,
+    );
+    final ids = photos!.map((p) => p.id).toList();
+
+    container.read(cullControllerProvider.notifier)
+      ..selectOnly(ids[0])
+      ..toggleSelect(ids[1]);
+
+    await tester.tap(find.byType(PhotoCell).first, buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+    expect(find.text('2 photos'), findsNWidgets(2));
+
+    // The menu has many entries and overflows the test viewport, so "Delete…"
+    // (last, alone behind a divider) needs scrolling into view first.
+    await tester.ensureVisible(find.text('Delete…'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete…'));
+    await tester.pumpAndSettle();
+
+    // Confirmation names the whole selection, not just the clicked photo.
+    expect(find.textContaining('Move 2 photos to the Trash?'), findsOneWidget);
+
+    // Cancel must leave both rows and the selection untouched.
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PhotoCell), findsNWidgets(2));
+    final remaining = await tester.runAsync(
+      () => db.watchPhotosForImport(importId).first,
+    );
+    expect(remaining, hasLength(2));
   });
 }

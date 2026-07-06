@@ -437,6 +437,64 @@ mixin _CullJobs on _CullSelections {
     );
   }
 
+  /// Moves the current selection (the mark targets) to the OS trash, after
+  /// confirmation — the right-click context menu's "Delete…" entry. Same
+  /// target rule and cleanup as [_deleteRejects], just over an arbitrary
+  /// selection instead of every reject-flagged photo in the folder.
+  Future<void> _deleteSelected() async {
+    final importId = ref.read(currentImportProvider);
+    if (importId == null) return;
+    final targets = ref.read(cullControllerProvider).markTargets;
+    final photos = [
+      for (final photo in ref.read(filteredPhotosProvider))
+        if (targets.contains(photo.id)) photo,
+    ];
+    if (photos.isEmpty) return;
+
+    final confirmed = await showDeleteSelectedPhotosDialog(
+      context,
+      count: photos.length,
+    );
+    if (!mounted) return;
+    _gridFocus.requestFocus();
+    if (confirmed != true) return;
+
+    final result = await deleteRejectedPhotos(
+      db: ref.read(appDatabaseProvider),
+      importId: importId,
+      rejects: photos,
+    );
+    if (!mounted) return;
+
+    final failed = result.failedPaths.toSet();
+    final deletedIds = {
+      for (final photo in photos)
+        if (!failed.contains(photo.path)) photo.id,
+    };
+    // The rows are gone: prune them out of focus/selection and forget the
+    // undo history, so a stale entry can't "restore" marks onto reused ids.
+    ref.read(cullControllerProvider.notifier)
+      ..pruneMissing(deletedIds)
+      ..clearHistory();
+    final cache = ref.read(previewCacheProvider);
+    for (final photo in photos) {
+      cache.evict(photo.path);
+    }
+
+    if (result.error != null) {
+      _notify(result.error!, kind: NoticeKind.warning);
+      return;
+    }
+    final noun = result.deleted == 1 ? 'photo' : 'photos';
+    _notify(
+      [
+        'Moved ${result.deleted} $noun to the Trash',
+        if (failed.isNotEmpty) '${failed.length} failed',
+      ].join(' · '),
+      kind: failed.isEmpty ? NoticeKind.success : NoticeKind.warning,
+    );
+  }
+
   /// Opens the rename dialog for the current selection (the mark targets) and,
   /// on confirm, renames the files in place. Same target rule as copy/move.
   Future<void> _rename() async {

@@ -6,14 +6,38 @@ import 'package:flutter/material.dart';
 Future<bool?> showDeleteRejectsDialog(
   BuildContext context, {
   required int count,
+}) => _showTrashConfirmDialog(
+  context,
+  title: 'Delete rejected photos',
+  count: count,
+  descriptor: count == 1 ? 'rejected photo' : 'rejected photos',
+);
+
+/// Confirms moving [count] selected photos to the OS trash (the right-click
+/// context menu's "Delete…" entry). Resolves to `true` on confirm,
+/// `false`/`null` on cancel.
+Future<bool?> showDeleteSelectedPhotosDialog(
+  BuildContext context, {
+  required int count,
+}) => _showTrashConfirmDialog(
+  context,
+  title: count == 1 ? 'Delete photo' : 'Delete $count photos',
+  count: count,
+  descriptor: count == 1 ? 'photo' : 'photos',
+);
+
+Future<bool?> _showTrashConfirmDialog(
+  BuildContext context, {
+  required String title,
+  required int count,
+  required String descriptor,
 }) {
-  final noun = count == 1 ? 'photo' : 'photos';
   return showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Delete rejected photos'),
+      title: Text(title),
       content: Text(
-        'Move $count rejected $noun to the Trash?\n\n'
+        'Move $count $descriptor to the Trash?\n\n'
         'The originals and their .xmp sidecars leave this folder. Nothing is '
         'permanently deleted — you can restore them from the Trash.',
       ),

@@ -467,6 +467,7 @@ class _CullPageState extends ConsumerState<CullPage>
               onUnstack: () => unawaited(_unstackSelection()),
               onContactSheet: (pull) =>
                   unawaited(_openContactSheet(pullMode: pull)),
+              onDelete: () => unawaited(_deleteSelected()),
             ),
           );
         },

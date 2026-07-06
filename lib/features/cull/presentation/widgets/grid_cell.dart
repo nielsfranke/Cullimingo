@@ -37,6 +37,7 @@ class GridCell extends ConsumerWidget {
     this.onStack,
     this.onUnstack,
     this.onContactSheet,
+    this.onDelete,
     super.key,
   });
 
@@ -90,6 +91,10 @@ class GridCell extends ConsumerWidget {
   /// (true = fetch client marks, false = send/upload). The menu only offers it
   /// when the integration is configured (§7b).
   final ValueChanged<bool>? onContactSheet;
+
+  /// Moves the selection's files to the OS trash, after confirmation (context
+  /// menu). Null disables it.
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -146,7 +151,7 @@ class GridCell extends ConsumerWidget {
         // desktop conventions: ⌘/Ctrl toggles, Shift range-selects, plain click
         // selects just this photo.
         child: Listener(
-          onPointerDown: (_) => _onPointerDown(ref),
+          onPointerDown: (event) => _onPointerDown(ref, event),
           child: GestureDetector(
             onSecondaryTapDown: (d) =>
                 unawaited(_onSecondaryTap(context, ref, d)),
@@ -220,7 +225,13 @@ class GridCell extends ConsumerWidget {
     );
   }
 
-  void _onPointerDown(WidgetRef ref) {
+  void _onPointerDown(WidgetRef ref, PointerDownEvent event) {
+    // A right-click's own selection handling happens later, once the gesture
+    // arena resolves it as a secondary tap (`_selectForContextMenu`), which
+    // keeps an existing multi-selection intact when the click lands inside
+    // it. This handler fires for *every* button before that resolution, so it
+    // must not collapse the selection out from under a right-click first.
+    if (event.buttons & kSecondaryButton != 0) return;
     final controller = ref.read(cullControllerProvider.notifier);
     final keys = HardwareKeyboard.instance;
     if (keys.isShiftPressed) {
@@ -310,6 +321,7 @@ class GridCell extends ConsumerWidget {
               (ref.read(contactSheetConfiguredProvider).value ?? false)
               ? onContactSheet
               : null,
+          onDelete: onDelete,
         );
       } finally {
         GestureBinding.instance.pointerRouter.removeGlobalRoute(

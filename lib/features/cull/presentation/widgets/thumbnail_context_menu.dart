@@ -36,6 +36,7 @@ Future<void> showThumbnailContextMenu({
   VoidCallback? onStack,
   VoidCallback? onUnstack,
   ValueChanged<bool>? onContactSheet,
+  VoidCallback? onDelete,
 }) async {
   final overlay = Overlay.of(context).context.findRenderObject()! as RenderBox;
   final position = RelativeRect.fromRect(
@@ -176,6 +177,18 @@ Future<void> showThumbnailContextMenu({
             value: () async => onSendTo(editor),
             child: Text('Open in ${editor.label}'),
           ),
+      ],
+      // Destructive, so it sits alone behind a divider (mirrors the toolbar's
+      // "Delete rejected photos" placement in cull_top_bar.dart).
+      if (onDelete != null) ...[
+        const PopupMenuDivider(),
+        PopupMenuItem<_MenuAction>(
+          value: () async => onDelete(),
+          child: const Text(
+            'Delete…',
+            style: TextStyle(color: AppColors.labelRed),
+          ),
+        ),
       ],
     ],
   );
