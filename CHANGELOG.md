@@ -3,6 +3,28 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## 1.2.0 — 2026-07-06
+
+### Added
+- **Filter import by capture date:** the import dialog now shows a day-per-chip
+  breakdown when a card holds more than one day's photos, so leftovers from an
+  old shoot don't get swept in with today's — tap a day to exclude/re-include
+  it, no re-scan needed.
+- **Selection-aware Delete… in the right-click menu:** move the current
+  selection to the Trash (with its `.xmp` sidecars) after a confirmation,
+  without leaving the grid.
+
+### Fixed
+- **Right-click no longer collapses a multi-selection:** right-clicking a
+  photo that's part of an existing selection keeps the whole selection instead
+  of narrowing it down to just that photo before the context menu opens.
+- **"Open in library" opens the actual imported folder:** after an import with
+  a dated-shoot naming template, the completion screen now opens the
+  sub-folder the photos landed in, not the whole destination root.
+- **A failing SD card/reader no longer hangs the app:** card detection and
+  folder scanning tolerate an unresponsive device — the app stays responsive
+  and the scan skips the stuck file instead of hanging forever.
+
 ## 1.1.0 — 2026-07-05
 
 ### Added
