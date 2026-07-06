@@ -22,7 +22,11 @@ class Volume {
 /// under `/Volumes`, on Linux the per-user mount roots (`/media/$USER`,
 /// `/run/media/$USER`) and `/mnt`. Pass [searchRoots] in tests.
 ///
-/// Top-level listing only (cheap), so it's fine to await on the UI isolate.
+/// Top-level listing only (cheap) and fully synchronous, so callers that
+/// poll this every few seconds (`cull_page.workspace.dart`) must run it via
+/// `Isolate.run` rather than awaiting it directly — a failing card reader can
+/// make even this "cheap" listing block for a long time, and a synchronous
+/// call can't be raced against a timeout on the same isolate.
 /// Returns volumes sorted with likely camera cards (those with `DCIM`) first.
 Future<List<Volume>> listVolumes({List<String>? searchRoots}) async {
   final roots = searchRoots ?? _platformRoots();

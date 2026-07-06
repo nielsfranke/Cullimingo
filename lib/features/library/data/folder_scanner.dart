@@ -1,14 +1,23 @@
+import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
 
 import 'package:cullimingo/core/files/exif_reader.dart';
 import 'package:cullimingo/core/files/supported_files.dart';
+import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/raw/libraw_metadata.dart';
 import 'package:cullimingo/core/raw/libraw_preview_extractor.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
 import 'package:flutter_libraw/flutter_libraw.dart';
 import 'package:path/path.dart' as p;
+
+/// How long a single filesystem step (advancing a directory listing, or one
+/// file's `stat`/EXIF read) may stall before it's treated as a failing device
+/// and skipped, so one bad file/sector on a flaky SD card can't hang the whole
+/// scan forever. Generous: a healthy read returns in micro/milliseconds, so
+/// this only ever fires on genuinely stuck hardware.
+const _scanStallTimeout = Duration(seconds: 8);
 
 /// One file found by the fast scan pass: just path + stat, no EXIF yet.
 class ScannedFile {
@@ -107,15 +116,31 @@ Future<List<ScannedFile>> scanFolderFast(
   );
 }
 
-List<ScannedFile> _walk(
+Future<List<ScannedFile>> _walk(
   String root, {
   required bool recursive,
   required bool includeVideos,
-}) {
+}) async {
   final dir = Directory(root);
   if (!dir.existsSync()) return const [];
 
-  final entities = dir.listSync(recursive: recursive, followLinks: false);
+  // Listed asynchronously (not `listSync`) so a stalled step (a failing SD
+  // card/reader can block the underlying syscall for a long time) only stalls
+  // this await, not the whole isolate — letting the timeout below actually
+  // fire and hand back whatever was found before the device seized up.
+  final entities = <FileSystemEntity>[];
+  try {
+    await dir
+        .list(recursive: recursive, followLinks: false)
+        .timeout(_scanStallTimeout)
+        .forEach(entities.add);
+  } on TimeoutException {
+    appTalker.warning(
+      'Folder scan of $root stalled (device unresponsive); continuing with '
+      '${entities.length} entries found so far',
+    );
+  }
+
   // Index sidecar files by their stem (dir + basename-no-ext) so each media
   // file can claim its companions with a single map lookup — no extra stat.
   final sidecarsByStem = <String, List<String>>{};
@@ -131,7 +156,18 @@ List<ScannedFile> _walk(
   final out = <ScannedFile>[];
   for (final e in entities) {
     if (e is! File || !matches(e.path)) continue;
-    final stat = e.statSync();
+    FileStat stat;
+    try {
+      // Async stat (not statSync) so a stalled read on a failing device only
+      // blocks this await, letting the timeout below actually fire.
+      // ignore: avoid_slow_async_io
+      stat = await e.stat().timeout(_scanStallTimeout);
+    } on TimeoutException {
+      appTalker.warning(
+        'Skipping ${e.path}: stat() stalled (device unresponsive)',
+      );
+      continue;
+    }
     out.add(
       ScannedFile(
         path: e.path,
@@ -179,7 +215,15 @@ Future<List<ScannedExif>> _readExif(
 
   final out = <ScannedExif>[];
   for (final path in paths) {
-    var exif = await readPhotoExif(File(path));
+    var exif = await readPhotoExif(File(path)).timeout(
+      _scanStallTimeout,
+      onTimeout: () {
+        appTalker.warning(
+          'EXIF read for $path stalled (device unresponsive); skipping',
+        );
+        return const PhotoExif();
+      },
+    );
 
     // Fuji `.RAF` (and similar wrapped containers) hide their EXIF from the
     // pure-Dart reader, so capture time / camera / bias / shutter come back
@@ -197,7 +241,9 @@ Future<List<ScannedExif>> _readExif(
         final previewBytes = extractRawThumbnail(bindings, path);
         final preview = previewBytes == null
             ? const PhotoExif()
-            : await readPhotoExifBytes(previewBytes);
+            : await readPhotoExifBytes(
+                previewBytes,
+              ).timeout(_scanStallTimeout, onTimeout: () => const PhotoExif());
         final raw = readRawMetadata(bindings, path);
         exif = PhotoExif(
           capturedAt: exif.capturedAt ?? preview.capturedAt ?? raw.capturedAt,

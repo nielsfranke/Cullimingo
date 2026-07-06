@@ -27,44 +27,84 @@ mixin _CullWorkspace on _CullGrid {
   // Whether "Open folder" scans sub-folders (toggle in the toolbar).
   bool _includeSubfolders = true;
 
+  // True while a poll's listVolumes() call is still in flight, so a stuck
+  // card/reader (blocking well past _volumePollStallTimeout) can't pile up
+  // one spawned isolate per 3-second tick.
+  bool _pollBusy = false;
+
+  // How long a single poll waits for listVolumes() before giving up on this
+  // tick and trying again next time — generous, since a healthy poll returns
+  // near-instantly and this only ever fires on a genuinely failing device.
+  static const _volumePollStallTimeout = Duration(seconds: 10);
+
   /// Periodic check: surface newly-inserted cards, and notice when the folder
   /// on screen has been ejected or deleted.
   Future<void> _pollFilesystem() async {
-    // Active folder gone? (card ejected, folder deleted) → close its tab and
-    // fall back to a neighbour, then tell the user.
-    final src = _openSourcePath;
-    if (src != null && !Directory(src).existsSync()) {
-      final tabs = ref.read(workspaceProvider).tabs;
-      final idx = tabs.indexWhere((t) => t.sourcePath == src);
-      if (idx >= 0) ref.read(workspaceProvider.notifier).close(idx);
-      _restoreActiveLiveState();
-      if (mounted) {
-        _notify(
-          'The folder is no longer available (ejected or deleted)',
-          kind: NoticeKind.warning,
-        );
+    if (_pollBusy) return;
+    _pollBusy = true;
+    try {
+      // Active folder gone? (card ejected, folder deleted) → close its tab and
+      // fall back to a neighbour, then tell the user.
+      final src = _openSourcePath;
+      if (src != null && !Directory(src).existsSync()) {
+        final tabs = ref.read(workspaceProvider).tabs;
+        final idx = tabs.indexWhere((t) => t.sourcePath == src);
+        if (idx >= 0) ref.read(workspaceProvider.notifier).close(idx);
+        _restoreActiveLiveState();
+        if (mounted) {
+          _notify(
+            'The folder is no longer available (ejected or deleted)',
+            kind: NoticeKind.warning,
+          );
+        }
       }
-    }
 
-    // macOS auto-mounts inserted cards; many Linux desktops don't. Mount any
-    // freshly-plugged removable card ourselves first, so listVolumes() below
-    // sees it the same as it would on macOS. Skipped under `flutter_test` so
-    // widget tests never shell out to lsblk/udisksctl (a real subprocess would
-    // outlive the fake-async widget tree and leave a pending timer).
-    if (Platform.isLinux && !_underTest) {
-      _knownRemovables = await autoMountNewRemovables(_knownRemovables);
+      // macOS auto-mounts inserted cards; many Linux desktops don't. Mount any
+      // freshly-plugged removable card ourselves first, so listVolumes() below
+      // sees it the same as it would on macOS. Skipped under `flutter_test` so
+      // widget tests never shell out to lsblk/udisksctl (a real subprocess
+      // would outlive the fake-async widget tree and leave a pending timer).
+      if (Platform.isLinux && !_underTest) {
+        _knownRemovables = await autoMountNewRemovables(_knownRemovables);
+        if (!mounted) return;
+      }
+
+      List<Volume> volumes;
+      try {
+        volumes = await _listVolumesOffUiIsolate().timeout(
+          _volumePollStallTimeout,
+        );
+      } on TimeoutException {
+        // A mounted volume is failing to respond; skip this tick and keep the
+        // previous baseline so a plugged-in card isn't wrongly reported as
+        // removed. listVolumes() runs on its own isolate, so this only drops
+        // one poll — it never blocks the UI.
+        appTalker.warning(
+          'listVolumes() timed out — a mounted volume may be unresponsive',
+        );
+        return;
+      }
       if (!mounted) return;
+      // First poll just primes the baseline; later ones offer newly-seen cards.
+      if (_cardsPrimed) {
+        newCards(_seenVolumes, volumes).forEach(_offerCardImport);
+      }
+      _seenVolumes = volumes.map((v) => v.path).toSet();
+      _cardsPrimed = true;
+    } finally {
+      _pollBusy = false;
     }
-
-    final volumes = await listVolumes();
-    if (!mounted) return;
-    // First poll just primes the baseline; later ones offer newly-seen cards.
-    if (_cardsPrimed) {
-      newCards(_seenVolumes, volumes).forEach(_offerCardImport);
-    }
-    _seenVolumes = volumes.map((v) => v.path).toSet();
-    _cardsPrimed = true;
   }
+
+  /// Runs [listVolumes] on a one-off background isolate: it's fully
+  /// synchronous internally, so a failing card reader can block it for a long
+  /// time, and only a real isolate hop (not a same-isolate `.timeout()`) can
+  /// keep that from freezing the UI. Skipped under `flutter_test`, same as
+  /// [autoMountNewRemovables] above — a real isolate round-trip doesn't
+  /// resolve deterministically inside the fake-async widget-test clock and
+  /// would leave a "pending timer" behind.
+  Future<List<Volume>> _listVolumesOffUiIsolate() =>
+      _underTest ? listVolumes() : Isolate.run(listVolumes);
 
   void _offerCardImport(Volume card) {
     _showNotice(
