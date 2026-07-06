@@ -68,6 +68,59 @@ class IngestPlan {
 
   /// Total bytes to copy (per destination).
   int get totalBytes => items.fold(0, (sum, i) => sum + i.sizeBytes);
+
+  /// The destination-relative sub-folder every item shares (e.g.
+  /// `2026/2026-07-06_Shoot`), or `null` when items land directly at the
+  /// destination root (a flat template) or span more than one sub-folder (a
+  /// card spanning several shoot dates with a dated template). Lets the
+  /// caller open the folder a run actually landed in, instead of always the
+  /// whole destination root.
+  String? get commonSubfolder {
+    if (items.isEmpty) return null;
+    final dirs = items.map((i) => _relDir(i.relPath)).toSet();
+    if (dirs.length != 1) return null;
+    final dir = dirs.first;
+    return dir.isEmpty ? null : dir;
+  }
+}
+
+// [IngestItem.relPath] always uses `/` (see [RenameTemplate.pathFor]),
+// regardless of platform, so this splits on it directly rather than using
+// `package:path`'s dirname (which assumes the host platform's separator).
+String _relDir(String relPath) {
+  final i = relPath.lastIndexOf('/');
+  return i < 0 ? '' : relPath.substring(0, i);
+}
+
+/// The day (time truncated) [dt] falls on, so photos from the same day group
+/// together regardless of time-of-day.
+DateTime dateOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
+
+/// Distinct capture dates in [sources] with a photo count each, oldest first.
+/// Powers the ingest dialog's per-day filter chips — a card carrying more
+/// than one shoot's leftovers shows one chip per day found.
+List<MapEntry<DateTime, int>> captureDateCounts(List<IngestSource> sources) {
+  final counts = <DateTime, int>{};
+  for (final s in sources) {
+    final day = dateOnly(s.capturedAt);
+    counts[day] = (counts[day] ?? 0) + 1;
+  }
+  return counts.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
+}
+
+/// Returns [sources] with any whose capture date (day-only) is in
+/// [excludedDates] removed. An empty [excludedDates] returns [sources]
+/// unchanged. Used by the ingest dialog's "only import these days" filter —
+/// applied client-side over an already-scanned source list, so toggling a
+/// day never re-scans.
+List<IngestSource> excludeCaptureDates(
+  List<IngestSource> sources,
+  Set<DateTime> excludedDates,
+) {
+  if (excludedDates.isEmpty) return sources;
+  return sources
+      .where((s) => !excludedDates.contains(dateOnly(s.capturedAt)))
+      .toList();
 }
 
 /// Builds an [IngestPlan] from resolved [sources] (pure, unit-testable). Orders

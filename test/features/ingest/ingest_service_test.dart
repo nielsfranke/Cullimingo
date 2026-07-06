@@ -85,6 +85,51 @@ void main() {
       expect(plan.items[1].companions.single.relPath, '2026/IMG_2.xmp');
     });
 
+    test('commonSubfolder is the shared dated-shoot folder', () {
+      final plan = buildPlan(
+        sources: [
+          IngestSource(
+            path: '/card/a.arw',
+            capturedAt: DateTime(2026, 7, 6, 10),
+          ),
+          IngestSource(
+            path: '/card/b.arw',
+            capturedAt: DateTime(2026, 7, 6, 11),
+          ),
+        ],
+        template: RenameTemplate.datedShoot,
+        shoot: 'Wedding',
+      );
+
+      expect(plan.commonSubfolder, '2026/2026-07-06_Wedding');
+    });
+
+    test('commonSubfolder is null for a flat (no sub-folder) template', () {
+      final plan = buildPlan(
+        sources: [
+          IngestSource(path: '/card/a.arw', capturedAt: DateTime(2026)),
+        ],
+        template: RenameTemplate.keepNames,
+      );
+
+      expect(plan.commonSubfolder, isNull);
+    });
+
+    test(
+      'commonSubfolder is null when items span more than one sub-folder',
+      () {
+        final plan = buildPlan(
+          sources: [
+            IngestSource(path: '/card/a.arw', capturedAt: DateTime(2026, 7, 5)),
+            IngestSource(path: '/card/b.arw', capturedAt: DateTime(2026, 7, 6)),
+          ],
+          template: const RenameTemplate('{YYYY}/{YYYY-MM-DD}/{origname}'),
+        );
+
+        expect(plan.commonSubfolder, isNull);
+      },
+    );
+
     test('totalBytes sums the source sizes', () {
       final plan = buildPlan(
         sources: [
@@ -207,6 +252,34 @@ void main() {
       final summary = IngestSummary([for (final t in ticks) t.last]);
       expect(summary.failed, 1);
       expect(summary.allOk, isFalse);
+    });
+  });
+
+  group('captureDateCounts / excludeCaptureDates', () {
+    final sources = [
+      IngestSource(path: '/c/a.jpg', capturedAt: DateTime(2026, 7, 6, 9)),
+      IngestSource(path: '/c/b.jpg', capturedAt: DateTime(2026, 7, 6, 18)),
+      IngestSource(path: '/c/old.jpg', capturedAt: DateTime(2020, 1, 1, 12)),
+    ];
+
+    test('groups by day (time truncated) and sorts oldest first', () {
+      final counts = captureDateCounts(sources);
+
+      expect(counts.map((e) => e.key), [
+        DateTime(2020),
+        DateTime(2026, 7, 6),
+      ]);
+      expect(counts.map((e) => e.value), [1, 2]);
+    });
+
+    test('excludeCaptureDates with an empty set returns everything', () {
+      expect(excludeCaptureDates(sources, {}), sources);
+    });
+
+    test('excludeCaptureDates drops only the matching day', () {
+      final filtered = excludeCaptureDates(sources, {DateTime(2020)});
+
+      expect(filtered.map((s) => s.path), ['/c/a.jpg', '/c/b.jpg']);
     });
   });
 }

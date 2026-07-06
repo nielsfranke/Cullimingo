@@ -59,6 +59,10 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
   bool _scanning = false;
   // True when the source is a whole drive (not a card) — we don't scan those.
   bool _wholeDrive = false;
+  // Capture dates excluded from the plan (empty = every date scanned is
+  // included) — lets a card carrying more than one shoot's leftovers be
+  // narrowed down before import. Reset on every fresh scan (see `_refresh`).
+  final Set<DateTime> _excludedDates = {};
 
   bool _running = false;
   bool _cancelled = false;
@@ -163,6 +167,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
         _sources = null;
         _plan = null;
         _wholeDrive = false;
+        _excludedDates.clear();
       });
       return;
     }
@@ -171,6 +176,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
         _sources = null;
         _plan = null;
         _wholeDrive = true;
+        _excludedDates.clear();
       });
       return;
     }
@@ -187,18 +193,38 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       if (!mounted) return;
       _sources = sources;
       _scannedKey = key;
+      // A fresh scan may cover different capture dates than before, so any
+      // earlier exclusions no longer mean anything — start unfiltered.
+      _excludedDates.clear();
       setState(() => _scanning = false);
     }
     _rebuildPlan();
   }
 
-  /// Rebuilds the plan from the cached sources — pure and instant (no I/O).
+  /// Distinct capture dates in the current scan with a photo count each,
+  /// oldest first. Empty until a scan completes; a single entry means the
+  /// card holds just one day, so there's nothing to narrow down.
+  List<MapEntry<DateTime, int>> get _dateCounts {
+    final sources = _sources;
+    return sources == null ? const [] : captureDateCounts(sources);
+  }
+
+  void _toggleDate(DateTime day) {
+    setState(() {
+      if (!_excludedDates.remove(day)) _excludedDates.add(day);
+    });
+    _rebuildPlan();
+  }
+
+  /// Rebuilds the plan from the cached sources, minus any excluded capture
+  /// dates — pure and instant (no I/O, no re-scan).
   void _rebuildPlan() {
     final sources = _sources;
     if (sources == null) return;
+    final included = excludeCaptureDates(sources, _excludedDates);
     setState(() {
       _plan = buildPlan(
-        sources: sources,
+        sources: included,
         template: _template,
         shoot: _shoot.text.trim(),
       );
@@ -330,6 +356,10 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
             ),
           ],
         ),
+        if (_dateCounts.length > 1) ...[
+          const SizedBox(height: AppSpacing.sm),
+          _dateFilterRow(),
+        ],
         const SizedBox(height: AppSpacing.lg),
         const DialogSection('Destination'),
         DialogPathRow(
@@ -417,6 +447,42 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       },
     );
   }
+
+  /// A day-per-chip breakdown of the scan, so a card carrying more than one
+  /// shoot's leftovers (an old day mixed in with today's) can be narrowed down
+  /// before import — tapping a day excludes/re-includes it. Only shown when
+  /// the scan actually found more than one distinct capture date.
+  Widget _dateFilterRow() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'This card has more than one day on it — tap to include/exclude:',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Wrap(
+          spacing: AppSpacing.xs,
+          runSpacing: AppSpacing.xs,
+          children: [
+            for (final entry in _dateCounts)
+              _DateChip(
+                label: '${_formatDay(entry.key)} · ${entry.value}',
+                selected: !_excludedDates.contains(entry.key),
+                onTap: () => _toggleDate(entry.key),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  static const List<String> _dayMonths = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  static String _formatDay(DateTime d) => '${_dayMonths[d.month - 1]} ${d.day}';
 
   Widget _preview() {
     if (_wholeDrive) {
@@ -597,8 +663,15 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           FilledButton(
-            // Pop the destination so the grid opens the ingested folder.
-            onPressed: () => Navigator.of(context).pop(_dest),
+            // Pop the folder this batch actually landed in (e.g. the dated
+            // shoot sub-folder the naming template created), not the whole
+            // destination root — falls back to the root when items span more
+            // than one sub-folder (e.g. a card spanning several shoot dates).
+            onPressed: () {
+              final sub = _plan?.commonSubfolder;
+              final dest = _dest!;
+              Navigator.of(context).pop(sub == null ? dest : p.join(dest, sub));
+            },
             child: const Text('Open in library'),
           ),
         ],
@@ -635,4 +708,43 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     }
     return '${size.toStringAsFixed(size >= 10 ? 0 : 1)} ${units[unit]}';
   }
+}
+
+/// A small toggle chip for one capture date in the import dialog's date
+/// filter — mirrors the cull grid's filter-bar chip styling (selected =
+/// filled accent).
+class _DateChip extends StatelessWidget {
+  const _DateChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: selected ? AppColors.accent : AppColors.surfaceElevated,
+    borderRadius: BorderRadius.circular(AppRadius.sm),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: 4,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    ),
+  );
 }
