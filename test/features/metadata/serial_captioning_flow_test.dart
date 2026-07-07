@@ -130,7 +130,15 @@ void main() {
     );
 
     // Caption photo 1 (with a variable), walk forward with ⌘Enter.
-    await tester.enterText(find.byType(TextField).first, 'First: {name}');
+    await tester.enterText(
+      find
+          .descendant(
+            of: find.byType(AlertDialog),
+            matching: find.byType(TextField),
+          )
+          .first,
+      'First: {name}',
+    );
     await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
@@ -147,10 +155,26 @@ void main() {
     );
 
     // Caption photo 2, close with Save.
-    await tester.enterText(find.byType(TextField).first, 'Second');
+    await tester.enterText(
+      find
+          .descendant(
+            of: find.byType(AlertDialog),
+            matching: find.byType(TextField),
+          )
+          .first,
+      'Second',
+    );
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
-    expect(find.text('Metadata'), findsNothing);
+    // The editor (an AlertDialog titled "Metadata") is gone. Scope to the
+    // dialog — the filter bar's own "Metadata" dropdown label stays on screen.
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Metadata'),
+      ),
+      findsNothing,
+    );
 
     final rows = await tester.runAsync(
       () => db.watchPhotosForImport(importId).first,

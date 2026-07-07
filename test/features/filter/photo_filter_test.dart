@@ -112,6 +112,52 @@ void main() {
       );
       expect(filter.withCollapseBrackets(false).isActive, isFalse);
     });
+
+    test('file-type RAW keeps only RAW files', () {
+      const filter = PhotoFilter(fileType: FileTypeFilter.raw);
+      expect(filter.isActive, isTrue);
+      expect(filter.matches(_photo(path: '/c/1.ARW', isRaw: true)), isTrue);
+      expect(filter.matches(_photo(path: '/c/1.JPG')), isFalse);
+    });
+
+    test('file-type JPEG keeps only .jpg/.jpeg files (by extension)', () {
+      const filter = PhotoFilter(fileType: FileTypeFilter.jpeg);
+      expect(filter.matches(_photo(path: '/c/1.JPG')), isTrue);
+      expect(filter.matches(_photo(path: '/c/1.jpeg')), isTrue);
+      expect(filter.matches(_photo(path: '/c/1.ARW', isRaw: true)), isFalse);
+      expect(filter.matches(_photo(path: '/c/1.png')), isFalse); // not JPEG
+    });
+
+    test('file-type survives a json round-trip and clears back to all', () {
+      const filter = PhotoFilter(fileType: FileTypeFilter.jpeg);
+      expect(
+        PhotoFilter.fromJson(filter.toJson()).fileType,
+        FileTypeFilter.jpeg,
+      );
+      expect(filter.withFileType(FileTypeFilter.all).isActive, isFalse);
+    });
+
+    test('query matches the filename as a case-insensitive substring', () {
+      const filter = PhotoFilter(query: 'dsc_004');
+      expect(filter.isActive, isTrue);
+      expect(filter.matches(_photo(path: '/c/DSC_0042.ARW')), isTrue);
+      expect(filter.matches(_photo(path: '/c/DSC_0099.ARW')), isFalse);
+    });
+
+    test('query matches the extension too, so "jpg" finds JPEGs', () {
+      const filter = PhotoFilter(query: 'jpg');
+      expect(filter.matches(_photo(path: '/c/DSC_0042.JPG')), isTrue);
+      expect(filter.matches(_photo(path: '/c/DSC_0042.ARW')), isFalse);
+    });
+
+    test('query is transient — active but omitted from the preset json', () {
+      const filter = PhotoFilter(query: 'dsc');
+      expect(filter.isActive, isTrue);
+      expect(filter.toJson().containsKey('query'), isFalse);
+      expect(PhotoFilter.fromJson(filter.toJson()).query, '');
+      expect(filter.withQuery('  ').isActive, isFalse); // whitespace = inactive
+      expect(filter.withQuery('').isActive, isFalse);
+    });
   });
 
   group('filteredPhotosProvider', () {
@@ -221,6 +267,34 @@ void main() {
           .read(photoFilterControllerProvider.notifier)
           .toggleHideJpegPairs();
       expect(container.read(filteredPhotosProvider).map((p) => p.id), [1, 3]);
+    });
+
+    test('file-type toggle keeps only the chosen type, and clears', () async {
+      final mixed = [
+        _photo(path: '/c/1.ARW', isRaw: true),
+        _photo(id: 2, path: '/c/2.JPG'),
+        _photo(id: 3, path: '/c/3.png'),
+      ];
+      final container = ProviderContainer(
+        overrides: [photosProvider.overrideWith((ref) => Stream.value(mixed))],
+      );
+      addTearDown(container.dispose);
+      container.listen(photosProvider, (_, _) {});
+      await container.read(photosProvider.future);
+
+      final filter = container.read(photoFilterControllerProvider.notifier)
+        ..toggleFileType(FileTypeFilter.jpeg);
+      expect(container.read(filteredPhotosProvider).map((p) => p.id), [2]);
+
+      filter.toggleFileType(FileTypeFilter.raw); // switch, not stack
+      expect(container.read(filteredPhotosProvider).map((p) => p.id), [1]);
+
+      filter.toggleFileType(FileTypeFilter.raw); // tap active → clears
+      expect(container.read(filteredPhotosProvider).map((p) => p.id), [
+        1,
+        2,
+        3,
+      ]);
     });
 
     test('collapse-brackets shows only reference frames + non-brackets', () {

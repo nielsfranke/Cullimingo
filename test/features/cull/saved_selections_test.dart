@@ -106,7 +106,13 @@ void main() {
     await tester.tap(find.text('Save current selection…'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField), 'My picks');
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      'My picks',
+    );
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 

@@ -120,7 +120,13 @@ void main() {
     await tester.tap(find.byTooltip('Find by filename (⌘F)'));
     await tester.pumpAndSettle();
     // The client only sent back the normal exposure's filename.
-    await tester.enterText(find.byType(TextField), 'DSCF0001');
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      'DSCF0001',
+    );
     await tester.tap(find.text('Find'));
     await tester.pumpAndSettle();
 

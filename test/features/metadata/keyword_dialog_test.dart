@@ -96,7 +96,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Keywords'), findsOneWidget);
-    await tester.enterText(find.byType(TextField), 'sunset, beach');
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      'sunset, beach',
+    );
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 

@@ -1,5 +1,7 @@
 import 'package:cullimingo/core/db/database.dart';
+import 'package:cullimingo/core/files/supported_files.dart';
 import 'package:cullimingo/shared/models/cull_marks.dart';
+import 'package:path/path.dart' as p;
 
 /// A combinable filter over the cull grid (`BUILD_PLAN.md` §5): rating
 /// threshold, flag state, colour label, "has keyword" and "needs caption".
@@ -20,6 +22,8 @@ class PhotoFilter {
     this.burstsOnly = false,
     this.hideJpegPairs = false,
     this.collapseBrackets = false,
+    this.fileType = FileTypeFilter.all,
+    this.query = '',
   });
 
   /// Rebuilds a filter from a saved-preset [json] (see [toJson]). Missing keys
@@ -34,6 +38,9 @@ class PhotoFilter {
     burstsOnly: json['burstsOnly'] as bool? ?? false,
     hideJpegPairs: json['hideJpegPairs'] as bool? ?? false,
     collapseBrackets: json['collapseBrackets'] as bool? ?? false,
+    fileType:
+        _enumByName(FileTypeFilter.values, json['fileType']) ??
+        FileTypeFilter.all,
   );
 
   /// Minimum star rating (0 = any).
@@ -72,6 +79,17 @@ class PhotoFilter {
   /// outside this value object).
   final bool collapseBrackets;
 
+  /// Restricts the grid to a single file type (RAW or JPEG), or
+  /// [FileTypeFilter.all] for no restriction. Judged per-photo by [matches].
+  final FileTypeFilter fileType;
+
+  /// Live filename search: only photos whose filename (with extension) contains
+  /// this text (case-insensitive) pass. Empty = no restriction. Judged by
+  /// [matches]. Transient — like [selectedOnly] it is not part of a saved
+  /// preset (a stray search term makes a poor reusable filter), so [toJson]
+  /// omits it.
+  final String query;
+
   /// Whether any constraint is set.
   bool get isActive =>
       minRating > 0 ||
@@ -82,7 +100,9 @@ class PhotoFilter {
       selectedOnly ||
       burstsOnly ||
       hideJpegPairs ||
-      collapseBrackets;
+      collapseBrackets ||
+      fileType != FileTypeFilter.all ||
+      query.trim().isNotEmpty;
 
   /// True if [photo] passes every active constraint that this object can judge
   /// on its own. Does **not** consider [selectedOnly] — see the class doc.
@@ -92,6 +112,18 @@ class PhotoFilter {
     if (color != null && photo.colorLabel != color) return false;
     if (hasKeyword && photo.keywords.isEmpty) return false;
     if (needsCaption && photo.iptc.caption.trim().isNotEmpty) return false;
+    switch (fileType) {
+      case FileTypeFilter.all:
+        break;
+      case FileTypeFilter.raw:
+        if (!photo.isRaw) return false;
+      case FileTypeFilter.jpeg:
+        if (!isJpegPath(photo.path)) return false;
+    }
+    final q = query.trim().toLowerCase();
+    if (q.isNotEmpty && !p.basename(photo.path).toLowerCase().contains(q)) {
+      return false;
+    }
     return true;
   }
 
@@ -107,6 +139,7 @@ class PhotoFilter {
     'burstsOnly': burstsOnly,
     'hideJpegPairs': hideJpegPairs,
     'collapseBrackets': collapseBrackets,
+    if (fileType != FileTypeFilter.all) 'fileType': fileType.name,
   };
 
   /// Returns a copy with the minimum rating set (0 clears it).
@@ -143,6 +176,13 @@ class PhotoFilter {
   PhotoFilter withCollapseBrackets(bool value) =>
       _copyWith(collapseBrackets: value);
 
+  /// Returns a copy with the file-type constraint set ([FileTypeFilter.all]
+  /// clears it).
+  PhotoFilter withFileType(FileTypeFilter value) => _copyWith(fileType: value);
+
+  /// Returns a copy with the live filename search set (empty clears it).
+  PhotoFilter withQuery(String value) => _copyWith(query: value);
+
   // Nullable fields use a thunk so passing null clears them (vs "absent").
   PhotoFilter _copyWith({
     int? minRating,
@@ -154,6 +194,8 @@ class PhotoFilter {
     bool? burstsOnly,
     bool? hideJpegPairs,
     bool? collapseBrackets,
+    FileTypeFilter? fileType,
+    String? query,
   }) => PhotoFilter(
     minRating: minRating ?? this.minRating,
     flag: flag != null ? flag() : this.flag,
@@ -164,7 +206,23 @@ class PhotoFilter {
     burstsOnly: burstsOnly ?? this.burstsOnly,
     hideJpegPairs: hideJpegPairs ?? this.hideJpegPairs,
     collapseBrackets: collapseBrackets ?? this.collapseBrackets,
+    fileType: fileType ?? this.fileType,
+    query: query ?? this.query,
   );
+}
+
+/// The file-type quick-filter: show all files, only RAW, or only JPEG. RAW is
+/// judged from [Photo.isRaw]; JPEG from the path extension ([isJpegPath]), so
+/// PNG/HEIF count as neither.
+enum FileTypeFilter {
+  /// No file-type restriction.
+  all,
+
+  /// Only RAW files (`Photo.isRaw`).
+  raw,
+
+  /// Only JPEG files (`.jpg`/`.jpeg`).
+  jpeg,
 }
 
 /// Looks up the enum value named [name] in [values], or null when [name] is

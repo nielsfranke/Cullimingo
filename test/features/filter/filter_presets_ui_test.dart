@@ -73,7 +73,14 @@ void main() {
     await tester.tap(find.text('Save current filter…'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField), 'Keepers');
+    // Scope to the dialog's field — the filter bar now also has a search box.
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      'Keepers',
+    );
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 

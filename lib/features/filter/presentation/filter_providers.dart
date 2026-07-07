@@ -62,6 +62,19 @@ class PhotoFilterController extends _$PhotoFilterController {
   /// Toggles the "collapse exposure brackets" quick-filter.
   void toggleCollapseBrackets() =>
       state = state.withCollapseBrackets(!state.collapseBrackets);
+
+  /// Sets the file-type constraint, toggling back to [FileTypeFilter.all] if
+  /// [type] is already active (so tapping the active chip clears it).
+  void toggleFileType(FileTypeFilter type) => state = state.withFileType(
+    state.fileType == type ? FileTypeFilter.all : type,
+  );
+
+  /// Sets the file-type constraint directly (the radio group in the Grouping
+  /// menu picks one of all/RAW/JPEG).
+  void setFileType(FileTypeFilter type) => state = state.withFileType(type);
+
+  /// Sets the live filename search text (empty clears it).
+  void setQuery(String value) => state = state.withQuery(value);
 }
 
 /// Startup seed for [FilterPresets] — the presets persisted last session,

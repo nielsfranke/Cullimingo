@@ -1,7 +1,9 @@
 import 'package:cullimingo/app/theme/tokens.dart';
 import 'package:cullimingo/core/db/database.dart';
+import 'package:cullimingo/core/files/supported_files.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
 import 'package:cullimingo/features/filter/domain/filter_preset.dart';
+import 'package:cullimingo/features/filter/domain/photo_filter.dart';
 import 'package:cullimingo/features/filter/presentation/filter_providers.dart';
 import 'package:cullimingo/shared/models/cull_marks.dart';
 import 'package:cullimingo/shared/widgets/edge_fade_scroll.dart';
@@ -33,6 +35,17 @@ class FilterBar extends ConsumerWidget {
     final groupCount = ref.watch(effectiveGroupsProvider).memberIds.length;
     final pairCount = ref.watch(rawJpegPairsProvider).pairCount;
     final bracketCount = ref.watch(bracketGroupsProvider).bracketCount;
+    // The file-type filter is only useful when the folder actually mixes RAW
+    // and JPEG — otherwise "RAW only"/"JPEG only" is a no-op or empties the
+    // grid. But keep it offered while it's still *active*, even if the folder
+    // stopped being mixed (e.g. you filtered to JPEG then deleted every JPEG):
+    // otherwise the control vanishes with the filter stuck on, leaving no way
+    // to clear it short of "All".
+    final rawCount = count((p) => p.isRaw);
+    final jpegCount = count((p) => isJpegPath(p.path));
+    final showFileType =
+        (rawCount > 0 && jpegCount > 0) ||
+        filter.fileType != FileTypeFilter.all;
 
     return Container(
       height: 44,
@@ -47,6 +60,8 @@ class FilterBar extends ConsumerWidget {
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           children: [
             const _FilterPresetsButton(),
+            const _Divider(),
+            const _SearchField(),
             const _Divider(),
             _Chip(
               label: 'All (${all.length})',
@@ -85,37 +100,94 @@ class FilterBar extends ConsumerWidget {
                   onTap: () => controller.toggleColor(label),
                 ),
             const _Divider(),
-            _Chip(
-              label: 'Keyworded (${count((p) => p.keywords.isNotEmpty)})',
-              selected: filter.hasKeyword,
-              onTap: controller.toggleHasKeyword,
+            // The situational attribute/grouping filters live in two grouped
+            // dropdowns so the bar stays scannable; the core cull filters above
+            // (flags / stars / colours) stay inline. Each dropdown tints when
+            // any of its filters is active, and its items carry live counts.
+            _FilterMenuButton(
+              label: 'Metadata',
+              active: filter.hasKeyword || filter.needsCaption,
+              menuChildren: [
+                CheckboxMenuButton(
+                  value: filter.hasKeyword,
+                  closeOnActivate: false,
+                  onChanged: (_) => controller.toggleHasKeyword(),
+                  child: Text(
+                    'Keyworded (${count((p) => p.keywords.isNotEmpty)})',
+                  ),
+                ),
+                CheckboxMenuButton(
+                  value: filter.needsCaption,
+                  closeOnActivate: false,
+                  onChanged: (_) => controller.toggleNeedsCaption(),
+                  child: Text(
+                    'Needs caption '
+                    '(${count((p) => p.iptc.caption.trim().isEmpty)})',
+                  ),
+                ),
+              ],
             ),
-            _Chip(
-              label:
-                  'Needs caption '
-                  '(${count((p) => p.iptc.caption.trim().isEmpty)})',
-              selected: filter.needsCaption,
-              onTap: controller.toggleNeedsCaption,
+            _FilterMenuButton(
+              label: 'Grouping',
+              active:
+                  filter.burstsOnly ||
+                  filter.hideJpegPairs ||
+                  filter.collapseBrackets ||
+                  filter.fileType != FileTypeFilter.all,
+              menuChildren: [
+                CheckboxMenuButton(
+                  value: filter.burstsOnly,
+                  closeOnActivate: false,
+                  onChanged: (_) => controller.toggleBurstsOnly(),
+                  child: Text('$groupLabel ($groupCount)'),
+                ),
+                // Only offered when the folder actually has exposure brackets.
+                if (bracketCount > 0)
+                  CheckboxMenuButton(
+                    value: filter.collapseBrackets,
+                    closeOnActivate: false,
+                    onChanged: (_) => controller.toggleCollapseBrackets(),
+                    child: Text('Stack brackets ($bracketCount)'),
+                  ),
+                // Only offered when the folder actually has RAW+JPEG pairs.
+                if (pairCount > 0)
+                  CheckboxMenuButton(
+                    value: filter.hideJpegPairs,
+                    closeOnActivate: false,
+                    onChanged: (_) => controller.toggleHideJpegPairs(),
+                    child: Text('Hide JPEG ($pairCount)'),
+                  ),
+                // File-type radio (All / RAW / JPEG) — shown when the folder
+                // mixes both, or while a type filter is still active.
+                if (showFileType) ...[
+                  const Divider(height: 1),
+                  RadioMenuButton<FileTypeFilter>(
+                    value: FileTypeFilter.all,
+                    groupValue: filter.fileType,
+                    closeOnActivate: false,
+                    onChanged: (v) =>
+                        controller.setFileType(v ?? FileTypeFilter.all),
+                    child: const Text('All file types'),
+                  ),
+                  RadioMenuButton<FileTypeFilter>(
+                    value: FileTypeFilter.raw,
+                    groupValue: filter.fileType,
+                    closeOnActivate: false,
+                    onChanged: (v) =>
+                        controller.setFileType(v ?? FileTypeFilter.all),
+                    child: Text('RAW only ($rawCount)'),
+                  ),
+                  RadioMenuButton<FileTypeFilter>(
+                    value: FileTypeFilter.jpeg,
+                    groupValue: filter.fileType,
+                    closeOnActivate: false,
+                    onChanged: (v) =>
+                        controller.setFileType(v ?? FileTypeFilter.all),
+                    child: Text('JPEG only ($jpegCount)'),
+                  ),
+                ],
+              ],
             ),
-            _Chip(
-              label: '$groupLabel ($groupCount)',
-              selected: filter.burstsOnly,
-              onTap: controller.toggleBurstsOnly,
-            ),
-            // Only offered when the folder actually has RAW+JPEG pairs.
-            if (pairCount > 0)
-              _Chip(
-                label: 'Hide JPEG ($pairCount)',
-                selected: filter.hideJpegPairs,
-                onTap: controller.toggleHideJpegPairs,
-              ),
-            // Only offered when the folder actually has exposure brackets.
-            if (bracketCount > 0)
-              _Chip(
-                label: 'Stack brackets ($bracketCount)',
-                selected: filter.collapseBrackets,
-                onTap: controller.toggleCollapseBrackets,
-              ),
           ],
         ),
       ),
@@ -154,6 +226,164 @@ class _Chip extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                   fontSize: 12,
                 ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Live filename search box. Filters the grid as you type by substring against
+/// each photo's filename (with extension, case-insensitive), so "DSC_004" and
+/// "jpg" both work. Owns its own [FocusNode] so the grid's bare-key cull
+/// shortcuts (1–5, P, X, colours) never fire while the user is typing, and
+/// mirrors the filter provider so clearing the filter elsewhere ("All") empties
+/// the box.
+class _SearchField extends ConsumerStatefulWidget {
+  const _SearchField();
+
+  @override
+  ConsumerState<_SearchField> createState() => _SearchFieldState();
+}
+
+class _SearchFieldState extends ConsumerState<_SearchField> {
+  late final TextEditingController _controller;
+  final _focus = FocusNode(debugLabel: 'filter-search');
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: ref.read(photoFilterControllerProvider).query,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = ref.watch(
+      photoFilterControllerProvider.select((f) => f.query),
+    );
+    // Re-sync the box when the filter is cleared/replaced elsewhere (the "All"
+    // chip, or a tab switch restoring a saved filter). A programmatic set does
+    // not fire onChanged, so this can't loop with the user's own typing.
+    if (query != _controller.text) {
+      _controller.value = TextEditingValue(
+        text: query,
+        selection: TextSelection.collapsed(offset: query.length),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 3),
+      child: SizedBox(
+        width: 190,
+        child: TextField(
+          controller: _controller,
+          focusNode: _focus,
+          style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+          cursorColor: AppColors.accent,
+          textAlignVertical: TextAlignVertical.center,
+          onChanged: (v) =>
+              ref.read(photoFilterControllerProvider.notifier).setQuery(v),
+          onSubmitted: (_) => _focus.unfocus(),
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: AppColors.surfaceElevated,
+            hintText: 'Search filename…',
+            hintStyle: const TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+            prefixIcon: const Icon(
+              Icons.search,
+              size: 16,
+              color: AppColors.textSecondary,
+            ),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 30,
+              minHeight: 30,
+            ),
+            suffixIcon: query.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Clear',
+                    iconSize: 14,
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.close),
+                    color: AppColors.textSecondary,
+                    onPressed: () => ref
+                        .read(photoFilterControllerProvider.notifier)
+                        .setQuery(''),
+                  ),
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 30,
+              minHeight: 30,
+            ),
+            contentPadding: const EdgeInsets.symmetric(vertical: 8),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              borderSide: BorderSide.none,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A chip-styled dropdown trigger that opens a [MenuAnchor] of checkable
+/// filter items. Tints with [AppColors.accent] (like a selected [_Chip]) when
+/// [active], so an active filter hidden inside the menu is still visible on the
+/// bar. Tapping the trigger toggles the menu (it stays visible while open).
+class _FilterMenuButton extends StatelessWidget {
+  const _FilterMenuButton({
+    required this.label,
+    required this.active,
+    required this.menuChildren,
+  });
+
+  final String label;
+  final bool active;
+  final List<Widget> menuChildren;
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = active ? Colors.white : AppColors.textSecondary;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 3),
+      child: MenuAnchor(
+        menuChildren: menuChildren,
+        builder: (context, controller, child) => Material(
+          color: active ? AppColors.accent : AppColors.surfaceElevated,
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            onTap: () =>
+                controller.isOpen ? controller.close() : controller.open(),
+            child: Padding(
+              padding: const EdgeInsets.only(left: AppSpacing.md, right: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: fg,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                  Icon(Icons.arrow_drop_down, size: 18, color: fg),
+                ],
               ),
             ),
           ),

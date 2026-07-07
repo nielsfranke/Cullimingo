@@ -132,9 +132,25 @@ void main() {
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.keyM);
     await tester.pumpAndSettle();
-    expect(find.text('Metadata'), findsOneWidget);
+    // Scope to the editor's own dialog title — the filter bar behind it now
+    // also carries a "Metadata" dropdown label.
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Metadata'),
+      ),
+      findsOneWidget,
+    );
 
-    await tester.enterText(find.byType(TextField).first, input);
+    await tester.enterText(
+      find
+          .descendant(
+            of: find.byType(AlertDialog),
+            matching: find.byType(TextField),
+          )
+          .first,
+      input,
+    );
     await tester.pump();
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();

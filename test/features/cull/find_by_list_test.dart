@@ -104,7 +104,13 @@ void main() {
 
     // Bare names, no extension — must still match the .ARW files. Listed in
     // reverse grid order to prove the reveal focuses the grid-first match.
-    await tester.enterText(find.byType(TextField), '_AIV0003 _AIV0001');
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      '_AIV0003 _AIV0001',
+    );
     await tester.tap(find.text('Find'));
     await tester.pumpAndSettle();
 
