@@ -129,7 +129,7 @@ void main() {
     final request = (result()! as ContactSheetSend).request;
     expect(request.baseUrl, 'https://cs.example.com');
     expect(request.token, 'cs_pat_x');
-    expect(request.galleryName, 'My Shoot');
+    expect(request.newGalleryNames, ['My Shoot']);
     expect(request.galleryId, isNull);
     expect(request.sources.length, 2);
     expect(request.preset.longEdge, 2048);

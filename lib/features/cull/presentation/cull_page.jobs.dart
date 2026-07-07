@@ -701,13 +701,23 @@ mixin _CullJobs on _CullSelections {
         throw const ContactSheetException('Nothing was rendered to upload');
       }
 
-      // 2. Resolve the gallery (create when new).
-      final galleryId =
-          request.galleryId ??
-          (await client.createGallery(
-            name: request.galleryName!,
-            parentId: request.parentId,
+      // 2. Resolve the gallery. For a new destination, create the chain of new
+      // (sub-)galleries in order — each nested under the previous, the first
+      // under request.parentId — and upload into the deepest one.
+      var galleryId = request.galleryId;
+      if (galleryId == null) {
+        var parentId = request.parentId;
+        for (final name in request.newGalleryNames) {
+          parentId = (await client.createGallery(
+            name: name,
+            parentId: parentId,
           )).id;
+        }
+        galleryId = parentId;
+      }
+      if (galleryId == null) {
+        throw const ContactSheetException('No gallery to upload into');
+      }
 
       // 3. Upload in batches, reporting progress.
       if (mounted) {

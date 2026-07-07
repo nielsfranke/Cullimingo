@@ -67,14 +67,15 @@ class ContactSheetPullRequest {
 /// A confirmed "send to ContactSheet" request, returned by
 /// [showContactSheetDialog]. The page runs it non-modally (§7b).
 class ContactSheetRequest {
-  /// Creates a request. Exactly one of [galleryId] / [galleryName] is set.
+  /// Creates a request. Either [galleryId] (existing) or [newGalleryNames]
+  /// (create a new chain) identifies the destination.
   const ContactSheetRequest({
     required this.baseUrl,
     required this.token,
     required this.sources,
     required this.preset,
     this.galleryId,
-    this.galleryName,
+    this.newGalleryNames = const [],
     this.parentId,
   });
 
@@ -90,14 +91,16 @@ class ContactSheetRequest {
   /// Render settings (JPEG, keep names).
   final ExportPreset preset;
 
-  /// Existing gallery to upload into, or null to create a new one.
+  /// Existing gallery to upload into, or null to create new gallery/-ies.
   final String? galleryId;
 
-  /// Name for a new gallery, or null when [galleryId] is set.
-  final String? galleryName;
+  /// Names of the new galleries to create, from root to leaf; the upload goes
+  /// into the last. Created sequentially on send, each nested under the
+  /// previous (the first under [parentId]). Empty when [galleryId] is set.
+  final List<String> newGalleryNames;
 
-  /// Parent gallery id for a new gallery (sub-gallery), or null = top level.
-  /// Only meaningful when [galleryName] is set.
+  /// Parent (existing) gallery id the new chain is rooted under, or null = top
+  /// level. Only meaningful when [newGalleryNames] is non-empty.
   final String? parentId;
 }
 
@@ -141,7 +144,8 @@ class _ContactSheetDialog extends ConsumerStatefulWidget {
 class _ContactSheetDialogState extends ConsumerState<_ContactSheetDialog> {
   final TextEditingController _baseUrl = TextEditingController();
   final TextEditingController _token = TextEditingController();
-  final TextEditingController _galleryName = TextEditingController();
+  // Name for a new top-level gallery before the tree is loaded (no picker yet).
+  final TextEditingController _fallbackName = TextEditingController();
 
   int _sizeValue = 2048;
   int _quality = 85;
@@ -158,8 +162,12 @@ class _ContactSheetDialogState extends ConsumerState<_ContactSheetDialog> {
   List<CsGallery>? _galleries;
   String? _selectedGalleryId;
 
-  // Parent for a NEW gallery (sub-gallery), or null = top level.
-  String? _newParentId;
+  // A NEW-gallery chain (root→leaf) to create on send, rooted under
+  // _newRootParentId (null = top level). Non-empty while creating new; the
+  // upload goes into the deepest one. Ignored while an existing gallery is
+  // chosen (_selectedGalleryId != null).
+  List<String> _newNames = [''];
+  String? _newRootParentId;
   bool _loading = false;
   String? _error;
 
@@ -217,7 +225,7 @@ class _ContactSheetDialogState extends ConsumerState<_ContactSheetDialog> {
   void dispose() {
     _baseUrl.dispose();
     _token.dispose();
-    _galleryName.dispose();
+    _fallbackName.dispose();
     super.dispose();
   }
 
@@ -232,9 +240,14 @@ class _ContactSheetDialogState extends ConsumerState<_ContactSheetDialog> {
     return (host == null || host.isEmpty) ? url : host;
   }
 
-  bool get _canSend =>
-      _canConnect &&
-      (_selectedGalleryId != null || _galleryName.text.trim().isNotEmpty);
+  bool get _canSend {
+    if (!_canConnect) return false;
+    // No tree loaded yet → the fallback top-level name field.
+    if (_galleries == null) return _fallbackName.text.trim().isNotEmpty;
+    // An existing gallery is chosen, or every level of the new chain is named.
+    if (_selectedGalleryId != null) return true;
+    return _newNames.isNotEmpty && _newNames.every((n) => n.trim().isNotEmpty);
+  }
 
   // Pull needs an existing (already-reviewed) gallery, so its share token.
   bool get _canPull => _canConnect && _selectedGallery != null;
@@ -255,6 +268,9 @@ class _ContactSheetDialogState extends ConsumerState<_ContactSheetDialog> {
       if (!mounted) return;
       setState(() {
         _galleries = galleries;
+        // Carry a name typed into the pre-load fallback field into the inline
+        // top-level row, so switching to the tree view doesn't lose it.
+        _newNames = [_fallbackName.text];
         // Preselect last time's gallery — once. If it's gone (or the user
         // already picked something), the choice stays as-is.
         final last = _lastGalleryId;
@@ -301,6 +317,14 @@ class _ContactSheetDialogState extends ConsumerState<_ContactSheetDialog> {
         ),
       );
     } else {
+      // New-gallery chain: from the fallback field (no tree) or the inline
+      // picker chain (tree loaded). Empty when an existing gallery is chosen.
+      final creatingNew = _selectedGalleryId == null;
+      final newNames = !creatingNew
+          ? const <String>[]
+          : (_galleries == null
+                ? [_fallbackName.text.trim()]
+                : [for (final n in _newNames) n.trim()]);
       action = ContactSheetSend(
         ContactSheetRequest(
           baseUrl: baseUrl,
@@ -308,10 +332,8 @@ class _ContactSheetDialogState extends ConsumerState<_ContactSheetDialog> {
           sources: widget.sources,
           preset: ExportPreset(longEdge: _sizeValue, quality: _quality),
           galleryId: _selectedGalleryId,
-          galleryName: _selectedGalleryId == null
-              ? _galleryName.text.trim()
-              : null,
-          parentId: _selectedGalleryId == null ? _newParentId : null,
+          newGalleryNames: newNames,
+          parentId: creatingNew && _galleries != null ? _newRootParentId : null,
         ),
       );
     }
@@ -430,40 +452,40 @@ class _ContactSheetDialogState extends ConsumerState<_ContactSheetDialog> {
           tree: _galleries!,
           baseUrl: _baseUrl.text.trim(),
           selectedId: _selectedGalleryId,
+          newRootParentId: _newRootParentId,
+          newNames: _newNames,
           allowNew: !_pullMode,
-          onSelect: (id) => setState(() => _selectedGalleryId = id),
+          onSelectExisting: (id) => setState(() => _selectedGalleryId = id),
+          onStartNewUnder: (parentId) => setState(() {
+            _selectedGalleryId = null;
+            _newRootParentId = parentId;
+            _newNames = ['']; // fresh single-level chain
+          }),
+          onAddNestedLevel: () =>
+              setState(() => _newNames = [..._newNames, '']),
+          onRemoveLevel: () => setState(() {
+            if (_newNames.length > 1) {
+              _newNames = _newNames.sublist(0, _newNames.length - 1);
+            } else {
+              // Removing the only new level cancels new-creation: fall back to
+              // the parent gallery (upload straight into it) if there is one.
+              _selectedGalleryId = _newRootParentId;
+              _newNames = const [];
+            }
+          }),
+          onNameChanged: (i, v) => setState(() => _newNames[i] = v),
         ),
-      ],
-      if (!_pullMode && _selectedGalleryId == null) ...[
+      ] else if (!_pullMode) ...[
+        // Galleries not loaded yet — a plain top-level name field so you can
+        // send to a new gallery without browsing the tree first. Load existing
+        // to nest it under another gallery inline.
         const SizedBox(height: AppSpacing.sm),
         TextField(
-          controller: _galleryName,
+          controller: _fallbackName,
           decoration: dialogInputDecoration('New gallery name'),
           style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
           onChanged: (_) => setState(() {}),
         ),
-        if (_galleries != null) ...[
-          const SizedBox(height: AppSpacing.sm),
-          DialogField(
-            label: 'Parent',
-            child: DialogDropdown<String?>(
-              value: _newParentId,
-              onChanged: (v) => setState(() => _newParentId = v),
-              items: [
-                const DropdownMenuItem(child: Text('Top level')),
-                for (final row in flattenGalleryTree(_galleries!))
-                  DropdownMenuItem(
-                    value: row.gallery.id,
-                    child: Text(
-                      '${'   ' * row.depth}${row.gallery.name}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
       ],
       if (_error != null) ...[
         const SizedBox(height: AppSpacing.sm),
@@ -536,21 +558,53 @@ class _ContactSheetDialogState extends ConsumerState<_ContactSheetDialog> {
 /// A hierarchical gallery list with cover thumbnails, image counts and indented
 /// sub-galleries — so the structure is visible and sub-galleries aren't lost.
 /// Parents are collapsible (chevron) and a search box filters by name. In send
-/// mode it leads with a "New gallery…" row (selection id `null`).
+/// mode it leads with an inline "New gallery" row you type the name into, and
+/// every existing gallery carries a "+" that starts an inline sub-gallery under
+/// it (created on Send).
 class _GalleryPicker extends StatefulWidget {
   const _GalleryPicker({
     required this.tree,
     required this.baseUrl,
     required this.selectedId,
+    required this.newRootParentId,
+    required this.newNames,
     required this.allowNew,
-    required this.onSelect,
+    required this.onSelectExisting,
+    required this.onStartNewUnder,
+    required this.onAddNestedLevel,
+    required this.onRemoveLevel,
+    required this.onNameChanged,
   });
 
   final List<CsGallery> tree;
   final String baseUrl;
+
+  /// The chosen existing gallery, or null while creating a new chain.
   final String? selectedId;
+
+  /// Existing gallery the new chain is rooted under (null = top level); only
+  /// meaningful when [selectedId] is null.
+  final String? newRootParentId;
+
+  /// The new-gallery chain names, root→leaf. Non-empty while creating new.
+  final List<String> newNames;
   final bool allowNew;
-  final ValueChanged<String?> onSelect;
+
+  /// Picks an existing gallery as the destination.
+  final ValueChanged<String> onSelectExisting;
+
+  /// Starts a fresh new chain under `parentId` (null = top level).
+  final ValueChanged<String?> onStartNewUnder;
+
+  /// Adds a deeper level to the current new chain (the leaf's "+").
+  final VoidCallback onAddNestedLevel;
+
+  /// Removes the deepest new level (the leaf's "×"); cancels when it is the
+  /// last remaining level.
+  final VoidCallback onRemoveLevel;
+
+  /// Fires as a chain level's name changes (by index).
+  final void Function(int index, String value) onNameChanged;
 
   @override
   State<_GalleryPicker> createState() => _GalleryPickerState();
@@ -581,9 +635,33 @@ class _GalleryPickerState extends State<_GalleryPicker> {
     if (!_collapsed.remove(id)) _collapsed.add(id);
   });
 
+  /// The inline chain of new-gallery name rows (root→leaf), starting at
+  /// [startDepth]; only the leaf carries the "+" (add level) and "×" (remove).
+  List<Widget> _chainRows(int startDepth) => [
+    for (var i = 0; i < widget.newNames.length; i++)
+      _NewGalleryRow(
+        key: ValueKey('new-${widget.newRootParentId ?? "top"}-$i'),
+        depth: startDepth + i,
+        initialText: widget.newNames[i],
+        autofocus: i == widget.newNames.length - 1,
+        onChanged: (v) => widget.onNameChanged(i, v),
+        onAddChild: i == widget.newNames.length - 1
+            ? widget.onAddNestedLevel
+            : null,
+        onRemove: i == widget.newNames.length - 1 ? widget.onRemoveLevel : null,
+      ),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final searching = _query.trim().isNotEmpty;
+    // Creating a NEW chain (vs. an existing gallery chosen).
+    final creatingNew =
+        widget.allowNew &&
+        widget.selectedId == null &&
+        widget.newNames.isNotEmpty;
+    // Rooted at top level: the chain leads the list inline.
+    final creatingTopLevel = creatingNew && widget.newRootParentId == null;
     final rows = searching
         ? searchGalleryRows(widget.tree, _query)
         : visibleGalleryRows(widget.tree, _collapsed);
@@ -623,17 +701,23 @@ class _GalleryPickerState extends State<_GalleryPicker> {
                   shrinkWrap: true,
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
                   children: [
+                    // Lead "New gallery" row: an inline name field while it's
+                    // the chosen destination, else a tappable row that selects
+                    // it. Hidden while searching (search filters existing).
                     if (widget.allowNew && !searching)
-                      _PickerRow(
-                        depth: 0,
-                        label: 'New gallery…',
-                        leading: const _CoverBox(
-                          child: Icon(Icons.add, size: 18),
+                      if (creatingTopLevel)
+                        ..._chainRows(0)
+                      else
+                        _PickerRow(
+                          depth: 0,
+                          label: 'New gallery…',
+                          leading: const _CoverBox(
+                            child: Icon(Icons.add, size: 18),
+                          ),
+                          selected: false,
+                          onTap: () => widget.onStartNewUnder(null),
                         ),
-                        selected: widget.selectedId == null,
-                        onTap: () => widget.onSelect(null),
-                      ),
-                    for (final row in rows)
+                    for (final row in rows) ...[
                       _PickerRow(
                         depth: row.depth,
                         label: row.gallery.name,
@@ -649,8 +733,23 @@ class _GalleryPickerState extends State<_GalleryPicker> {
                             ? () => _toggleCollapse(row.gallery.id)
                             : null,
                         selected: widget.selectedId == row.gallery.id,
-                        onTap: () => widget.onSelect(row.gallery.id),
+                        onTap: () => widget.onSelectExisting(row.gallery.id),
+                        // "+" starts an inline sub-gallery chain here.
+                        onAddChild: widget.allowNew && !searching
+                            ? () {
+                                setState(
+                                  () => _collapsed.remove(row.gallery.id),
+                                );
+                                widget.onStartNewUnder(row.gallery.id);
+                              }
+                            : null,
                       ),
+                      // The inline sub-gallery name chain, nested under its
+                      // chosen parent.
+                      if (creatingNew &&
+                          widget.newRootParentId == row.gallery.id)
+                        ..._chainRows(row.depth + 1),
+                    ],
                   ],
                 ),
         ),
@@ -669,6 +768,7 @@ class _PickerRow extends StatelessWidget {
     this.count,
     this.collapsed = false,
     this.onToggleCollapse,
+    this.onAddChild,
   });
 
   final int depth;
@@ -681,6 +781,9 @@ class _PickerRow extends StatelessWidget {
 
   /// Collapse toggle for a parent gallery; null = leaf (no chevron).
   final VoidCallback? onToggleCollapse;
+
+  /// Starts a new sub-gallery under this row ("+"); null = not offered.
+  final VoidCallback? onAddChild;
 
   @override
   Widget build(BuildContext context) => InkWell(
@@ -731,7 +834,132 @@ class _PickerRow extends StatelessWidget {
               ),
             ),
           ],
+          if (onAddChild != null) ...[
+            const SizedBox(width: AppSpacing.xs),
+            _RowIconButton(
+              icon: Icons.add,
+              tooltip: 'New sub-gallery',
+              onTap: onAddChild!,
+            ),
+          ],
         ],
+      ),
+    ),
+  );
+}
+
+/// An inline row (in [_GalleryPicker]) for naming a new gallery — one per level
+/// of the new chain (lead row at top level, or nested under a parent). Owns its
+/// own controller (seeded from [initialText]) so it survives the picker's
+/// rebuilds; the leaf gets a "+" (nest a deeper new gallery) and a "×" (remove
+/// this level). Styled like a selected [_PickerRow], with a folder icon.
+class _NewGalleryRow extends StatefulWidget {
+  const _NewGalleryRow({
+    required this.depth,
+    required this.initialText,
+    required this.autofocus,
+    required this.onChanged,
+    this.onAddChild,
+    this.onRemove,
+    super.key,
+  });
+
+  final int depth;
+  final String initialText;
+  final bool autofocus;
+  final ValueChanged<String> onChanged;
+
+  /// Nest a deeper new gallery under this one (leaf only); null = not offered.
+  final VoidCallback? onAddChild;
+
+  /// Remove this (deepest) level (leaf only); null = not offered.
+  final VoidCallback? onRemove;
+
+  @override
+  State<_NewGalleryRow> createState() => _NewGalleryRowState();
+}
+
+class _NewGalleryRowState extends State<_NewGalleryRow> {
+  late final TextEditingController _c = TextEditingController(
+    text: widget.initialText,
+  );
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    color: AppColors.accent.withValues(alpha: 0.18),
+    padding: const EdgeInsets.symmetric(vertical: 5, horizontal: AppSpacing.sm),
+    child: Row(
+      children: [
+        SizedBox(width: widget.depth * 18.0),
+        // Align with the chevron column of the other rows.
+        const SizedBox(width: 20),
+        const _CoverBox(
+          child: Icon(Icons.create_new_folder_outlined, size: 18),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: TextField(
+            controller: _c,
+            autofocus: widget.autofocus,
+            onChanged: widget.onChanged,
+            style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
+            decoration: const InputDecoration(
+              isDense: true,
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+              hintText: 'New gallery name…',
+              hintStyle: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ),
+        if (widget.onAddChild != null)
+          _RowIconButton(
+            icon: Icons.add,
+            tooltip: 'Nested sub-gallery',
+            onTap: widget.onAddChild!,
+          ),
+        if (widget.onRemove != null)
+          _RowIconButton(
+            icon: Icons.close,
+            tooltip: 'Remove',
+            onTap: widget.onRemove!,
+          ),
+      ],
+    ),
+  );
+}
+
+/// A compact icon tap-target for the picker rows ("+"/"×"), sized to sit inline
+/// without the bulk of a full [IconButton].
+class _RowIconButton extends StatelessWidget {
+  const _RowIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      child: Padding(
+        padding: const EdgeInsets.all(3),
+        child: Icon(icon, size: 16, color: AppColors.textSecondary),
       ),
     ),
   );
