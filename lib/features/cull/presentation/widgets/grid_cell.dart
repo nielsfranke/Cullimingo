@@ -157,6 +157,13 @@ class GridCell extends ConsumerWidget {
         // selects just this photo.
         child: Listener(
           onPointerDown: (event) => _onPointerDown(ref, event),
+          // A plain click inside a multi-selection collapses to this photo on
+          // release; a cancel (a drag or scroll took over the pointer) leaves
+          // the selection intact so a drag-out keeps every selected file.
+          onPointerUp: (_) =>
+              ref.read(cullControllerProvider.notifier).commitPendingCollapse(),
+          onPointerCancel: (_) =>
+              ref.read(cullControllerProvider.notifier).cancelPendingCollapse(),
           child: GestureDetector(
             onSecondaryTapDown: (d) =>
                 unawaited(_onSecondaryTap(context, ref, d)),
@@ -210,6 +217,9 @@ class GridCell extends ConsumerWidget {
     WidgetRef ref,
     DragConfiguration configuration,
   ) {
+    // The press became a drag, not a click — cancel the deferred collapse so
+    // pointer-up won't shrink the selection to the dragged cell.
+    ref.read(cullControllerProvider.notifier).cancelPendingCollapse();
     final selected = ref.read(cullControllerProvider).selectedIds;
     final ids = dragTargets(photo.id, selected);
     if (ids.length <= 1) return configuration;
@@ -240,12 +250,28 @@ class GridCell extends ConsumerWidget {
     final controller = ref.read(cullControllerProvider.notifier);
     final keys = HardwareKeyboard.instance;
     if (keys.isShiftPressed) {
+      controller.cancelPendingCollapse();
       final ids = ref.read(filteredPhotosProvider).map((p) => p.id).toList();
       controller.extendSelectionTo(photo.id, ids);
     } else if (keys.isMetaPressed || keys.isControlPressed) {
-      controller.toggleSelect(photo.id);
+      controller
+        ..cancelPendingCollapse()
+        ..toggleSelect(photo.id);
     } else {
-      controller.selectOnly(photo.id);
+      final selection = ref.read(cullControllerProvider);
+      final insideMultiSelection =
+          selection.selectedIds.length > 1 &&
+          selection.selectedIds.contains(photo.id);
+      if (insideMultiSelection) {
+        // Keep the whole selection under the press so a drag-out carries every
+        // selected file; collapse to just this photo only on release, if the
+        // press turns out to be a plain click (see [commitPendingCollapse]).
+        controller.beginPendingCollapse(photo.id);
+      } else {
+        controller
+          ..cancelPendingCollapse()
+          ..selectOnly(photo.id);
+      }
     }
   }
 

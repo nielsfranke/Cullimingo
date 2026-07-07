@@ -808,6 +808,33 @@ class CullController extends _$CullController {
     selectedIds: {photoId},
   );
 
+  // A plain click that lands inside a multi-selection can't collapse the
+  // selection on pointer-down: a drag-out from that press would then carry only
+  // the clicked file, not the whole selection. So the click is remembered here
+  // and the collapse waits for pointer-up ([commitPendingCollapse]) — unless a
+  // drag starts first ([cancelPendingCollapse]).
+  int? _pendingCollapseId;
+
+  /// Remembers a plain click on [photoId] inside a multi-selection; the
+  /// collapse to just [photoId] is deferred to [commitPendingCollapse] so a
+  /// drag can pre-empt it and keep every selected file.
+  // ignore: use_setters_to_change_properties
+  void beginPendingCollapse(int photoId) => _pendingCollapseId = photoId;
+
+  /// Drops any deferred collapse (a drag started, or the press was cancelled),
+  /// leaving the multi-selection intact.
+  void cancelPendingCollapse() => _pendingCollapseId = null;
+
+  /// Applies a deferred collapse on pointer-up: the press was a plain click,
+  /// not the start of a drag, so select only the clicked photo. A no-op when
+  /// nothing is pending (a modifier click, a drag, or a click outside).
+  void commitPendingCollapse() {
+    final id = _pendingCollapseId;
+    if (id == null) return;
+    _pendingCollapseId = null;
+    selectOnly(id);
+  }
+
   /// Adds/removes [photoId] from the selection (Space / ⌘-click) and focuses it.
   void toggleSelect(int photoId) {
     final next = {...state.selectedIds};

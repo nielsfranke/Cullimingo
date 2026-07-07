@@ -115,6 +115,32 @@ void main() {
     expect(state().markTargets, {ids[3]});
   });
 
+  test('a click inside a multi-selection defers its collapse', () {
+    controller()
+      ..selectOnly(ids[0])
+      ..toggleSelect(ids[1])
+      ..toggleSelect(ids[2]); // {0,1,2}
+
+    // Pressing an already-selected photo must not collapse yet — a drag-out
+    // from this press has to carry the whole selection.
+    controller().beginPendingCollapse(ids[0]);
+    expect(state().selectedIds, {ids[0], ids[1], ids[2]});
+
+    // A drag cancels the pending collapse; the selection stays intact even
+    // after a (now no-op) commit.
+    controller()
+      ..cancelPendingCollapse()
+      ..commitPendingCollapse();
+    expect(state().selectedIds, {ids[0], ids[1], ids[2]});
+
+    // A plain click (no drag) commits on release: collapse to the clicked one.
+    controller()
+      ..beginPendingCollapse(ids[0])
+      ..commitPendingCollapse();
+    expect(state().selectedIds, {ids[0]});
+    expect(state().focusedId, ids[0]);
+  });
+
   test('pruneMissing drops deleted ids but keeps the rest selected', () {
     controller()
       ..selectOnly(ids[0])
