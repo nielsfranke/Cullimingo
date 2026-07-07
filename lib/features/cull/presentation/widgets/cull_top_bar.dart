@@ -42,6 +42,8 @@ class CullTopBar extends StatelessWidget {
     this.onRefresh,
     this.onDeleteRejects,
     this.onContactSheet,
+    this.propagateMarksToStack = false,
+    this.onTogglePropagateMarks,
     this.cellWidth,
     this.onCellWidth,
     this.onZoomStart,
@@ -129,6 +131,14 @@ class CullTopBar extends StatelessWidget {
 
   /// Opens the ContactSheet dialog (send/pull); null = disabled, no folder.
   final Future<void> Function()? onContactSheet;
+
+  /// Whether marking a photo also marks the rest of its exposure bracket — the
+  /// live value of the same Settings toggle, surfaced here as a checkable
+  /// "More" entry.
+  final bool propagateMarksToStack;
+
+  /// Flips [propagateMarksToStack] (null = disabled, no folder open).
+  final VoidCallback? onTogglePropagateMarks;
 
   /// Current grid cell width, or `null` to hide the size slider (no photos).
   final double? cellWidth;
@@ -280,115 +290,20 @@ class CullTopBar extends StatelessWidget {
                   // with no folder open so it's never an empty/near-empty menu.
                   if (count > 0) ...[
                     const SizedBox(width: AppSpacing.xs),
-                    PopupMenuButton<String>(
-                      tooltip: 'More',
-                      icon: const Icon(Icons.more_vert, size: 18),
-                      popUpAnimationStyle: kMenuAnimationStyle,
-                      onSelected: (value) {
-                        switch (value) {
-                          case 'compare':
-                            onCompare?.call();
-                          case 'expand-brackets':
-                            onExpandBrackets?.call();
-                          case 'find-similar':
-                            if (onFindSimilar != null) {
-                              unawaited(onFindSimilar!());
-                            }
-                          case 'clear-similar':
-                            onClearSimilar?.call();
-                          case 'import-list':
-                            if (onImport != null) unawaited(onImport!());
-                          case 'keywords':
-                            onEditKeywords?.call();
-                          case 'metadata':
-                            onEditMetadata?.call();
-                          case 'apply-template':
-                            onApplyTemplate?.call();
-                          case 'geocode':
-                            onGeocode?.call();
-                          case 'resync':
-                            if (onResync != null) unawaited(onResync!());
-                          case 'delete-rejects':
-                            onDeleteRejects?.call();
-                          case 'refresh':
-                            if (onRefresh != null) unawaited(onRefresh!());
-                          case 'contactsheet':
-                            if (onContactSheet != null) {
-                              unawaited(onContactSheet!());
-                            }
-                        }
-                      },
-                      // Grouped by purpose (review · metadata · client ·
-                      // folder) with a divider between each non-empty group, so
-                      // the long action list scans instead of reading as a
-                      // flat grab-bag.
-                      itemBuilder: (context) {
-                        PopupMenuItem<String> entry(
-                          String value,
-                          String label,
-                        ) => PopupMenuItem<String>(
-                          value: value,
-                          height: 40,
-                          child: Text(label),
-                        );
-                        final groups = <List<PopupMenuEntry<String>>>[
-                          [
-                            if (onCompare != null)
-                              entry('compare', 'Compare selected (C)'),
-                            if (onExpandBrackets != null)
-                              entry(
-                                'expand-brackets',
-                                'Expand selection to bracket (G)',
-                              ),
-                            if (onFindSimilar != null)
-                              entry('find-similar', 'Find similar photos'),
-                            if (onClearSimilar != null)
-                              entry('clear-similar', 'Clear similar grouping'),
-                          ],
-                          [
-                            if (onEditKeywords != null)
-                              entry('keywords', 'Edit keywords (K)'),
-                            if (onEditMetadata != null)
-                              entry('metadata', 'Edit metadata (M)'),
-                            if (onApplyTemplate != null)
-                              entry(
-                                'apply-template',
-                                'Apply metadata template (T)',
-                              ),
-                            if (onGeocode != null)
-                              entry('geocode', 'Fill location from GPS'),
-                          ],
-                          [
-                            if (onImport != null)
-                              entry('import-list', 'Import selection list…'),
-                            if (onContactSheet != null)
-                              entry('contactsheet', 'ContactSheet…'),
-                          ],
-                          [
-                            if (onRefresh != null)
-                              entry('refresh', 'Refresh folder (⌘R)'),
-                            if (onResync != null)
-                              entry('resync', 'Re-sync sidecars from disk'),
-                          ],
-                          // Destructive, so it sits alone behind a divider.
-                          [
-                            if (onDeleteRejects != null)
-                              entry(
-                                'delete-rejects',
-                                'Delete rejected photos… (⌘⌫)',
-                              ),
-                          ],
-                        ];
-                        final entries = <PopupMenuEntry<String>>[];
-                        for (final group in groups) {
-                          if (group.isEmpty) continue;
-                          if (entries.isNotEmpty) {
-                            entries.add(const PopupMenuDivider());
-                          }
-                          entries.addAll(group);
-                        }
-                        return entries;
-                      },
+                    // A MenuAnchor (not PopupMenuButton) so the ⋮ button stays
+                    // visible while the menu is open — clicking it again
+                    // toggles the menu closed. PopupMenuButton drops a
+                    // full-screen barrier over the button, which swallows
+                    // that second click.
+                    MenuAnchor(
+                      menuChildren: _moreMenuChildren(),
+                      builder: (context, controller, child) => IconButton(
+                        tooltip: 'More',
+                        icon: const Icon(Icons.more_vert, size: 18),
+                        onPressed: () => controller.isOpen
+                            ? controller.close()
+                            : controller.open(),
+                      ),
                     ),
                   ],
                 ],
@@ -398,6 +313,67 @@ class CullTopBar extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// The "More" menu's entries, grouped by purpose (review · metadata ·
+  /// client · folder · destructive) with a divider between each non-empty
+  /// group, so the long action list scans instead of reading as a flat
+  /// grab-bag. Each entry only appears when its callback is wired (a folder
+  /// is open).
+  List<Widget> _moreMenuChildren() {
+    MenuItemButton item(String label, VoidCallback onPressed) =>
+        MenuItemButton(onPressed: onPressed, child: Text(label));
+    final groups = <List<Widget>>[
+      [
+        if (onCompare != null) item('Compare selected (C)', onCompare!),
+        if (onExpandBrackets != null)
+          item('Expand selection to bracket (G)', onExpandBrackets!),
+        // A mode toggle (mirrors the Settings checkbox), kept open on click so
+        // its checkmark flips in place.
+        if (onTogglePropagateMarks != null)
+          CheckboxMenuButton(
+            value: propagateMarksToStack,
+            closeOnActivate: false,
+            onChanged: (_) => onTogglePropagateMarks!(),
+            child: const Text('Apply marks to whole bracket'),
+          ),
+        if (onFindSimilar != null)
+          item('Find similar photos', () => unawaited(onFindSimilar!())),
+        if (onClearSimilar != null)
+          item('Clear similar grouping', onClearSimilar!),
+      ],
+      [
+        if (onEditKeywords != null) item('Edit keywords (K)', onEditKeywords!),
+        if (onEditMetadata != null) item('Edit metadata (M)', onEditMetadata!),
+        if (onApplyTemplate != null)
+          item('Apply metadata template (T)', onApplyTemplate!),
+        if (onGeocode != null) item('Fill location from GPS', onGeocode!),
+      ],
+      [
+        if (onImport != null)
+          item('Import selection list…', () => unawaited(onImport!())),
+        if (onContactSheet != null)
+          item('ContactSheet…', () => unawaited(onContactSheet!())),
+      ],
+      [
+        if (onRefresh != null)
+          item('Refresh folder (⌘R)', () => unawaited(onRefresh!())),
+        if (onResync != null)
+          item('Re-sync sidecars from disk', () => unawaited(onResync!())),
+      ],
+      // Destructive, so it sits alone behind a divider.
+      [
+        if (onDeleteRejects != null)
+          item('Delete rejected photos… (⌘⌫)', onDeleteRejects!),
+      ],
+    ];
+    final children = <Widget>[];
+    for (final group in groups) {
+      if (group.isEmpty) continue;
+      if (children.isNotEmpty) children.add(const Divider(height: 1));
+      children.addAll(group);
+    }
+    return children;
   }
 }
 

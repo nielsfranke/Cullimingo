@@ -105,4 +105,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(geocoded, 1);
   });
+
+  testWidgets('clicking the ⋮ button again closes the open menu', (
+    tester,
+  ) async {
+    await pumpBar(tester, onEditMetadata: () {});
+
+    await openMoreMenu(tester);
+    expect(find.text('Edit metadata (M)'), findsOneWidget);
+
+    // The ⋮ button stays visible/clickable while the menu is open, so a second
+    // tap on it toggles the menu closed (MenuAnchor, not PopupMenuButton).
+    await openMoreMenu(tester);
+    expect(find.text('Edit metadata (M)'), findsNothing);
+  });
 }

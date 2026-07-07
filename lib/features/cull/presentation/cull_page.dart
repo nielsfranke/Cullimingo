@@ -260,6 +260,14 @@ class _CullPageState extends ConsumerState<CullPage>
                         ? () => unawaited(_deleteRejects())
                         : null,
                     onContactSheet: total > 0 ? _openContactSheet : null,
+                    propagateMarksToStack: ref.watch(
+                      propagateMarksToStackProvider,
+                    ),
+                    onTogglePropagateMarks: total > 0
+                        ? () => ref
+                              .read(propagateMarksToStackProvider.notifier)
+                              .set(!ref.read(propagateMarksToStackProvider))
+                        : null,
                     onSettings: _openSettings,
                     onShortcuts: _showShortcuts,
                     inspectorOpen: inspectorOpen,
