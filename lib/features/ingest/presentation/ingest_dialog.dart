@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cullimingo/app/theme/tokens.dart';
 import 'package:cullimingo/core/files/directory_picker.dart';
+import 'package:cullimingo/core/files/supported_files.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:cullimingo/features/ingest/data/ingest_service.dart';
 import 'package:cullimingo/features/ingest/data/verified_copy.dart';
@@ -50,6 +51,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
   bool _backup = false;
   bool _verify = true;
   bool _includeVideos = true;
+  bool _includeJpegs = true;
   IngestPlan? _plan;
   // Cached scan of the source, plus the key it was scanned with, so typing a
   // shoot name only re-runs the (instant, pure) buildPlan — no re-scan, no
@@ -57,6 +59,9 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
   List<IngestSource>? _sources;
   String? _scannedKey;
   bool _scanning = false;
+  // Set when a scan fails, so the dialog shows the reason instead of spinning
+  // on "Scanning…" forever.
+  String? _scanError;
   // True when the source is a whole drive (not a card) — we don't scan those.
   bool _wholeDrive = false;
   // Capture dates excluded from the plan (empty = every date scanned is
@@ -136,6 +141,8 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
           if (verify is bool) _verify = verify;
           final videos = last['includeVideos'];
           if (videos is bool) _includeVideos = videos;
+          final jpegs = last['includeJpegs'];
+          if (jpegs is bool) _includeJpegs = jpegs;
         }
       });
     }
@@ -182,14 +189,30 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     }
     _wholeDrive = false;
     final needsCamera = _template.pattern.contains('{camera}');
-    final key = '$source|$_includeVideos|$needsCamera';
+    // The scan always includes videos and caches them; the "include videos"
+    // toggle just filters the plan (see `_visibleSources`), so flipping it is
+    // instant and never re-scans the card. So it's not part of the scan key.
+    final key = '$source|$needsCamera';
     if (_sources == null || _scannedKey != key) {
-      setState(() => _scanning = true);
-      final sources = await scanSources(
-        source,
-        includeVideos: _includeVideos,
-        withCamera: needsCamera,
-      );
+      setState(() {
+        _scanning = true;
+        _scanError = null;
+      });
+      final List<IngestSource> sources;
+      try {
+        // Always scans videos too (scanSources defaults includeVideos: true);
+        // the toggle filters the plan, not the scan.
+        sources = await scanSources(source, withCamera: needsCamera);
+      } on Object catch (e) {
+        // Never leave the dialog stuck on "Scanning…": surface the failure and
+        // let the user pick another source or retry.
+        if (!mounted) return;
+        setState(() {
+          _scanning = false;
+          _scanError = '$e';
+        });
+        return;
+      }
       if (!mounted) return;
       _sources = sources;
       _scannedKey = key;
@@ -201,13 +224,26 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     _rebuildPlan();
   }
 
+  /// The cached scan minus videos when "include videos" is off — the set the
+  /// plan and the date chips are built from. Filtering here (not in the scan)
+  /// keeps the videos toggle instant.
+  List<IngestSource> get _visibleSources {
+    final sources = _sources;
+    if (sources == null) return const [];
+    if (_includeVideos && _includeJpegs) return sources;
+    return [
+      for (final s in sources)
+        if ((_includeVideos || !isVideoPath(s.path)) &&
+            (_includeJpegs || !isJpegPath(s.path)))
+          s,
+    ];
+  }
+
   /// Distinct capture dates in the current scan with a photo count each,
   /// oldest first. Empty until a scan completes; a single entry means the
   /// card holds just one day, so there's nothing to narrow down.
-  List<MapEntry<DateTime, int>> get _dateCounts {
-    final sources = _sources;
-    return sources == null ? const [] : captureDateCounts(sources);
-  }
+  List<MapEntry<DateTime, int>> get _dateCounts =>
+      captureDateCounts(_visibleSources);
 
   void _toggleDate(DateTime day) {
     setState(() {
@@ -216,12 +252,23 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     _rebuildPlan();
   }
 
-  /// Rebuilds the plan from the cached sources, minus any excluded capture
-  /// dates — pure and instant (no I/O, no re-scan).
+  /// Bulk date selection: [included] true = keep every day, false = exclude
+  /// every day (so the user can then tap back the one or two they want).
+  void _setAllDatesIncluded({required bool included}) {
+    setState(() {
+      _excludedDates.clear();
+      if (!included) {
+        _excludedDates.addAll(_dateCounts.map((e) => e.key));
+      }
+    });
+    _rebuildPlan();
+  }
+
+  /// Rebuilds the plan from the cached sources, minus videos (when off) and any
+  /// excluded capture dates — pure and instant (no I/O, no re-scan).
   void _rebuildPlan() {
-    final sources = _sources;
-    if (sources == null) return;
-    final included = excludeCaptureDates(sources, _excludedDates);
+    if (_sources == null) return;
+    final included = excludeCaptureDates(_visibleSources, _excludedDates);
     setState(() {
       _plan = buildPlan(
         sources: included,
@@ -262,6 +309,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
           'naming': _naming.toJson(),
           'verify': _verify,
           'includeVideos': _includeVideos,
+          'includeJpegs': _includeJpegs,
         }),
       ),
     );
@@ -382,20 +430,22 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
           value: _includeVideos,
           onChanged: (v) {
             setState(() => _includeVideos = v ?? true);
-            unawaited(_refresh());
+            // Instant: the videos were already scanned, this just re-filters.
+            _rebuildPlan();
           },
           label: 'Include video files (copied alongside photos)',
         ),
+        DialogCheckbox(
+          value: _includeJpegs,
+          onChanged: (v) {
+            setState(() => _includeJpegs = v ?? true);
+            // Instant re-filter of the cached scan (e.g. RAW+JPEG cards).
+            _rebuildPlan();
+          },
+          label: 'Include JPEGs (uncheck to import RAW only)',
+        ),
         const SizedBox(height: AppSpacing.lg),
         const DialogSection('Organise'),
-        TextField(
-          controller: _shoot,
-          // Pure, instant rebuild from the cached scan — no re-scan/flicker.
-          onChanged: (_) => _rebuildPlan(),
-          decoration: dialogInputDecoration('Job name (the Job-name element)'),
-          style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
-        ),
-        const SizedBox(height: AppSpacing.sm),
         NameBuilder(
           initial: _naming,
           savedPresets: _savedNaming,
@@ -411,6 +461,20 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
               ? 'Shoot'
               : _shoot.text.trim(),
         ),
+        // Only shown when the pattern actually uses the Job-name element, so it
+        // never sits there confusingly on a "Keep filenames"-style scheme.
+        if (_template.pattern.contains('{shoot}')) ...[
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: _shoot,
+            // Pure, instant rebuild from the cached scan — no re-scan/flicker.
+            onChanged: (_) => _rebuildPlan(),
+            decoration: dialogInputDecoration(
+              'Job name (fills the Job-name element above)',
+            ),
+            style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+          ),
+        ],
         const SizedBox(height: AppSpacing.sm),
         DialogCheckbox(
           value: _verify,
@@ -456,9 +520,24 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'This card has more than one day on it — tap to include/exclude:',
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'This card has more than one day on it — '
+                'tap to include/exclude:',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
+            ),
+            _dateActionButton(
+              'Select all',
+              () => _setAllDatesIncluded(included: true),
+            ),
+            _dateActionButton(
+              'Clear',
+              () => _setAllDatesIncluded(included: false),
+            ),
+          ],
         ),
         const SizedBox(height: AppSpacing.xs),
         Wrap(
@@ -477,12 +556,39 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     );
   }
 
+  /// A compact accent text button for the date-filter bulk actions.
+  Widget _dateActionButton(String label, VoidCallback onTap) => TextButton(
+    onPressed: onTap,
+    style: TextButton.styleFrom(
+      minimumSize: Size.zero,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 2,
+      ),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      foregroundColor: AppColors.accent,
+      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+    ),
+    child: Text(label),
+  );
+
   static const List<String> _dayMonths = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
 
-  static String _formatDay(DateTime d) => '${_dayMonths[d.month - 1]} ${d.day}';
+  static String _formatDay(DateTime d) {
+    final date = '${_dayMonths[d.month - 1]} ${d.day}';
+    final now = DateTime.now();
+    final days = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).difference(DateTime(d.year, d.month, d.day)).inDays;
+    if (days == 0) return 'Today · $date';
+    if (days == 1) return 'Yesterday · $date';
+    return date;
+  }
 
   Widget _preview() {
     if (_wholeDrive) {
@@ -508,6 +614,15 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
               style: TextStyle(color: AppColors.textSecondary),
             ),
           ],
+        ),
+      );
+    }
+    if (_scanError != null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+        child: Text(
+          "Couldn't scan this source: $_scanError",
+          style: const TextStyle(color: AppColors.labelYellow),
         ),
       );
     }
