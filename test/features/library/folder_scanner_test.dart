@@ -49,6 +49,34 @@ void main() {
     expect(await names(files), {'p1.jpg', 'v1.mp4'});
   });
 
+  test('an unreadable subdirectory is skipped, not fatal', () async {
+    // A locked sub-tree, like the macOS-protected `.Trashes` on a camera card
+    // that made a DJI import hang forever on "Scanning…".
+    final locked = Directory(p.join(tmp.path, 'locked'))..createSync();
+    File(p.join(locked.path, 'secret.jpg')).writeAsStringSync('x');
+    await Process.run('chmod', ['000', locked.path]);
+    // Always restore perms so tearDown's recursive delete can remove it.
+    addTearDown(() => Process.run('chmod', ['755', locked.path]));
+
+    // Only meaningful when 000 actually restricts us (not as root).
+    var restricted = true;
+    try {
+      Directory(locked.path).listSync();
+      restricted = false;
+    } on FileSystemException {
+      // Expected: the directory is genuinely unreadable.
+    }
+    if (!restricted) {
+      markTestSkipped('cannot restrict directory access (running as root?)');
+      return;
+    }
+
+    // The recursive walk hits "permission denied" descending into `locked`,
+    // but completes over the readable files instead of throwing/hanging.
+    final files = await scanFolderFast(tmp.path, includeVideos: true);
+    expect(await names(files), {'p1.jpg', 'p2.arw', 'v1.mp4', 'v2.mov'});
+  });
+
   test('attaches same-stem companions, ignores orphan sidecars', () async {
     final files = await scanFolderFast(tmp.path);
     final p1 = files.firstWhere((f) => p.basename(f.path) == 'p1.jpg');

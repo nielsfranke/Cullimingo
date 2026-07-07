@@ -128,10 +128,22 @@ Future<List<ScannedFile>> _walk(
   // card/reader can block the underlying syscall for a long time) only stalls
   // this await, not the whole isolate — letting the timeout below actually
   // fire and hand back whatever was found before the device seized up.
+  //
+  // `handleError` skips individual unreadable entries instead of aborting the
+  // whole walk: a recursive `list` THROWS a FileSystemException (e.g. a
+  // macOS-protected `.Trashes` on a camera card → "Operation not permitted")
+  // and, unguarded, that error escapes the isolate and the caller — hanging the
+  // "Scanning…" spinner forever. Swallowing it lets the walk finish over the
+  // real media files.
   final entities = <FileSystemEntity>[];
   try {
     await dir
         .list(recursive: recursive, followLinks: false)
+        .handleError(
+          (Object e) =>
+              appTalker.warning('Scan: skipping unreadable entry: $e'),
+          test: (e) => e is FileSystemException,
+        )
         .timeout(_scanStallTimeout)
         .forEach(entities.add);
   } on TimeoutException {
@@ -229,13 +241,15 @@ Future<List<ScannedExif>> _readExif(
     // pure-Dart reader, so capture time / camera / bias / shutter come back
     // null. Their embedded preview JPEG *does* carry standard EXIF (incl. the
     // exposure bias that back-to-back bracket detection needs), so read that;
-    // fall back to LibRaw's header fields if a preview has no EXIF. TIFF-based
-    // raws (DNG/ARW/CR2/NEF) satisfy the direct read and skip all of this.
-    if (isRawPath(path) &&
-        (exif.capturedAt == null ||
-            exif.exposureTime == null ||
-            exif.exposureBias == null ||
-            exif.camera == null)) {
+    // fall back to LibRaw's header fields if a preview has no EXIF.
+    //
+    // Gate on capturedAt being null — i.e. the direct read got *nothing*, the
+    // signature of an opaque container like RAF. TIFF-based raws (DNG/ARW/CR2/
+    // NEF) satisfy the direct read, so they skip this entirely. That matters
+    // for safety, not just speed: the LibRaw calls below are blocking FFI with
+    // no timeout, and DJI DNGs (which often lack an ExposureBias tag) could
+    // otherwise wedge LibRaw and hang the whole scan.
+    if (isRawPath(path) && exif.capturedAt == null) {
       final bindings = libraw();
       if (bindings != null) {
         final previewBytes = extractRawThumbnail(bindings, path);
