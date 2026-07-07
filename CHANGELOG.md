@@ -3,6 +3,31 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## 1.2.1 — 2026-07-07
+
+### Added
+- **Apply marks to bracket:** a right-click action that copies the focused
+  frame's rating, flag and colour onto the rest of its exposure bracket — a
+  one-shot alternative to the always-on "apply marks to the whole bracket"
+  setting, shown only on a frame that belongs to a bracket.
+- **Click empty grid space to clear the selection** — a left-click off any
+  thumbnail (the padding, the gaps, or below the last row) now deselects.
+
+### Changed
+- **Tighter right-click menu:** shorter rows and thinner dividers so the full
+  menu fits on screen without running off the top or bottom.
+
+### Fixed
+- **Dragging a multi-selection out keeps every photo:** starting a drag-out on
+  a selected thumbnail no longer collapses the selection to just that one — all
+  selected files are carried to Finder/Desktop. A plain click still selects a
+  single photo.
+- **Dragging a collapsed exposure bracket carries all its frames**, not just
+  the visible reference — the collapsed cell stands in for the whole stack.
+- **ContactSheet actions show reliably in the right-click menu** once a
+  connection is configured; they could be missing from the first menu opened
+  after launch.
+
 ## 1.2.0 — 2026-07-06
 
 ### Added
