@@ -173,6 +173,11 @@ class _CullPageState extends ConsumerState<CullPage>
       // Keep the "Send to" editor list warm so the right-click menu / ⌘E can
       // read it synchronously (loaded once; Settings invalidates it on edit).
       ..watch(sendToEditorsProvider)
+      // Keep the ContactSheet-configured flag warm too, so the right-click menu
+      // reads it synchronously — otherwise the first menu after launch sees an
+      // unresolved future and hides the ContactSheet rows. Invalidated after
+      // the ContactSheet dialog closes (a connection may have just been set).
+      ..watch(contactSheetConfiguredProvider)
       // Keep the saved open-folders list current so reopen-on-startup works.
       ..listen(workspaceProvider, (_, _) => _persistOpenFolders())
       // Flash an "update available" notice when the startup check (kicked off

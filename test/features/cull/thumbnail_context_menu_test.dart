@@ -7,6 +7,7 @@ import 'package:cullimingo/core/raw/preview_extractor.dart';
 import 'package:cullimingo/features/cull/presentation/cull_page.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/photo_cell.dart';
+import 'package:cullimingo/features/handoff/presentation/send_to_providers.dart';
 import 'package:cullimingo/features/metadata/data/metadata_repository.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
@@ -41,8 +42,9 @@ class _NoopMetadata extends MetadataRepository {
 void main() {
   // Pumps a two-photo grid and returns (db, container, importId).
   Future<(AppDatabase, ProviderContainer, int)> pumpGrid(
-    WidgetTester tester,
-  ) async {
+    WidgetTester tester, {
+    bool? contactSheetConfigured,
+  }) async {
     tester.view.physicalSize = const Size(1280, 800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -57,6 +59,10 @@ void main() {
           PreviewCache(extractor: _NullExtractor()),
         ),
         metadataRepositoryProvider.overrideWithValue(_NoopMetadata(db)),
+        if (contactSheetConfigured != null)
+          contactSheetConfiguredProvider.overrideWith(
+            (ref) async => contactSheetConfigured,
+          ),
       ],
     );
     addTearDown(container.dispose);
@@ -106,6 +112,38 @@ void main() {
       () => db.watchPhotosForImport(importId).first,
     );
     expect(rows!.first.rating, 3);
+  });
+
+  testWidgets('ContactSheet rows appear when the connection is configured', (
+    tester,
+  ) async {
+    // The page must keep contactSheetConfiguredProvider warm, or the first
+    // menu after launch reads an unresolved future and hides these rows.
+    await pumpGrid(tester, contactSheetConfigured: true);
+
+    await tester.tap(find.byType(PhotoCell).first, buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Send to ContactSheet…'), findsOneWidget);
+    expect(find.text('Pull marks from ContactSheet…'), findsOneWidget);
+
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('ContactSheet rows are hidden when not configured', (
+    tester,
+  ) async {
+    await pumpGrid(tester, contactSheetConfigured: false);
+
+    await tester.tap(find.byType(PhotoCell).first, buttons: kSecondaryButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text(revealInFileManagerLabel), findsOneWidget); // menu is open
+    expect(find.text('Send to ContactSheet…'), findsNothing);
+
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('right-click another cell moves the open menu to it', (
