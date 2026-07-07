@@ -891,6 +891,26 @@ class CullController extends _$CullController {
   Future<void> applyRotation(int quarterTurnsCW) =>
       _rotateAll(_effectiveMarkTargets.toList(), quarterTurnsCW);
 
+  /// Copies the focused photo's current rating, flag and colour onto every
+  /// other frame of its exposure bracket — a one-shot "match the bracket to
+  /// this frame", independent of the propagate-to-stack setting. Returns the
+  /// number of sibling frames updated (0 = nothing focused / not in a bracket).
+  Future<int> applyMarksToBracket() async {
+    final sourceId = state.focusedId;
+    if (sourceId == null) return 0;
+    // groupOf returns just [id] for a non-member, so a lone frame is a no-op.
+    final group = ref.read(bracketGroupsProvider).groupOf(sourceId);
+    if (group.length < 2) return 0;
+    final rows = await _photosByIds({sourceId});
+    if (rows.isEmpty) return 0;
+    final source = rows.first;
+    final siblings = {...group}..remove(sourceId);
+    await _setRatingAll(siblings, source.rating);
+    await _setFlagAll(siblings, source.flag);
+    await _setColorAll(siblings, source.colorLabel);
+    return siblings.length;
+  }
+
   /// Manually stacks every [CullSelection.markTargets] photo into one exposure
   /// bracket, overriding automatic detection (a fresh stack id, mirrored to the
   /// sidecar). Needs ≥ 2 photos; returns the count stacked (0 = nothing done).

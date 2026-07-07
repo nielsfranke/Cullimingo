@@ -33,6 +33,7 @@ Future<void> showThumbnailContextMenu({
   VoidCallback? onGeocode,
   VoidCallback? onExport,
   VoidCallback? onExpandBrackets,
+  VoidCallback? onApplyMarksToBracket,
   VoidCallback? onStack,
   VoidCallback? onUnstack,
   ValueChanged<bool>? onContactSheet,
@@ -56,6 +57,7 @@ Future<void> showThumbnailContextMenu({
     position: position,
     color: AppColors.surfaceElevated,
     popUpAnimationStyle: kMenuAnimationStyle,
+    menuPadding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
     items: [
       if (count > 1)
         PopupMenuItem<_MenuAction>(
@@ -85,106 +87,96 @@ Future<void> showThumbnailContextMenu({
         padding: EdgeInsets.zero,
         child: _ColorRow(photo: photo, controller: controller),
       ),
-      const PopupMenuDivider(),
-      PopupMenuItem<_MenuAction>(
-        value: () => controller.applyRotation(-1),
-        child: const _MenuRow('Rotate left', ','),
+      const PopupMenuDivider(height: 8),
+      _action(
+        () => controller.applyRotation(-1),
+        const _MenuRow('Rotate left', ','),
       ),
-      PopupMenuItem<_MenuAction>(
-        value: () => controller.applyRotation(1),
-        child: const _MenuRow('Rotate right', '.'),
+      _action(
+        () => controller.applyRotation(1),
+        const _MenuRow('Rotate right', '.'),
       ),
-      const PopupMenuDivider(),
+      const PopupMenuDivider(height: 8),
       if (onEditMetadata != null)
-        PopupMenuItem<_MenuAction>(
-          value: () async => onEditMetadata(),
-          child: const _MenuRow('Edit metadata…', 'M'),
+        _action(
+          () async => onEditMetadata(),
+          const _MenuRow('Edit metadata…', 'M'),
         ),
-      PopupMenuItem<_MenuAction>(
-        value: () => showKeywordEditor(context, ref),
-        child: const _MenuRow('Edit keywords…', 'K'),
+      _action(
+        () => showKeywordEditor(context, ref),
+        const _MenuRow('Edit keywords…', 'K'),
       ),
       if (onApplyTemplate != null)
-        PopupMenuItem<_MenuAction>(
-          value: () async => onApplyTemplate(),
-          child: const _MenuRow('Apply metadata template', 'T'),
+        _action(
+          () async => onApplyTemplate(),
+          const _MenuRow('Apply metadata template', 'T'),
         ),
       if (onGeocode != null)
-        PopupMenuItem<_MenuAction>(
-          value: () async => onGeocode(),
-          child: const Text('Fill location from GPS'),
-        ),
-      const PopupMenuDivider(),
+        _action(() async => onGeocode(), const Text('Fill location from GPS')),
+      const PopupMenuDivider(height: 8),
       if (onExpandBrackets != null)
-        PopupMenuItem<_MenuAction>(
-          value: () async => onExpandBrackets(),
-          child: const _MenuRow('Expand selection to bracket', 'G'),
+        _action(
+          () async => onExpandBrackets(),
+          const _MenuRow('Expand selection to bracket', 'G'),
+        ),
+      if (onApplyMarksToBracket != null)
+        _action(
+          () async => onApplyMarksToBracket(),
+          const Text('Apply marks to bracket'),
         ),
       if (onStack != null)
-        PopupMenuItem<_MenuAction>(
-          value: () async => onStack(),
-          child: const Text('Stack as bracket'),
-        ),
+        _action(() async => onStack(), const Text('Stack as bracket')),
       if (onUnstack != null)
-        PopupMenuItem<_MenuAction>(
-          value: () async => onUnstack(),
-          child: const Text('Remove from bracket'),
-        ),
+        _action(() async => onUnstack(), const Text('Remove from bracket')),
       if (onRename != null)
-        PopupMenuItem<_MenuAction>(
-          value: () async => onRename(),
-          child: const _MenuRow('Rename…', 'R'),
-        ),
-      PopupMenuItem<_MenuAction>(
-        value: () async => onTransfer(TransferMode.copy),
-        child: const Text('Copy to folder…'),
+        _action(() async => onRename(), const _MenuRow('Rename…', 'R')),
+      _action(
+        () async => onTransfer(TransferMode.copy),
+        const Text('Copy to folder…'),
       ),
-      PopupMenuItem<_MenuAction>(
-        value: () async => onTransfer(TransferMode.move),
-        child: const Text('Move to folder…'),
+      _action(
+        () async => onTransfer(TransferMode.move),
+        const Text('Move to folder…'),
       ),
       if (onExport != null)
-        PopupMenuItem<_MenuAction>(
-          value: () async => onExport(),
-          child: const _MenuRow('Export…', 'S'),
-        ),
+        _action(() async => onExport(), const _MenuRow('Export…', 'S')),
       // ContactSheet round-trip — only when the integration is configured
       // (the caller passes a non-null callback in that case, §7b).
       if (onContactSheet != null) ...[
-        const PopupMenuDivider(),
-        PopupMenuItem<_MenuAction>(
-          value: () async => onContactSheet(false),
-          child: const Text('Send to ContactSheet…'),
+        const PopupMenuDivider(height: 8),
+        _action(
+          () async => onContactSheet(false),
+          const Text('Send to ContactSheet…'),
         ),
-        PopupMenuItem<_MenuAction>(
-          value: () async => onContactSheet(true),
-          child: const Text('Pull marks from ContactSheet…'),
+        _action(
+          () async => onContactSheet(true),
+          const Text('Pull marks from ContactSheet…'),
         ),
       ],
-      const PopupMenuDivider(),
-      PopupMenuItem<_MenuAction>(
-        value: () => openExternally(photo.path),
-        child: const Text('Open in default app'),
+      const PopupMenuDivider(height: 8),
+      _action(
+        () => openExternally(photo.path),
+        const Text('Open in default app'),
       ),
-      PopupMenuItem<_MenuAction>(
-        value: () => revealInFileManager(photo.path),
-        child: Text(revealInFileManagerLabel),
+      _action(
+        () => revealInFileManager(photo.path),
+        Text(revealInFileManagerLabel),
       ),
       if (editors.isNotEmpty) ...[
-        const PopupMenuDivider(),
+        const PopupMenuDivider(height: 8),
         for (final editor in editors)
-          PopupMenuItem<_MenuAction>(
-            value: () async => onSendTo(editor),
-            child: Text('Open in ${editor.label}'),
+          _action(
+            () async => onSendTo(editor),
+            Text('Open in ${editor.label}'),
           ),
       ],
       // Destructive, so it sits alone behind a divider (mirrors the toolbar's
       // "Delete rejected photos" placement in cull_top_bar.dart).
       if (onDelete != null) ...[
-        const PopupMenuDivider(),
-        PopupMenuItem<_MenuAction>(
-          value: () async => onDelete(),
-          child: const Text(
+        const PopupMenuDivider(height: 8),
+        _action(
+          () async => onDelete(),
+          const Text(
             'Delete…',
             style: TextStyle(color: AppColors.labelRed),
           ),
@@ -194,6 +186,11 @@ Future<void> showThumbnailContextMenu({
   );
   await action?.call();
 }
+
+/// A compact action row — shorter than the 48px `PopupMenuItem` default so the
+/// (long) thumbnail menu stays within the window height (spacing-only trim).
+PopupMenuItem<_MenuAction> _action(_MenuAction value, Widget child) =>
+    PopupMenuItem<_MenuAction>(height: 36, value: value, child: child);
 
 /// A menu label with a right-aligned, muted shortcut hint (Photo-Mechanic
 /// style, e.g. `Apply metadata template … T`).

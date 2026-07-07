@@ -463,6 +463,7 @@ class _CullPageState extends ConsumerState<CullPage>
               onGeocode: () => unawaited(_geocodeSelection()),
               onExport: _export,
               onExpandBrackets: _expandSelectionToBrackets,
+              onApplyMarksToBracket: () => unawaited(_applyMarksToBracket()),
               onStack: () => unawaited(_stackSelection()),
               onUnstack: () => unawaited(_unstackSelection()),
               onContactSheet: (pull) =>

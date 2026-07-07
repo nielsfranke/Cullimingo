@@ -99,6 +99,26 @@ mixin _CullSelections on _CullWorkspace {
     );
   }
 
+  /// Copies the focused frame's current rating, flag and colour onto the rest
+  /// of its exposure bracket — a one-shot "match the bracket to this frame" for
+  /// people who leave the propagate-to-stack setting off and only want it now
+  /// and then (the context-menu entry only shows on a bracket member).
+  Future<void> _applyMarksToBracket() async {
+    final n = await ref
+        .read(cullControllerProvider.notifier)
+        .applyMarksToBracket();
+    if (!mounted) return;
+    _gridFocus.requestFocus();
+    if (n == 0) {
+      _notify('No bracket siblings to update', kind: NoticeKind.warning);
+    } else {
+      _notify(
+        'Applied marks to $n bracket frame(s)',
+        kind: NoticeKind.success,
+      );
+    }
+  }
+
   /// Manually stacks the current selection into one exposure bracket,
   /// overriding automatic detection (a correction for a series the detector
   /// split or missed).

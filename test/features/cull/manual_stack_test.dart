@@ -7,6 +7,7 @@ import 'package:cullimingo/features/cull/presentation/cull_page.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
 import 'package:cullimingo/features/filter/presentation/filter_providers.dart';
 import 'package:cullimingo/features/metadata/data/metadata_repository.dart';
+import 'package:cullimingo/shared/models/cull_marks.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
@@ -121,6 +122,56 @@ void main() {
       () => db.watchPhotosForImport(importId).first,
     );
     expect(reverted!.every((r) => r.stackId == null), isTrue);
+  });
+
+  testWidgets(
+    'applyMarksToBracket copies the focused frame onto its siblings',
+    (
+      tester,
+    ) async {
+      final ids = await pumpPage(tester);
+      final notifier = container.read(cullControllerProvider.notifier);
+
+      // Form one manual bracket from the three unrelated frames.
+      container.read(cullControllerProvider.notifier).setSelection(ids.toSet());
+      await notifier.stackSelection();
+      await tester.pump();
+      expect(container.read(bracketGroupsProvider).bracketCount, 1);
+
+      // Mark only the first frame (propagate-to-stack is off by default, so a
+      // batch mark on the lone selection stays on that frame).
+      notifier.selectOnly(ids.first);
+      await notifier.applyRating(4);
+      await notifier.applyFlag(PickFlag.pick);
+      await notifier.applyColor(ColorLabel.green);
+      await tester.pump();
+
+      // Now push those marks to the rest of the bracket.
+      final n = await notifier.applyMarksToBracket();
+      await tester.pump();
+      expect(n, 2); // two siblings updated
+
+      final rows = await tester.runAsync(
+        () => db.watchPhotosForImport(importId).first,
+      );
+      for (final row in rows!) {
+        expect(row.rating, 4);
+        expect(row.flag, PickFlag.pick);
+        expect(row.colorLabel, ColorLabel.green);
+      }
+    },
+  );
+
+  testWidgets('applyMarksToBracket is a no-op for a lone frame', (
+    tester,
+  ) async {
+    final ids = await pumpPage(tester);
+    // No stacking + no exposure data → these frames are not a bracket.
+    container.read(cullControllerProvider.notifier).selectOnly(ids.first);
+    final n = await container
+        .read(cullControllerProvider.notifier)
+        .applyMarksToBracket();
+    expect(n, 0);
   });
 
   testWidgets('unstacking removes the override (empty-string sentinel)', (
