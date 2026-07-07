@@ -3,6 +3,42 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## 1.2.2 — 2026-07-07
+
+### Added
+- **Live filename search:** a search box in the filter bar that filters the
+  grid as you type — by any part of the filename (extension included, so
+  `DSC_004` and `jpg` both match).
+- **RAW / JPEG file-type filter:** show all files, only RAW, or only JPEG —
+  offered when a folder mixes both.
+- **RAW-only import:** an "Include JPEGs" toggle in the Import dialog, so a
+  RAW+JPEG card can be brought in as RAW only.
+- **Nested ContactSheet sub-galleries:** name a new gallery inline in the
+  picker, and use each row's "+" to nest another level — a whole chain (e.g.
+  *Shoot › Day 1 › Selects*) is created when you Send, with the upload landing
+  in the deepest one.
+- **Apply-marks-to-bracket toggle** is now a checkable entry in the ⋮ menu, so
+  it's reachable without opening Settings.
+- **Import date bulk actions:** "Select all" / "Clear" for the per-day chips,
+  which also label today and yesterday (e.g. *Today · Jul 7 · 24*).
+
+### Changed
+- **Tidier filter bar:** the situational filters (keyworded, needs-caption,
+  bursts, hide-JPEG, stack-brackets, file-type) now live in two grouped
+  dropdowns — *Metadata* and *Grouping* — so the core cull filters stay inline
+  and easy to scan.
+- **Instant "Include videos" toggle** in Import — it re-filters the cached scan
+  instead of re-scanning the whole card.
+- **The Import Job-name field** only appears when the naming pattern actually
+  uses it, and sits below the name builder so it reads in context.
+
+### Fixed
+- **Import no longer hangs on "Scanning…"** for a card with a macOS-protected
+  `.Trashes` (seen on a DJI microSD): the scan skips unreadable entries and
+  finishes over the real media files.
+- **The ⋮ overflow menu can be clicked again to close it** (its button stayed
+  put but ignored the second click before).
+
 ## 1.2.1 — 2026-07-07
 
 ### Added
