@@ -139,8 +139,10 @@ class GridCell extends ConsumerWidget {
 
     // Drag a cell out to Finder/Desktop to copy the original file(s) (§7
     // hand-off). Dragging a selected photo carries the whole selection; an
-    // unselected one carries just itself (see [dragTargets]). super_native
-    // _extensions backs this with NSDraggingSource/file promises on macOS.
+    // unselected one carries just itself (see [dragTargets]); a collapsed
+    // bracket carries all its folded frames (see [_dragConfiguration]).
+    // super_native_extensions backs this with NSDraggingSource/file promises
+    // on macOS.
     return DragItemWidget(
       allowedOperations: () => const [DropOperation.copy],
       dragItemProvider: (_) async => DragItem(
@@ -221,12 +223,21 @@ class GridCell extends ConsumerWidget {
     // pointer-up won't shrink the selection to the dragged cell.
     ref.read(cullControllerProvider.notifier).cancelPendingCollapse();
     final selected = ref.read(cullControllerProvider).selectedIds;
-    final ids = dragTargets(photo.id, selected);
+    var ids = dragTargets(photo.id, selected);
+    // A collapsed bracket shows only its reference frame, yet that cell stands
+    // in for the whole stack — so dragging it out carries every hidden sibling
+    // too (the ±EV frames the grid folded away).
+    if (ref.read(photoFilterControllerProvider).collapseBrackets) {
+      final groups = ref.read(bracketGroupsProvider);
+      ids = {for (final id in ids) ...groups.groupOf(id)};
+    }
     if (ids.length <= 1) return configuration;
 
     final image = configuration.items.first.image;
+    // Resolve over the *unfiltered* photo list: collapsed bracket siblings are
+    // hidden from the grid, so they aren't in filteredPhotosProvider.
     final items = [
-      for (final row in ref.read(filteredPhotosProvider))
+      for (final row in ref.read(photosProvider).value ?? const <Photo>[])
         if (ids.contains(row.id))
           DragConfigurationItem(
             item: DragItem(suggestedName: p.basename(row.path))
