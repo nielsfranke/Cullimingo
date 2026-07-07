@@ -3,6 +3,7 @@ import 'package:cullimingo/core/db/database.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
 import 'package:cullimingo/features/cull/presentation/cull_page.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
+import 'package:cullimingo/features/cull/presentation/widgets/grid_cell.dart';
 import 'package:cullimingo/features/metadata/data/metadata_repository.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
@@ -119,9 +120,12 @@ void main() {
     container.read(cullControllerProvider.notifier).setSelection({ids.first});
     await tester.pump();
 
-    // Focus the grid (tap the first cell) then press G.
-    await tester.tap(find.byType(CullPage));
-    await tester.pump();
+    // Focus the grid (tap the reference cell — tapping empty space would
+    // instead clear the selection) then press G.
+    await tester.tap(find.byType(GridCell).first);
+    await tester.pump(
+      const Duration(milliseconds: 300),
+    ); // clear double-tap timer
     await tester.sendKeyEvent(LogicalKeyboardKey.keyG);
     await tester.pump();
 
@@ -146,8 +150,10 @@ void main() {
     container.read(cullControllerProvider.notifier).setSelection({loneId});
     await tester.pump();
 
-    await tester.tap(find.byType(CullPage));
-    await tester.pump();
+    await tester.tap(find.byType(GridCell).first);
+    await tester.pump(
+      const Duration(milliseconds: 300),
+    ); // clear double-tap timer
     await tester.sendKeyEvent(LogicalKeyboardKey.keyG);
     await tester.pump();
 

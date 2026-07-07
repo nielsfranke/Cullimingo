@@ -73,7 +73,9 @@ import 'package:cullimingo/shared/models/cull_marks.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
@@ -390,6 +392,25 @@ class _CullPageState extends ConsumerState<CullPage>
     );
   }
 
+  /// The photo id of the thumbnail under [globalPosition] (tagged via
+  /// [MetaData] on each cell), or null when the point isn't over a cell —
+  /// used to tell a click on empty grid space from one on a thumbnail.
+  int? _photoIdAt(Offset globalPosition) {
+    final result = HitTestResult();
+    GestureBinding.instance.hitTestInView(
+      result,
+      globalPosition,
+      View.of(context).viewId,
+    );
+    for (final entry in result.path) {
+      final target = entry.target;
+      if (target is RenderMetaData && target.metaData is int) {
+        return target.metaData as int;
+      }
+    }
+    return null;
+  }
+
   Widget _grid(List<Photo> photos) {
     final cellWidth = ref.watch(gridCellWidthProvider);
     _cellExtent = cellWidth * _cellAspect;
@@ -436,39 +457,52 @@ class _CullPageState extends ConsumerState<CullPage>
           _applyPendingScrollRestore();
           if (!_zoomDragging) _applyPendingZoomReanchor();
           _schedulePrefetch();
-          return GridView.builder(
-            controller: _scroll,
-            padding: const EdgeInsets.all(AppSpacing.md),
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: _columns,
-              mainAxisSpacing: _cellSpacing,
-              crossAxisSpacing: _cellSpacing,
-              mainAxisExtent: _cellExtent,
-            ),
-            itemCount: photos.length,
-            itemBuilder: (context, i) => GridCell(
-              photo: photos[i],
-              cellWidth: decodeWidth,
-              onOpenLoupe: _openLoupe,
-              onTransfer: _transfer,
-              onSendTo: (editor) => unawaited(_sendTo(editor)),
-              onEditMetadata: () => unawaited(
-                showIptcEditor(
-                  context,
-                  ref,
-                ).then((_) => _gridFocus.requestFocus()),
+          // A click that lands on empty grid space (the padding, the gaps, or
+          // below the last row) clears the selection. Cells select on their own
+          // pointer-down and are opaque, so this only fires off a thumbnail —
+          // we still hit-test to be sure. A drag (scroll) wins the arena and
+          // never triggers onTapUp, so scrolling is unaffected.
+          return GestureDetector(
+            behavior: HitTestBehavior.deferToChild,
+            onTapUp: (details) {
+              if (_photoIdAt(details.globalPosition) != null) return;
+              ref.read(cullControllerProvider.notifier).clearSelection();
+              _gridFocus.requestFocus();
+            },
+            child: GridView.builder(
+              controller: _scroll,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: _columns,
+                mainAxisSpacing: _cellSpacing,
+                crossAxisSpacing: _cellSpacing,
+                mainAxisExtent: _cellExtent,
               ),
-              onRename: () => unawaited(_rename()),
-              onApplyTemplate: () => unawaited(_applyTemplate()),
-              onGeocode: () => unawaited(_geocodeSelection()),
-              onExport: _export,
-              onExpandBrackets: _expandSelectionToBrackets,
-              onApplyMarksToBracket: () => unawaited(_applyMarksToBracket()),
-              onStack: () => unawaited(_stackSelection()),
-              onUnstack: () => unawaited(_unstackSelection()),
-              onContactSheet: (pull) =>
-                  unawaited(_openContactSheet(pullMode: pull)),
-              onDelete: () => unawaited(_deleteSelected()),
+              itemCount: photos.length,
+              itemBuilder: (context, i) => GridCell(
+                photo: photos[i],
+                cellWidth: decodeWidth,
+                onOpenLoupe: _openLoupe,
+                onTransfer: _transfer,
+                onSendTo: (editor) => unawaited(_sendTo(editor)),
+                onEditMetadata: () => unawaited(
+                  showIptcEditor(
+                    context,
+                    ref,
+                  ).then((_) => _gridFocus.requestFocus()),
+                ),
+                onRename: () => unawaited(_rename()),
+                onApplyTemplate: () => unawaited(_applyTemplate()),
+                onGeocode: () => unawaited(_geocodeSelection()),
+                onExport: _export,
+                onExpandBrackets: _expandSelectionToBrackets,
+                onApplyMarksToBracket: () => unawaited(_applyMarksToBracket()),
+                onStack: () => unawaited(_stackSelection()),
+                onUnstack: () => unawaited(_unstackSelection()),
+                onContactSheet: (pull) =>
+                    unawaited(_openContactSheet(pullMode: pull)),
+                onDelete: () => unawaited(_deleteSelected()),
+              ),
             ),
           );
         },

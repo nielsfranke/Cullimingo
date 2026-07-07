@@ -878,6 +878,10 @@ class CullController extends _$CullController {
     );
   }
 
+  /// Clears the selection — e.g. a click on empty grid space below the
+  /// thumbnails — while leaving the keyboard cursor (focus/anchor) put.
+  void clearSelection() => state = state.copyWith(selectedIds: {});
+
   /// Replaces the selection wholesale (e.g. from an imported Picdrop/CSV list)
   /// and focuses the first selected photo.
   void setSelection(Set<int> ids) {

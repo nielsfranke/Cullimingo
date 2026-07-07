@@ -141,6 +141,15 @@ void main() {
     expect(state().focusedId, ids[0]);
   });
 
+  test('clearSelection empties the selection but keeps the cursor', () {
+    controller()
+      ..selectOnly(ids[0])
+      ..toggleSelect(ids[1]); // {0,1}, focus ids[1]
+    controller().clearSelection();
+    expect(state().selectedIds, isEmpty);
+    expect(state().focusedId, ids[1]); // cursor stays put
+  });
+
   test('pruneMissing drops deleted ids but keeps the rest selected', () {
     controller()
       ..selectOnly(ids[0])
