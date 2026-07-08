@@ -3,6 +3,16 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## 1.2.3 — 2026-07-08
+
+### Added
+- **RAW-only filename selection:** the *Find photos by filename* (⌘F) and
+  *Import selection list* dialogs now offer an **"Only RAWs (skip JPEG twins)"**
+  option. When a pasted or imported name matches both a RAW and its JPEG
+  sibling, only the RAW is selected; a JPEG with no RAW twin is still selected.
+  The option starts checked when the grid is already filtered to RAW-only or
+  hiding JPEG pairs, so a RAW+JPEG card selects just the RAWs from a file list.
+
 ## 1.2.2 — 2026-07-07
 
 ### Added
