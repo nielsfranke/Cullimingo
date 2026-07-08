@@ -11,8 +11,14 @@ mixin _CullSelections on _CullWorkspace {
       name: file.name,
       content: await file.readAsString(),
     ).load();
+    if (!mounted) return;
+    final rawOnly = await _promptImportOptions(
+      fileName: file.name,
+      nameCount: list.filenames.length,
+    );
+    if (rawOnly == null) return; // cancelled
     final photos = ref.read(photosProvider).value ?? const <Photo>[];
-    final ids = matchPhotoIds(list.filenames, photos);
+    final ids = matchPhotoIds(list.filenames, photos, rawOnly: rawOnly);
     final selected = _applySelectionMaybeExpanding(ids);
     _revealFirstSelected(selected);
     _gridFocus.requestFocus();
@@ -30,10 +36,10 @@ mixin _CullSelections on _CullWorkspace {
   Future<void> _findByList() async {
     final photos = ref.read(photosProvider).value ?? const <Photo>[];
     if (photos.isEmpty) return;
-    final text = await _promptList();
-    if (text == null || text.trim().isEmpty) return;
-    final names = parseNameTokens(text);
-    final ids = matchPhotoIds(names, photos);
+    final result = await _promptList();
+    if (result == null || result.text.trim().isEmpty) return;
+    final names = parseNameTokens(result.text);
+    final ids = matchPhotoIds(names, photos, rawOnly: result.rawOnly);
     final selected = _applySelectionMaybeExpanding(ids);
     _revealFirstSelected(selected);
     _gridFocus.requestFocus();
@@ -148,53 +154,140 @@ mixin _CullSelections on _CullWorkspace {
     }
   }
 
-  /// Multiline paste dialog for [_findByList]. Returns the entered text, or
-  /// null if cancelled.
-  Future<String?> _promptList() {
+  /// Whether the "only RAWs" option should start checked: on when the grid is
+  /// already showing RAW-only or hiding the JPEG side of pairs, so a culler in
+  /// that mode gets the matching selection behaviour without an extra click.
+  bool _rawOnlyDefault() {
+    final filter = ref.read(photoFilterControllerProvider);
+    return filter.fileType == FileTypeFilter.raw || filter.hideJpegPairs;
+  }
+
+  /// A "Only RAWs (skip JPEG twins)" checkbox row for the find/import dialogs.
+  Widget _rawOnlyCheckbox({
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) => CheckboxListTile(
+    value: value,
+    onChanged: (v) => onChanged(v ?? false),
+    controlAffinity: ListTileControlAffinity.leading,
+    contentPadding: EdgeInsets.zero,
+    dense: true,
+    title: const Text(
+      'Only RAWs (skip JPEG twins)',
+      style: TextStyle(fontSize: 13),
+    ),
+    subtitle: const Text(
+      'When a name has both a RAW and a JPEG, select just the RAW. A JPEG '
+      'with no RAW twin is still selected.',
+      style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+    ),
+  );
+
+  /// Multiline paste dialog for [_findByList]. Returns the entered text and the
+  /// "only RAWs" choice, or null if cancelled.
+  Future<({String text, bool rawOnly})?> _promptList() {
     final controller = TextEditingController();
-    return showDialog<String>(
+    var rawOnly = _rawOnlyDefault();
+    return showDialog<({String text, bool rawOnly})>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Find photos by filename'),
-        content: SizedBox(
-          width: 460,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Paste a list of filenames (from Capture One, Lightroom or '
-                'ContactSheet). Any separator works, and the extension is '
-                'optional — a JPEG list still selects your RAWs.',
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Find photos by filename'),
+          content: SizedBox(
+            width: 460,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Paste a list of filenames (from Capture One, Lightroom or '
+                  'ContactSheet). Any separator works, and the extension is '
+                  'optional — a JPEG list still selects your RAWs.',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              TextField(
-                controller: controller,
-                autofocus: true,
-                minLines: 4,
-                maxLines: 10,
-                decoration: const InputDecoration(
-                  hintText: '_AIV9551 _AIV9555 _AIV9562 …',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: AppSpacing.md),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  minLines: 4,
+                  maxLines: 10,
+                  decoration: const InputDecoration(
+                    hintText: '_AIV9551 _AIV9555 _AIV9562 …',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: AppSpacing.sm),
+                _rawOnlyCheckbox(
+                  value: rawOnly,
+                  onChanged: (v) => setState(() => rawOnly = v),
+                ),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(
+                (text: controller.text, rawOnly: rawOnly),
+              ),
+              child: const Text('Find'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+      ),
+    );
+  }
+
+  /// Confirms an imported filename list and offers the "only RAWs" choice.
+  /// Returns the chosen value, or null if cancelled.
+  Future<bool?> _promptImportOptions({
+    required String fileName,
+    required int nameCount,
+  }) {
+    var rawOnly = _rawOnlyDefault();
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Import selection list'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$nameCount name(s) from $fileName.',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _rawOnlyCheckbox(
+                  value: rawOnly,
+                  onChanged: (v) => setState(() => rawOnly = v),
+                ),
+              ],
+            ),
           ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(controller.text),
-            child: const Text('Find'),
-          ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(rawOnly),
+              child: const Text('Import'),
+            ),
+          ],
+        ),
       ),
     );
   }

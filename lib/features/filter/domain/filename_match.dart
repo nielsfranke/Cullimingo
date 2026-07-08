@@ -54,17 +54,28 @@ List<String> parseNameTokens(String content) {
 
 /// Returns the ids of [photos] whose names match any in [names] (extension-,
 /// case- and path-insensitive). A name that matches both a RAW and its JPEG
-/// sibling selects both.
-Set<int> matchPhotoIds(Iterable<String> names, List<Photo> photos) {
-  final byName = <String, List<int>>{};
+/// sibling selects both — unless [rawOnly] is set, in which case only the RAW
+/// twin is kept (a JPEG with no RAW sibling is still selected, since it's the
+/// only file for that name). Lets a filename list pull just the RAWs when the
+/// culler shot RAW+JPEG (`BUILD_PLAN.md` §5).
+Set<int> matchPhotoIds(
+  Iterable<String> names,
+  List<Photo> photos, {
+  bool rawOnly = false,
+}) {
+  final byName = <String, List<Photo>>{};
   for (final photo in photos) {
-    byName.putIfAbsent(normalizeName(photo.path), () => []).add(photo.id);
+    byName.putIfAbsent(normalizeName(photo.path), () => []).add(photo);
   }
 
   final ids = <int>{};
   for (final name in names) {
     final hit = byName[normalizeName(name)];
-    if (hit != null) ids.addAll(hit);
+    if (hit == null) continue;
+    final keep = rawOnly && hit.any((p) => p.isRaw)
+        ? hit.where((p) => p.isRaw)
+        : hit;
+    ids.addAll(keep.map((p) => p.id));
   }
   return ids;
 }

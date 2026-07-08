@@ -54,6 +54,22 @@ void main() {
       final ids = matchPhotoIds(['DSC_0001', 'DSC_0003'], photos);
       expect(ids, {1, 3});
     });
+
+    test('rawOnly keeps just the RAW when a name has both twins', () {
+      final withJpeg = [...photos, _photo(4, '/cards/DSC_0001.JPG')];
+      expect(
+        matchPhotoIds(['DSC_0001'], withJpeg, rawOnly: true),
+        {1},
+      );
+    });
+
+    test('rawOnly still selects a JPEG that has no RAW sibling', () {
+      final loneJpeg = [_photo(5, '/cards/DSC_0009.JPG')];
+      expect(
+        matchPhotoIds(['DSC_0009'], loneJpeg, rawOnly: true),
+        {5},
+      );
+    });
   });
 
   group('parseNameTokens', () {
