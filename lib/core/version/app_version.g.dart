@@ -8,4 +8,4 @@
 library;
 
 /// The running app's marketing version (e.g. `1.0.0`), from pubspec.yaml.
-const String kAppVersion = '1.2.6';
+const String kAppVersion = '1.2.7';
