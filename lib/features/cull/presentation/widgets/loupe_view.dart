@@ -12,6 +12,7 @@ import 'package:cullimingo/core/raw/preview_extractor.dart';
 import 'package:cullimingo/features/cull/domain/loupe_analysis.dart';
 import 'package:cullimingo/features/cull/domain/loupe_zoom.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
+import 'package:cullimingo/features/cull/presentation/loupe_analysis_decode.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/cull_toolbar.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/loupe_filmstrip.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/thumbnail_context_menu.dart';
@@ -305,43 +306,61 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
     _analyzedFlags = flags;
     final gen = ++_analysisGen;
 
+    LoupeAnalysis? result;
     var rgba = sameSource ? _analysisRgba : null;
     var width = _analysisWidth;
     var height = _analysisHeight;
     if (rgba == null) {
-      final decoded = await _decodeForAnalysis(source);
+      final decoded = await decodeRgbaForAnalysis(
+        source,
+        maxLongEdge: _analysisMaxLongEdge,
+      );
       if (!mounted || gen != _analysisGen) return;
-      if (decoded == null) {
-        // Undecodable bytes — show nothing, same as before.
-        _analysisRgba = null;
-        _disposeAnalysisImages();
-        setState(() => _histogram = null);
-        return;
+      if (decoded != null) {
+        rgba = decoded.rgba;
+        width = decoded.width;
+        height = decoded.height;
+        _analysisRgba = rgba;
+        _analysisWidth = width;
+        _analysisHeight = height;
+      } else {
+        // Native decode/readback failed (already logged) — fall back to the
+        // slow pure-Dart decode so the overlays degrade to slow, not broken.
+        result = await computeLoupeAnalysisOffThread(
+          source,
+          wantHistogram: histogram,
+          wantClipping: clipping,
+          wantPeaking: peaking,
+        );
+        if (!mounted || gen != _analysisGen) return;
+        if (result == null) {
+          // Genuinely undecodable bytes — show nothing, same as before.
+          _analysisRgba = null;
+          _disposeAnalysisImages();
+          setState(() => _histogram = null);
+          return;
+        }
       }
-      rgba = decoded.rgba;
-      width = decoded.width;
-      height = decoded.height;
-      _analysisRgba = rgba;
-      _analysisWidth = width;
-      _analysisHeight = height;
     }
 
-    final result = await computeLoupeAnalysisFromRgbaOffThread(
-      rgba,
-      width: width,
-      height: height,
-      wantHistogram: histogram,
-      wantClipping: clipping,
-      wantPeaking: peaking,
-    );
+    final analysis =
+        result ??
+        await computeLoupeAnalysisFromRgbaOffThread(
+          rgba!,
+          width: width,
+          height: height,
+          wantHistogram: histogram,
+          wantClipping: clipping,
+          wantPeaking: peaking,
+        );
     if (!mounted || gen != _analysisGen) return;
 
     ui.Image? clipImage;
-    if (result.clippingOverlayRgba != null) {
+    if (analysis.clippingOverlayRgba != null) {
       clipImage = await _decodeRgba(
-        result.clippingOverlayRgba!,
-        result.width,
-        result.height,
+        analysis.clippingOverlayRgba!,
+        analysis.width,
+        analysis.height,
       );
     }
     if (!mounted || gen != _analysisGen) {
@@ -350,11 +369,11 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
     }
 
     ui.Image? peakImage;
-    if (result.peakingOverlayRgba != null) {
+    if (analysis.peakingOverlayRgba != null) {
       peakImage = await _decodeRgba(
-        result.peakingOverlayRgba!,
-        result.width,
-        result.height,
+        analysis.peakingOverlayRgba!,
+        analysis.width,
+        analysis.height,
       );
     }
     if (!mounted || gen != _analysisGen) {
@@ -365,56 +384,10 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
 
     _disposeAnalysisImages();
     setState(() {
-      _histogram = result.histogram;
+      _histogram = analysis.histogram;
       _clippingImage = clipImage;
       _peakingImage = peakImage;
     });
-  }
-
-  /// Decodes [bytes] with the engine codec — runs on Flutter's IO thread, not
-  /// the UI isolate — capped to [_analysisMaxLongEdge] on the long edge
-  /// (JPEG shrink-on-decode, so a big source never gets fully decoded), then
-  /// reads the pixels back as straight RGBA. Null when the bytes don't decode.
-  Future<({Uint8List rgba, int width, int height})?> _decodeForAnalysis(
-    Uint8List bytes,
-  ) async {
-    ui.ImmutableBuffer? buffer;
-    ui.Codec? codec;
-    ui.Image? image;
-    try {
-      buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
-      codec = await ui.instantiateImageCodecWithSize(
-        buffer,
-        getTargetSize: (w, h) {
-          final long = math.max(w, h);
-          if (long <= _analysisMaxLongEdge) {
-            return ui.TargetImageSize(width: w, height: h);
-          }
-          final scale = _analysisMaxLongEdge / long;
-          return ui.TargetImageSize(
-            width: math.max(1, (w * scale).round()),
-            height: math.max(1, (h * scale).round()),
-          );
-        },
-      );
-      final frame = await codec.getNextFrame();
-      image = frame.image;
-      final data = await image.toByteData(
-        format: ui.ImageByteFormat.rawStraightRgba,
-      );
-      if (data == null) return null;
-      return (
-        rgba: data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-        width: image.width,
-        height: image.height,
-      );
-    } on Object {
-      return null;
-    } finally {
-      image?.dispose();
-      codec?.dispose();
-      buffer?.dispose();
-    }
   }
 
   Future<ui.Image> _decodeRgba(Uint8List rgba, int width, int height) {

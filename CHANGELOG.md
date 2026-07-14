@@ -3,6 +3,15 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **Loupe analysis overlays broken since 1.2.4:** the histogram, clipping
+  warning and focus peaking silently showed nothing — the sped-up native
+  decode disposed a buffer the engine had already disposed, and the resulting
+  error killed the analysis unseen. Decode failures are now logged and fall
+  back to the (slower) Dart decoder instead of breaking the overlays.
+
 ## 1.2.5 — 2026-07-14
 
 ### Changed

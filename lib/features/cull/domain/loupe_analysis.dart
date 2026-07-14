@@ -106,11 +106,33 @@ Future<LoupeAnalysis> computeLoupeAnalysisFromRgbaOffThread(
   );
 }
 
+/// Runs [computeLoupeAnalysis] (pure-Dart decode + loop) on a background
+/// isolate. The slow path: production first tries the native engine decode
+/// (`decodeRgbaForAnalysis`) and only lands here when that fails — e.g. a
+/// renderer whose pixel readback is unsupported — so the overlays degrade to
+/// slow instead of to broken.
+Future<LoupeAnalysis?> computeLoupeAnalysisOffThread(
+  Uint8List sourceBytes, {
+  required bool wantHistogram,
+  required bool wantClipping,
+  required bool wantPeaking,
+}) {
+  return Isolate.run(
+    () => computeLoupeAnalysis(
+      sourceBytes,
+      wantHistogram: wantHistogram,
+      wantClipping: wantClipping,
+      wantPeaking: wantPeaking,
+    ),
+  );
+}
+
 /// Decodes [sourceBytes] (a JPEG/WebP) with the pure-Dart `image` package and
 /// computes the requested products. Slow on big images — production decodes
 /// natively (engine codec, downscaled) and calls
-/// [computeLoupeAnalysisFromRgba] directly; this entry point stays for tests
-/// and callers without an engine. Returns null when the bytes don't decode.
+/// [computeLoupeAnalysisFromRgba] directly; this entry point is the fallback
+/// (via [computeLoupeAnalysisOffThread]) and serves tests. Returns null when
+/// the bytes don't decode.
 LoupeAnalysis? computeLoupeAnalysis(
   Uint8List sourceBytes, {
   required bool wantHistogram,
