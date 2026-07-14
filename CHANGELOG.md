@@ -3,6 +3,25 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## 1.2.4 — 2026-07-14
+
+### Added
+- **Auto-open Import on card insert:** inserting a memory card now opens the
+  Import dialog directly, preselected on the card (previously it only showed a
+  "card detected" notice). Opt out in Settings → General → Ingest.
+
+### Changed
+- **Sticky loupe overlays:** the histogram, clipping warning and focus peaking
+  now stay on across photos, loupe sessions and app restarts until you turn
+  them off — like the filmstrip.
+
+### Fixed
+- **Loupe overlays appear much faster:** the histogram / clipping / focus
+  peaking analysis now decodes natively at a bounded size instead of running a
+  pure-Dart decode over the full preview (which took seconds on big files, and
+  far longer once zoomed into the full-resolution source). Toggling another
+  overlay on the same photo reuses the already-decoded pixels.
+
 ## 1.2.3 — 2026-07-08
 
 ### Added
