@@ -1341,28 +1341,78 @@ abstract class _$FilmstripVisible extends $Notifier<bool> {
   }
 }
 
-/// Whether the loupe shows the RGB histogram panel. Session state — not
-/// persisted, a panel toggle need not survive relaunch (mirrors
-/// `InspectorOpen`).
+/// Startup seed for [LoupeHistogramVisible] — the value persisted last
+/// session, overridden in `main()` (default false on first run / tests).
+
+@ProviderFor(loupeHistogramVisibleSeed)
+final loupeHistogramVisibleSeedProvider = LoupeHistogramVisibleSeedProvider._();
+
+/// Startup seed for [LoupeHistogramVisible] — the value persisted last
+/// session, overridden in `main()` (default false on first run / tests).
+
+final class LoupeHistogramVisibleSeedProvider
+    extends $FunctionalProvider<bool, bool, bool>
+    with $Provider<bool> {
+  /// Startup seed for [LoupeHistogramVisible] — the value persisted last
+  /// session, overridden in `main()` (default false on first run / tests).
+  LoupeHistogramVisibleSeedProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'loupeHistogramVisibleSeedProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$loupeHistogramVisibleSeedHash();
+
+  @$internal
+  @override
+  $ProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  bool create(Ref ref) {
+    return loupeHistogramVisibleSeed(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$loupeHistogramVisibleSeedHash() =>
+    r'14e5890c9164a8ab7d95652de618054075c9c1ab';
+
+/// Whether the loupe shows the RGB histogram panel. Sticky: once turned on it
+/// stays on across photos, loupe sessions and relaunches until turned off
+/// again (like the filmstrip).
 
 @ProviderFor(LoupeHistogramVisible)
 final loupeHistogramVisibleProvider = LoupeHistogramVisibleProvider._();
 
-/// Whether the loupe shows the RGB histogram panel. Session state — not
-/// persisted, a panel toggle need not survive relaunch (mirrors
-/// `InspectorOpen`).
+/// Whether the loupe shows the RGB histogram panel. Sticky: once turned on it
+/// stays on across photos, loupe sessions and relaunches until turned off
+/// again (like the filmstrip).
 final class LoupeHistogramVisibleProvider
     extends $NotifierProvider<LoupeHistogramVisible, bool> {
-  /// Whether the loupe shows the RGB histogram panel. Session state — not
-  /// persisted, a panel toggle need not survive relaunch (mirrors
-  /// `InspectorOpen`).
+  /// Whether the loupe shows the RGB histogram panel. Sticky: once turned on it
+  /// stays on across photos, loupe sessions and relaunches until turned off
+  /// again (like the filmstrip).
   LoupeHistogramVisibleProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
         name: r'loupeHistogramVisibleProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -1384,11 +1434,11 @@ final class LoupeHistogramVisibleProvider
 }
 
 String _$loupeHistogramVisibleHash() =>
-    r'aebbb000f028590b4fffbeaa1d4a5c0db061c418';
+    r'e6da0cf75a6d6bb89c1169f7740097bec3516085';
 
-/// Whether the loupe shows the RGB histogram panel. Session state — not
-/// persisted, a panel toggle need not survive relaunch (mirrors
-/// `InspectorOpen`).
+/// Whether the loupe shows the RGB histogram panel. Sticky: once turned on it
+/// stays on across photos, loupe sessions and relaunches until turned off
+/// again (like the filmstrip).
 
 abstract class _$LoupeHistogramVisible extends $Notifier<bool> {
   bool build();
@@ -1408,25 +1458,72 @@ abstract class _$LoupeHistogramVisible extends $Notifier<bool> {
   }
 }
 
+/// Startup seed for [LoupeClippingVisible].
+
+@ProviderFor(loupeClippingVisibleSeed)
+final loupeClippingVisibleSeedProvider = LoupeClippingVisibleSeedProvider._();
+
+/// Startup seed for [LoupeClippingVisible].
+
+final class LoupeClippingVisibleSeedProvider
+    extends $FunctionalProvider<bool, bool, bool>
+    with $Provider<bool> {
+  /// Startup seed for [LoupeClippingVisible].
+  LoupeClippingVisibleSeedProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'loupeClippingVisibleSeedProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$loupeClippingVisibleSeedHash();
+
+  @$internal
+  @override
+  $ProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  bool create(Ref ref) {
+    return loupeClippingVisibleSeed(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$loupeClippingVisibleSeedHash() =>
+    r'7f3b677ba9f87fa647887184781bfdcf06160e43';
+
 /// Whether the loupe tints blown highlights (red) and crushed shadows (blue)
-/// over the photo. Session state — not persisted.
+/// over the photo. Sticky: stays on until toggled off; persisted.
 
 @ProviderFor(LoupeClippingVisible)
 final loupeClippingVisibleProvider = LoupeClippingVisibleProvider._();
 
 /// Whether the loupe tints blown highlights (red) and crushed shadows (blue)
-/// over the photo. Session state — not persisted.
+/// over the photo. Sticky: stays on until toggled off; persisted.
 final class LoupeClippingVisibleProvider
     extends $NotifierProvider<LoupeClippingVisible, bool> {
   /// Whether the loupe tints blown highlights (red) and crushed shadows (blue)
-  /// over the photo. Session state — not persisted.
+  /// over the photo. Sticky: stays on until toggled off; persisted.
   LoupeClippingVisibleProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
         name: r'loupeClippingVisibleProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -1448,10 +1545,10 @@ final class LoupeClippingVisibleProvider
 }
 
 String _$loupeClippingVisibleHash() =>
-    r'3e07715906686132c3766c1e5ecb0371043d6272';
+    r'3adca141fb8568c7398825ebdbfd1e14ddafb754';
 
 /// Whether the loupe tints blown highlights (red) and crushed shadows (blue)
-/// over the photo. Session state — not persisted.
+/// over the photo. Sticky: stays on until toggled off; persisted.
 
 abstract class _$LoupeClippingVisible extends $Notifier<bool> {
   bool build();
@@ -1471,28 +1568,76 @@ abstract class _$LoupeClippingVisible extends $Notifier<bool> {
   }
 }
 
+/// Startup seed for [LoupeFocusPeakingVisible].
+
+@ProviderFor(loupeFocusPeakingVisibleSeed)
+final loupeFocusPeakingVisibleSeedProvider =
+    LoupeFocusPeakingVisibleSeedProvider._();
+
+/// Startup seed for [LoupeFocusPeakingVisible].
+
+final class LoupeFocusPeakingVisibleSeedProvider
+    extends $FunctionalProvider<bool, bool, bool>
+    with $Provider<bool> {
+  /// Startup seed for [LoupeFocusPeakingVisible].
+  LoupeFocusPeakingVisibleSeedProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'loupeFocusPeakingVisibleSeedProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$loupeFocusPeakingVisibleSeedHash();
+
+  @$internal
+  @override
+  $ProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  bool create(Ref ref) {
+    return loupeFocusPeakingVisibleSeed(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$loupeFocusPeakingVisibleSeedHash() =>
+    r'dd87f7e8135c3838d9df3ed81c5cea6d1478a7c1';
+
 /// Whether the loupe overlays a focus-peaking edge map over the photo (pure
-/// gradient-magnitude signal processing, not AI). Session state — not
-/// persisted.
+/// gradient-magnitude signal processing, not AI). Sticky: stays on until
+/// toggled off; persisted.
 
 @ProviderFor(LoupeFocusPeakingVisible)
 final loupeFocusPeakingVisibleProvider = LoupeFocusPeakingVisibleProvider._();
 
 /// Whether the loupe overlays a focus-peaking edge map over the photo (pure
-/// gradient-magnitude signal processing, not AI). Session state — not
-/// persisted.
+/// gradient-magnitude signal processing, not AI). Sticky: stays on until
+/// toggled off; persisted.
 final class LoupeFocusPeakingVisibleProvider
     extends $NotifierProvider<LoupeFocusPeakingVisible, bool> {
   /// Whether the loupe overlays a focus-peaking edge map over the photo (pure
-  /// gradient-magnitude signal processing, not AI). Session state — not
-  /// persisted.
+  /// gradient-magnitude signal processing, not AI). Sticky: stays on until
+  /// toggled off; persisted.
   LoupeFocusPeakingVisibleProvider._()
     : super(
         from: null,
         argument: null,
         retry: null,
         name: r'loupeFocusPeakingVisibleProvider',
-        isAutoDispose: true,
+        isAutoDispose: false,
         dependencies: null,
         $allTransitiveDependencies: null,
       );
@@ -1514,13 +1659,131 @@ final class LoupeFocusPeakingVisibleProvider
 }
 
 String _$loupeFocusPeakingVisibleHash() =>
-    r'86d3c9794a4147073e3ea5b7778dcd97eadd7781';
+    r'c9a878e4832133c232109d2dcfc059d66314f3be';
 
 /// Whether the loupe overlays a focus-peaking edge map over the photo (pure
-/// gradient-magnitude signal processing, not AI). Session state — not
-/// persisted.
+/// gradient-magnitude signal processing, not AI). Sticky: stays on until
+/// toggled off; persisted.
 
 abstract class _$LoupeFocusPeakingVisible extends $Notifier<bool> {
+  bool build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<bool, bool>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<bool, bool>,
+              bool,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
+/// Startup seed for [AutoOpenImportOnCardInsert]. **Defaults to false** so a
+/// widget test never pops the ingest dialog unbidden; `main()` overrides it
+/// with the persisted flag (true by default), so production auto-opens.
+
+@ProviderFor(autoOpenImportOnCardInsertSeed)
+final autoOpenImportOnCardInsertSeedProvider =
+    AutoOpenImportOnCardInsertSeedProvider._();
+
+/// Startup seed for [AutoOpenImportOnCardInsert]. **Defaults to false** so a
+/// widget test never pops the ingest dialog unbidden; `main()` overrides it
+/// with the persisted flag (true by default), so production auto-opens.
+
+final class AutoOpenImportOnCardInsertSeedProvider
+    extends $FunctionalProvider<bool, bool, bool>
+    with $Provider<bool> {
+  /// Startup seed for [AutoOpenImportOnCardInsert]. **Defaults to false** so a
+  /// widget test never pops the ingest dialog unbidden; `main()` overrides it
+  /// with the persisted flag (true by default), so production auto-opens.
+  AutoOpenImportOnCardInsertSeedProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'autoOpenImportOnCardInsertSeedProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$autoOpenImportOnCardInsertSeedHash();
+
+  @$internal
+  @override
+  $ProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  bool create(Ref ref) {
+    return autoOpenImportOnCardInsertSeed(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$autoOpenImportOnCardInsertSeedHash() =>
+    r'356dd91b871339c9d79545d8bcf33d047c16ba46';
+
+/// Whether inserting a memory card opens the Import dialog directly instead
+/// of only offering a notice (Settings → General → Ingest). Persisted.
+
+@ProviderFor(AutoOpenImportOnCardInsert)
+final autoOpenImportOnCardInsertProvider =
+    AutoOpenImportOnCardInsertProvider._();
+
+/// Whether inserting a memory card opens the Import dialog directly instead
+/// of only offering a notice (Settings → General → Ingest). Persisted.
+final class AutoOpenImportOnCardInsertProvider
+    extends $NotifierProvider<AutoOpenImportOnCardInsert, bool> {
+  /// Whether inserting a memory card opens the Import dialog directly instead
+  /// of only offering a notice (Settings → General → Ingest). Persisted.
+  AutoOpenImportOnCardInsertProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'autoOpenImportOnCardInsertProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$autoOpenImportOnCardInsertHash();
+
+  @$internal
+  @override
+  AutoOpenImportOnCardInsert create() => AutoOpenImportOnCardInsert();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$autoOpenImportOnCardInsertHash() =>
+    r'afd64bd44d139619a9ed20f40d72bc5bc96569a9';
+
+/// Whether inserting a memory card opens the Import dialog directly instead
+/// of only offering a notice (Settings → General → Ingest). Persisted.
+
+abstract class _$AutoOpenImportOnCardInsert extends $Notifier<bool> {
   bool build();
   @$mustCallSuper
   @override
@@ -2398,7 +2661,7 @@ final class CullControllerProvider
   }
 }
 
-String _$cullControllerHash() => r'c17cf0797c31f0658db0132f8b321cbe9805b123';
+String _$cullControllerHash() => r'1badca892ac8d806d324c03a24d5393c9cf6859c';
 
 /// Owns grid focus/selection and writes cull marks straight to the read model
 /// (the reactive `photos` stream reflects them immediately).

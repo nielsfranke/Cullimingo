@@ -336,39 +336,87 @@ class FilmstripVisible extends _$FilmstripVisible {
   }
 }
 
-/// Whether the loupe shows the RGB histogram panel. Session state — not
-/// persisted, a panel toggle need not survive relaunch (mirrors
-/// `InspectorOpen`).
-@riverpod
+/// Startup seed for [LoupeHistogramVisible] — the value persisted last
+/// session, overridden in `main()` (default false on first run / tests).
+@Riverpod(keepAlive: true)
+bool loupeHistogramVisibleSeed(Ref ref) => false;
+
+/// Whether the loupe shows the RGB histogram panel. Sticky: once turned on it
+/// stays on across photos, loupe sessions and relaunches until turned off
+/// again (like the filmstrip).
+@Riverpod(keepAlive: true)
 class LoupeHistogramVisible extends _$LoupeHistogramVisible {
   @override
-  bool build() => false;
+  bool build() => ref.watch(loupeHistogramVisibleSeedProvider);
 
-  /// Flips the histogram panel on/off.
-  void toggle() => state = !state;
+  /// Flips the histogram panel on/off and remembers the choice.
+  void toggle() {
+    final value = !state;
+    state = value;
+    unawaited(AppSettings.load().then((s) => s.setLoupeHistogram(value)));
+  }
 }
+
+/// Startup seed for [LoupeClippingVisible].
+@Riverpod(keepAlive: true)
+bool loupeClippingVisibleSeed(Ref ref) => false;
 
 /// Whether the loupe tints blown highlights (red) and crushed shadows (blue)
-/// over the photo. Session state — not persisted.
-@riverpod
+/// over the photo. Sticky: stays on until toggled off; persisted.
+@Riverpod(keepAlive: true)
 class LoupeClippingVisible extends _$LoupeClippingVisible {
   @override
-  bool build() => false;
+  bool build() => ref.watch(loupeClippingVisibleSeedProvider);
 
-  /// Flips the clipping-warning overlay on/off.
-  void toggle() => state = !state;
+  /// Flips the clipping-warning overlay on/off and remembers the choice.
+  void toggle() {
+    final value = !state;
+    state = value;
+    unawaited(AppSettings.load().then((s) => s.setLoupeClipping(value)));
+  }
 }
 
+/// Startup seed for [LoupeFocusPeakingVisible].
+@Riverpod(keepAlive: true)
+bool loupeFocusPeakingVisibleSeed(Ref ref) => false;
+
 /// Whether the loupe overlays a focus-peaking edge map over the photo (pure
-/// gradient-magnitude signal processing, not AI). Session state — not
-/// persisted.
-@riverpod
+/// gradient-magnitude signal processing, not AI). Sticky: stays on until
+/// toggled off; persisted.
+@Riverpod(keepAlive: true)
 class LoupeFocusPeakingVisible extends _$LoupeFocusPeakingVisible {
   @override
-  bool build() => false;
+  bool build() => ref.watch(loupeFocusPeakingVisibleSeedProvider);
 
-  /// Flips the focus-peaking overlay on/off.
-  void toggle() => state = !state;
+  /// Flips the focus-peaking overlay on/off and remembers the choice.
+  void toggle() {
+    final value = !state;
+    state = value;
+    unawaited(AppSettings.load().then((s) => s.setLoupeFocusPeaking(value)));
+  }
+}
+
+/// Startup seed for [AutoOpenImportOnCardInsert]. **Defaults to false** so a
+/// widget test never pops the ingest dialog unbidden; `main()` overrides it
+/// with the persisted flag (true by default), so production auto-opens.
+@Riverpod(keepAlive: true)
+bool autoOpenImportOnCardInsertSeed(Ref ref) => false;
+
+/// Whether inserting a memory card opens the Import dialog directly instead
+/// of only offering a notice (Settings → General → Ingest). Persisted.
+@Riverpod(keepAlive: true)
+class AutoOpenImportOnCardInsert extends _$AutoOpenImportOnCardInsert {
+  @override
+  bool build() => ref.watch(autoOpenImportOnCardInsertSeedProvider);
+
+  /// Turns auto-open-on-card-insert on or off and remembers the choice.
+  // ignore: avoid_positional_boolean_parameters — simple flag setter.
+  void set(bool value) {
+    state = value;
+    unawaited(
+      AppSettings.load().then((s) => s.setAutoOpenImportOnCardInsert(value)),
+    );
+  }
 }
 
 /// Startup seed for [RecentFolders] — the paths persisted last session,

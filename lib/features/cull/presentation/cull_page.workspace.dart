@@ -107,6 +107,14 @@ mixin _CullWorkspace on _CullGrid {
       _underTest ? listVolumes() : Isolate.run(listVolumes);
 
   void _offerCardImport(Volume card) {
+    // With the auto-open preference on (Settings → General → Ingest), an
+    // inserted card opens the Import dialog directly, preselected on the card
+    // — unless one is already up (second card / user got there first), where
+    // stacking a second modal would only get in the way.
+    if (ref.read(autoOpenImportOnCardInsertProvider) && !_ingestDialogOpen) {
+      unawaited(_ingest(card.path));
+      return;
+    }
     _showNotice(
       Notice(
         kind: NoticeKind.info,
@@ -163,14 +171,24 @@ mixin _CullWorkspace on _CullGrid {
     if (ws.tabs.isNotEmpty) _closeTab(ws.activeIndex);
   }
 
+  // True while the ingest dialog is up, so a card inserted meanwhile doesn't
+  // auto-open a second one on top.
+  bool _ingestDialogOpen = false;
+
   /// Opens the Phase 3 ingest dialog (optionally preselecting [source], e.g. a
   /// just-inserted card); if it returns a destination root (the import ran),
   /// opens that folder in the grid.
   Future<void> _ingest([String? source]) async {
-    final dest = await showDialog<String>(
-      context: context,
-      builder: (_) => IngestDialog(initialSource: source),
-    );
+    _ingestDialogOpen = true;
+    final String? dest;
+    try {
+      dest = await showDialog<String>(
+        context: context,
+        builder: (_) => IngestDialog(initialSource: source),
+      );
+    } finally {
+      _ingestDialogOpen = false;
+    }
     if (dest == null) return;
     await _importFolder(dest);
     // Ingest is the one moment we stamp the whole import (open-folder mustn't).

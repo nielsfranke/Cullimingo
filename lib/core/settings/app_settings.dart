@@ -385,6 +385,43 @@ class AppSettings {
   Future<void> setFilmstripVisible(bool value) =>
       _setAll({'filmstripVisible': value});
 
+  /// Whether the loupe's RGB histogram panel was on when last toggled
+  /// (default false). Sticky across photos, loupe sessions and relaunches.
+  bool get loupeHistogram => _data['loupeHistogram'] as bool? ?? false;
+
+  /// Sets the loupe histogram-panel stickiness.
+  // ignore: avoid_positional_boolean_parameters — simple flag setter.
+  Future<void> setLoupeHistogram(bool value) =>
+      _setAll({'loupeHistogram': value});
+
+  /// Whether the loupe's clipping-warning overlay was on when last toggled
+  /// (default false). Sticky, like [loupeHistogram].
+  bool get loupeClipping => _data['loupeClipping'] as bool? ?? false;
+
+  /// Sets the loupe clipping-overlay stickiness.
+  // ignore: avoid_positional_boolean_parameters — simple flag setter.
+  Future<void> setLoupeClipping(bool value) =>
+      _setAll({'loupeClipping': value});
+
+  /// Whether the loupe's focus-peaking overlay was on when last toggled
+  /// (default false). Sticky, like [loupeHistogram].
+  bool get loupeFocusPeaking => _data['loupeFocusPeaking'] as bool? ?? false;
+
+  /// Sets the loupe focus-peaking stickiness.
+  // ignore: avoid_positional_boolean_parameters — simple flag setter.
+  Future<void> setLoupeFocusPeaking(bool value) =>
+      _setAll({'loupeFocusPeaking': value});
+
+  /// Whether inserting a memory card opens the Import dialog directly instead
+  /// of only showing a "card detected" notice (default true).
+  bool get autoOpenImportOnCardInsert =>
+      _data['autoOpenImportOnCardInsert'] as bool? ?? true;
+
+  /// Sets the auto-open-Import-on-card-insert preference.
+  // ignore: avoid_positional_boolean_parameters — simple flag setter.
+  Future<void> setAutoOpenImportOnCardInsert(bool value) =>
+      _setAll({'autoOpenImportOnCardInsert': value});
+
   /// The stored "Find similar" sensitivity preset name, or null when never
   /// chosen (then the balanced default is used).
   String? get similaritySensitivity =>

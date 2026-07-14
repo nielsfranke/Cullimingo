@@ -140,6 +140,9 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
   late bool _propagateMarksToStack = ref.read(propagateMarksToStackProvider);
   late bool _autoExpandBrackets = ref.read(autoExpandBracketsOnSelectProvider);
   late bool _markConfirmation = ref.read(markConfirmationEnabledProvider);
+  late bool _autoOpenImportOnCard = ref.read(
+    autoOpenImportOnCardInsertProvider,
+  );
   late List<ExternalEditor> _editors = [...widget.initialEditors];
   late List<DeliveryServer> _servers = [...widget.initialServers];
 
@@ -179,6 +182,9 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
         .read(autoExpandBracketsOnSelectProvider.notifier)
         .set(_autoExpandBrackets);
     ref.read(markConfirmationEnabledProvider.notifier).set(_markConfirmation);
+    ref
+        .read(autoOpenImportOnCardInsertProvider.notifier)
+        .set(_autoOpenImportOnCard);
     // Persist in the background and pop immediately — the page only needs the
     // result, and a settings save shouldn't block closing the dialog. Capture
     // the field values first since the controllers are disposed on pop.
@@ -490,6 +496,13 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
         label:
             'Expand pulled-in client picks (Find / ContactSheet) to their '
             'brackets automatically',
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      const DialogSection('Ingest'),
+      DialogCheckbox(
+        value: _autoOpenImportOnCard,
+        onChanged: (v) => setState(() => _autoOpenImportOnCard = v ?? true),
+        label: 'Open Import automatically when a memory card is inserted',
       ),
       const SizedBox(height: AppSpacing.lg),
       const DialogSection('Startup'),

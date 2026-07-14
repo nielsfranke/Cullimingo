@@ -110,6 +110,18 @@ Future<void> main() async {
         filmstripVisibleSeedProvider.overrideWithValue(
           settings.filmstripVisible,
         ),
+        loupeHistogramVisibleSeedProvider.overrideWithValue(
+          settings.loupeHistogram,
+        ),
+        loupeClippingVisibleSeedProvider.overrideWithValue(
+          settings.loupeClipping,
+        ),
+        loupeFocusPeakingVisibleSeedProvider.overrideWithValue(
+          settings.loupeFocusPeaking,
+        ),
+        autoOpenImportOnCardInsertSeedProvider.overrideWithValue(
+          settings.autoOpenImportOnCardInsert,
+        ),
         recentFoldersSeedProvider.overrideWithValue(settings.recentFolders),
         // Retry transient preview misses in production (off in widget tests so
         // the back-off timers never linger — see [previewRetryEnabled]).

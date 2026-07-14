@@ -192,6 +192,34 @@ void main() {
     expect(reloaded.lastImport!['verify'], false);
   });
 
+  test(
+    'loupe analysis toggles round-trip; default off (sticky overlays)',
+    () async {
+      final s = await AppSettings.load();
+      expect(s.loupeHistogram, isFalse);
+      expect(s.loupeClipping, isFalse);
+      expect(s.loupeFocusPeaking, isFalse);
+
+      await s.setLoupeHistogram(true);
+      await s.setLoupeFocusPeaking(true);
+
+      final reloaded = await AppSettings.load();
+      expect(reloaded.loupeHistogram, isTrue);
+      expect(reloaded.loupeClipping, isFalse);
+      expect(reloaded.loupeFocusPeaking, isTrue);
+    },
+  );
+
+  test('auto-open Import on card insert round-trips; default on', () async {
+    final s = await AppSettings.load();
+    expect(s.autoOpenImportOnCardInsert, isTrue);
+
+    await s.setAutoOpenImportOnCardInsert(false);
+
+    final reloaded = await AppSettings.load();
+    expect(reloaded.autoOpenImportOnCardInsert, isFalse);
+  });
+
   test('template defaults: null snapshots + legacy, ingest off', () async {
     final s = await AppSettings.load();
     expect(s.metadataTemplates, isNull);

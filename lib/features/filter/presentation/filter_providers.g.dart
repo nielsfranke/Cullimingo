@@ -45,7 +45,7 @@ final class PhotoFilterControllerProvider
 }
 
 String _$photoFilterControllerHash() =>
-    r'1e60e04e64357b6a856b2b81fd7e5d11d91da2f1';
+    r'ef905686db47f5b999ca05b3926e3b098c479dbb';
 
 /// Holds the active grid filter and toggles for the quick-filter chips.
 

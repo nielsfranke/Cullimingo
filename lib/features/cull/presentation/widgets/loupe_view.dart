@@ -126,6 +126,20 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
   Uint8List? _analyzedSource;
   ({bool histogram, bool clipping, bool peaking})? _analyzedFlags;
 
+  /// Decoded straight-RGBA pixels of [_analyzedSource] (downscaled to
+  /// [_analysisMaxLongEdge]), cached so toggling an overlay on the same photo
+  /// re-runs only the cheap pixel loop, not the decode.
+  Uint8List? _analysisRgba;
+  int _analysisWidth = 0;
+  int _analysisHeight = 0;
+
+  /// Long-edge cap for the analysis decode. The overlays stretch over the
+  /// photo anyway, so analysing more pixels than roughly a screen's worth
+  /// costs seconds (on a 45-MP original) for no visible gain. Close to the
+  /// loupe preview's own resolution so the peaking threshold keeps meaning
+  /// what it was tuned to mean.
+  static const int _analysisMaxLongEdge = 2048;
+
   /// Guards against a stale analysis (superseded by a newer photo/toggle)
   /// landing after the fact.
   int _analysisGen = 0;
@@ -259,11 +273,14 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
   }
 
   // Computes whichever of histogram/clipping/peaking are requested for
-  // [source], off the UI isolate (`BUILD_PLAN.md` §0.6 — a multi-megapixel
-  // convolution has no business running on the frame thread). Skips the
-  // recompute when neither the bytes nor the requested set changed since the
-  // last run, and drops a result that a newer call (photo blit, toggle) has
-  // already superseded.
+  // [source]: a native decode on the engine's IO thread (downscaled to
+  // [_analysisMaxLongEdge] — the pure-Dart decode this replaced took seconds
+  // on a big preview), then the pixel loop off the UI isolate
+  // (`BUILD_PLAN.md` §0.6 — a multi-megapixel convolution has no business
+  // running on the frame thread). Skips the recompute when neither the bytes
+  // nor the requested set changed since the last run, reuses the decoded
+  // pixels when only the set changed, and drops a result that a newer call
+  // (photo blit, toggle) has already superseded.
   Future<void> _scheduleAnalysis(
     Uint8List? source, {
     required bool histogram,
@@ -275,6 +292,7 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
       if (_analyzedSource != null) {
         _analyzedSource = null;
         _analyzedFlags = null;
+        _analysisRgba = null;
         _disposeAnalysisImages();
         setState(() => _histogram = null);
       }
@@ -282,17 +300,41 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
     }
     final flags = (histogram: histogram, clipping: clipping, peaking: peaking);
     if (identical(source, _analyzedSource) && _analyzedFlags == flags) return;
+    final sameSource = identical(source, _analyzedSource);
     _analyzedSource = source;
     _analyzedFlags = flags;
     final gen = ++_analysisGen;
 
-    final result = await computeLoupeAnalysisOffThread(
-      source,
+    var rgba = sameSource ? _analysisRgba : null;
+    var width = _analysisWidth;
+    var height = _analysisHeight;
+    if (rgba == null) {
+      final decoded = await _decodeForAnalysis(source);
+      if (!mounted || gen != _analysisGen) return;
+      if (decoded == null) {
+        // Undecodable bytes — show nothing, same as before.
+        _analysisRgba = null;
+        _disposeAnalysisImages();
+        setState(() => _histogram = null);
+        return;
+      }
+      rgba = decoded.rgba;
+      width = decoded.width;
+      height = decoded.height;
+      _analysisRgba = rgba;
+      _analysisWidth = width;
+      _analysisHeight = height;
+    }
+
+    final result = await computeLoupeAnalysisFromRgbaOffThread(
+      rgba,
+      width: width,
+      height: height,
       wantHistogram: histogram,
       wantClipping: clipping,
       wantPeaking: peaking,
     );
-    if (!mounted || gen != _analysisGen || result == null) return;
+    if (!mounted || gen != _analysisGen) return;
 
     ui.Image? clipImage;
     if (result.clippingOverlayRgba != null) {
@@ -327,6 +369,52 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
       _clippingImage = clipImage;
       _peakingImage = peakImage;
     });
+  }
+
+  /// Decodes [bytes] with the engine codec — runs on Flutter's IO thread, not
+  /// the UI isolate — capped to [_analysisMaxLongEdge] on the long edge
+  /// (JPEG shrink-on-decode, so a big source never gets fully decoded), then
+  /// reads the pixels back as straight RGBA. Null when the bytes don't decode.
+  Future<({Uint8List rgba, int width, int height})?> _decodeForAnalysis(
+    Uint8List bytes,
+  ) async {
+    ui.ImmutableBuffer? buffer;
+    ui.Codec? codec;
+    ui.Image? image;
+    try {
+      buffer = await ui.ImmutableBuffer.fromUint8List(bytes);
+      codec = await ui.instantiateImageCodecWithSize(
+        buffer,
+        getTargetSize: (w, h) {
+          final long = math.max(w, h);
+          if (long <= _analysisMaxLongEdge) {
+            return ui.TargetImageSize(width: w, height: h);
+          }
+          final scale = _analysisMaxLongEdge / long;
+          return ui.TargetImageSize(
+            width: math.max(1, (w * scale).round()),
+            height: math.max(1, (h * scale).round()),
+          );
+        },
+      );
+      final frame = await codec.getNextFrame();
+      image = frame.image;
+      final data = await image.toByteData(
+        format: ui.ImageByteFormat.rawStraightRgba,
+      );
+      if (data == null) return null;
+      return (
+        rgba: data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+        width: image.width,
+        height: image.height,
+      );
+    } on Object {
+      return null;
+    } finally {
+      image?.dispose();
+      codec?.dispose();
+      buffer?.dispose();
+    }
   }
 
   Future<ui.Image> _decodeRgba(Uint8List rgba, int width, int height) {
@@ -389,6 +477,7 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
       // dedup only keys off the byte reference, not the photo id).
       _analyzedSource = null;
       _analyzedFlags = null;
+      _analysisRgba = null;
       _histogram = null;
       _disposeAnalysisImages();
     }
@@ -434,9 +523,13 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
     if (source != null && !identical(source, _resolvedBytes)) {
       _resolveIntrinsic(source);
     }
+    // Analyse the screen-res preview when it's there: histogram/clipping/
+    // peaking don't gain from full-res pixels (the decode is capped anyway),
+    // and preferring the loupe bytes keeps the overlays stable — they don't
+    // recompute when zooming past the full-res trigger swaps the source.
     unawaited(
       _scheduleAnalysis(
-        source,
+        loupe ?? full,
         histogram: histogramOn,
         clipping: clippingOn,
         peaking: peakingOn,

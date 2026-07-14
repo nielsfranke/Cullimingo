@@ -77,24 +77,28 @@ const int _shadowThreshold = 5;
 /// smooth skies/skin don't peak, low enough that real detail does.
 const double _edgeThreshold = 40;
 
-/// Runs [computeLoupeAnalysis] on a background isolate (`BUILD_PLAN.md` §0.6 —
-/// a multi-megapixel convolution has no business on the UI isolate). A
-/// top-level wrapper, not a method: `Isolate.run` sends the closure it's
-/// given, and a closure created inside a `State` method can drag the whole
-/// widget tree along for the ride (Dart shares one context across a method's
-/// closures, so if any statement in the same method touches `this` — even
-/// `mounted` — the isolate call's closure captures it too, and a `_Timer`
+/// Runs [computeLoupeAnalysisFromRgba] on a background isolate
+/// (`BUILD_PLAN.md` §0.6 — a multi-megapixel convolution has no business on
+/// the UI isolate). A top-level wrapper, not a method: `Isolate.run` sends the
+/// closure it's given, and a closure created inside a `State` method can drag
+/// the whole widget tree along for the ride (Dart shares one context across a
+/// method's closures, so if any statement in the same method touches `this` —
+/// even `mounted` — the isolate call's closure captures it too, and a `_Timer`
 /// living somewhere in that tree fails to serialize). Calling from a
 /// top-level function sidesteps that: there's no `this` to capture.
-Future<LoupeAnalysis?> computeLoupeAnalysisOffThread(
-  Uint8List sourceBytes, {
+Future<LoupeAnalysis> computeLoupeAnalysisFromRgbaOffThread(
+  Uint8List rgba, {
+  required int width,
+  required int height,
   required bool wantHistogram,
   required bool wantClipping,
   required bool wantPeaking,
 }) {
   return Isolate.run(
-    () => computeLoupeAnalysis(
-      sourceBytes,
+    () => computeLoupeAnalysisFromRgba(
+      rgba,
+      width: width,
+      height: height,
       wantHistogram: wantHistogram,
       wantClipping: wantClipping,
       wantPeaking: wantPeaking,
@@ -102,11 +106,11 @@ Future<LoupeAnalysis?> computeLoupeAnalysisOffThread(
   );
 }
 
-/// Decodes [sourceBytes] (the loupe preview JPEG/WebP) and computes whichever
-/// of the histogram / clipping-warning / focus-peaking products are asked
-/// for, in a single pass over the pixels. Pure — call via
-/// [computeLoupeAnalysisOffThread] rather than directly from UI code. Returns
-/// null when the bytes don't decode.
+/// Decodes [sourceBytes] (a JPEG/WebP) with the pure-Dart `image` package and
+/// computes the requested products. Slow on big images — production decodes
+/// natively (engine codec, downscaled) and calls
+/// [computeLoupeAnalysisFromRgba] directly; this entry point stays for tests
+/// and callers without an engine. Returns null when the bytes don't decode.
 LoupeAnalysis? computeLoupeAnalysis(
   Uint8List sourceBytes, {
   required bool wantHistogram,
@@ -120,10 +124,28 @@ LoupeAnalysis? computeLoupeAnalysis(
     decoded = null;
   }
   if (decoded == null) return null;
-  final width = decoded.width;
-  final height = decoded.height;
-  final rgba = decoded.getBytes(order: img.ChannelOrder.rgba);
+  return computeLoupeAnalysisFromRgba(
+    decoded.getBytes(order: img.ChannelOrder.rgba),
+    width: decoded.width,
+    height: decoded.height,
+    wantHistogram: wantHistogram,
+    wantClipping: wantClipping,
+    wantPeaking: wantPeaking,
+  );
+}
 
+/// Computes whichever of the histogram / clipping-warning / focus-peaking
+/// products are asked for, in a single pass over [rgba] (straight RGBA,
+/// `width * height * 4` bytes). Pure — call via
+/// [computeLoupeAnalysisFromRgbaOffThread] rather than directly from UI code.
+LoupeAnalysis computeLoupeAnalysisFromRgba(
+  Uint8List rgba, {
+  required int width,
+  required int height,
+  required bool wantHistogram,
+  required bool wantClipping,
+  required bool wantPeaking,
+}) {
   List<int>? red;
   List<int>? green;
   List<int>? blue;
