@@ -68,20 +68,20 @@ class StatusBar extends StatelessWidget {
           ),
           Tooltip(
             message: 'Export (⌘/Ctrl S)',
-            child: FilledButton(
+            child: FilledButton.icon(
               onPressed: onExport,
               style: FilledButton.styleFrom(
-                visualDensity: VisualDensity.compact,
-                minimumSize: const Size(0, 28),
+                minimumSize: const Size(0, 32),
                 padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
+                  horizontal: AppSpacing.lg,
                 ),
                 textStyle: const TextStyle(
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              child: Text(label),
+              icon: const Icon(Icons.ios_share, size: 16),
+              label: Text(label),
             ),
           ),
         ],

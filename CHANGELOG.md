@@ -3,6 +3,13 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Changed
+- **Export button polished:** the status bar's Export button no longer looks
+  cramped — it gained an export icon, a slightly larger hit target and
+  roomier padding, while the bar itself stays slim.
+
 ## 1.2.6 — 2026-07-14
 
 ### Fixed
