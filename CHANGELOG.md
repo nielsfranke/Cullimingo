@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.2.5 — 2026-07-14
 
 ### Changed
 - **Slim status bar instead of the big export button:** the full-width
