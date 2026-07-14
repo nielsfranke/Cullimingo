@@ -108,10 +108,10 @@ void main() {
     await tester.pump();
     expect((await rows())[1].flag, PickFlag.pick);
 
-    // Space selects the focused (second) photo → export bar reflects the count.
+    // Space selects the focused (second) photo → status bar reflects the count.
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await tester.pump();
-    expect(find.text('Export 1 Photo'), findsOneWidget);
+    expect(find.text('Export 1 selected'), findsOneWidget);
 
     // Filtering to Picks leaves only the flagged photo in the grid.
     await tester.tap(find.textContaining('Picks'));
@@ -170,7 +170,7 @@ void main() {
     await tester.sendKeyUpEvent(LogicalKeyboardKey.meta);
     await tester.pump();
 
-    expect(find.text('Export 3 Photos'), findsOneWidget);
+    expect(find.text('Export 3 selected'), findsOneWidget);
   });
 
   testWidgets('rating/colour/flag keys toggle off when pressed twice', (

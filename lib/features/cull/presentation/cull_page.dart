@@ -35,6 +35,7 @@ import 'package:cullimingo/features/cull/presentation/widgets/grid_cell.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/keyboard_shortcuts_dialog.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/loupe_view.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/notice_bar.dart';
+import 'package:cullimingo/features/cull/presentation/widgets/status_bar.dart';
 import 'package:cullimingo/features/delivery/data/delivery_client.dart';
 import 'package:cullimingo/features/delivery/data/delivery_uploader.dart';
 import 'package:cullimingo/features/delivery/domain/delivery_server.dart';
@@ -98,7 +99,7 @@ const int _prefetchRows = 5;
 
 /// The cull grid — the heart of Cullimingo (`BUILD_PLAN.md` §5 Phase 1):
 /// toolbar, a virtualized thumbnail grid with keyboard-driven rate/flag/colour,
-/// and a full-width export bar.
+/// and a slim status bar with the export action.
 class CullPage extends ConsumerStatefulWidget {
   /// Creates the cull page.
   const CullPage({super.key});
@@ -316,20 +317,22 @@ class _CullPageState extends ConsumerState<CullPage>
                   ),
                   if (_notice != null)
                     NoticeBar(notice: _notice!, onDismiss: _dismissNotice),
-                  ExportBar(
-                    selectedCount: selectedCount,
-                    total: filtered.length,
-                    onExport: filtered.isEmpty ? null : _export,
-                  ),
+                  if (total > 0)
+                    StatusBar(
+                      total: total,
+                      filteredCount: filtered.length,
+                      selectedCount: selectedCount,
+                      onExport: filtered.isEmpty ? null : _export,
+                    ),
                 ],
               ),
               // Non-modal export progress: floats over the grid (bottom-right,
-              // above the export bar) so culling/scrolling continues during a
+              // above the status bar) so culling/scrolling continues during a
               // background export (§6).
               if (jobs.export != null)
                 Positioned(
                   right: AppSpacing.lg,
-                  bottom: 84,
+                  bottom: 48,
                   child: ExportProgressCard(
                     done: jobs.export!.done,
                     total: jobs.export!.total,
@@ -339,7 +342,7 @@ class _CullPageState extends ConsumerState<CullPage>
               if (jobs.contactSheet != null)
                 Positioned(
                   right: AppSpacing.lg,
-                  bottom: 84,
+                  bottom: 48,
                   child: ExportProgressCard(
                     verb: jobs.contactSheet!.verb,
                     done: jobs.contactSheet!.done,
@@ -350,7 +353,7 @@ class _CullPageState extends ConsumerState<CullPage>
               if (jobs.findSimilar != null)
                 Positioned(
                   right: AppSpacing.lg,
-                  bottom: 84,
+                  bottom: 48,
                   child: ExportProgressCard(
                     verb: jobs.findSimilar!.verb,
                     done: jobs.findSimilar!.done,
@@ -361,7 +364,7 @@ class _CullPageState extends ConsumerState<CullPage>
               if (jobs.transfer != null)
                 Positioned(
                   right: AppSpacing.lg,
-                  bottom: 84,
+                  bottom: 48,
                   child: ExportProgressCard(
                     verb: jobs.transfer!.verb,
                     done: jobs.transfer!.done,

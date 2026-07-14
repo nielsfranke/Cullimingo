@@ -1,46 +1,6 @@
 import 'package:cullimingo/app/theme/tokens.dart';
 import 'package:flutter/material.dart';
 
-/// The full-width bottom "Export N Photos" bar (`BUILD_PLAN.md` §7).
-class ExportBar extends StatelessWidget {
-  /// Creates the export bar.
-  const ExportBar({
-    required this.selectedCount,
-    required this.total,
-    this.onExport,
-    super.key,
-  });
-
-  /// How many photos are currently selected.
-  final int selectedCount;
-
-  /// How many photos are in the grid (used when nothing is selected).
-  final int total;
-
-  /// Called to start an export, or null to disable the bar.
-  final VoidCallback? onExport;
-
-  @override
-  Widget build(BuildContext context) {
-    final n = selectedCount > 0 ? selectedCount : total;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: SizedBox(
-        width: double.infinity,
-        height: 44,
-        child: FilledButton(
-          onPressed: onExport,
-          child: Text('Export $n Photo${n == 1 ? '' : 's'}'),
-        ),
-      ),
-    );
-  }
-}
-
 /// Compact non-modal progress card for a background job (export or upload) —
 /// floats over the grid so culling continues while it runs (§6/§7b).
 class ExportProgressCard extends StatelessWidget {

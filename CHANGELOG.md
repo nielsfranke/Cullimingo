@@ -3,6 +3,15 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Changed
+- **Slim status bar instead of the big export button:** the full-width
+  "Export N Photos" bar is now a compact status bar — photo, filter and
+  selection counts on the left ("12 of 165 photos · 2 selected"), a small
+  Export button on the right ("Export 2 selected" / "Export 165 photos",
+  still ⌘/Ctrl-S). Roughly half the height, and the grid gets the room.
+
 ## 1.2.4 — 2026-07-14
 
 ### Added
