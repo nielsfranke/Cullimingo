@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.2.6 — 2026-07-14
 
 ### Fixed
 - **Loupe analysis overlays broken since 1.2.4:** the histogram, clipping
