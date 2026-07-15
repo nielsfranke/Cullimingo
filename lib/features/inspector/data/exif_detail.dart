@@ -1,8 +1,12 @@
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
 
 import 'package:cullimingo/core/files/exif_values.dart';
+import 'package:cullimingo/core/raw/libraw_preview_extractor.dart';
+import 'package:cullimingo/core/raw/preview_extractor.dart';
 import 'package:exif/exif.dart';
+import 'package:flutter_libraw/flutter_libraw.dart';
 
 /// The richer EXIF fields the metadata inspector shows beyond what the drift
 /// row already carries (camera/capture-time/dimensions). Read lazily for the
@@ -58,15 +62,30 @@ class ExifDetail {
 
 /// Reads [ExifDetail] for the file at [path] in a background isolate (Rule 2:
 /// never parse on the UI isolate). Returns an empty result on any error.
-Future<ExifDetail> readExifDetail(String path) =>
-    Isolate.run(() => _readExifDetail(path));
+Future<ExifDetail> readExifDetail(String path) {
+  // Resolved on the caller's isolate — the packaged-bundle lookup depends on
+  // the app bundle layout (same pattern as `scanExif`).
+  final rawLibPath = LibRawPreviewExtractor.resolveLibraryPath();
+  return Isolate.run(() => _readExifDetail(path, rawLibPath));
+}
 
-Future<ExifDetail> _readExifDetail(String path) async {
+Future<ExifDetail> _readExifDetail(String path, String? rawLibPath) async {
   Map<String, IfdTag> tags;
   try {
     tags = await readExifFromFile(File(path));
   } on Object {
-    return const ExifDetail();
+    tags = const {};
+  }
+
+  // Opaque RAW containers (Fuji `.RAF`) hide their EXIF from the pure-Dart
+  // reader, but their embedded preview JPEG carries the standard tags — the
+  // same LibRaw fallback the scanner uses (`folder_scanner.dart`). Gate on the
+  // direct read coming back *empty*: TIFF-based raws (DNG/ARW/CR2/NEF) satisfy
+  // it and never reach the blocking FFI call below.
+  var fromPreview = false;
+  if (tags.isEmpty && rawLibPath != null && isRawPath(path)) {
+    tags = await _embeddedPreviewTags(rawLibPath, path);
+    fromPreview = tags.isNotEmpty;
   }
   if (tags.isEmpty) return const ExifDetail();
 
@@ -78,11 +97,32 @@ Future<ExifDetail> _readExifDetail(String path) async {
     iso: iso?.round(),
     focalLength: exifNum(tags, 'EXIF FocalLength'),
     exposureBias: exifNum(tags, 'EXIF ExposureBiasValue'),
-    width:
-        exifNum(tags, 'EXIF ExifImageWidth')?.round() ??
-        exifNum(tags, 'Image ImageWidth')?.round(),
-    height:
-        exifNum(tags, 'EXIF ExifImageLength')?.round() ??
-        exifNum(tags, 'Image ImageLength')?.round(),
+    // The embedded preview may be a downscaled render, so its pixel dimensions
+    // aren't the full image's — leave them null and let the inspector fall
+    // back to the drift row.
+    width: fromPreview
+        ? null
+        : exifNum(tags, 'EXIF ExifImageWidth')?.round() ??
+              exifNum(tags, 'Image ImageWidth')?.round(),
+    height: fromPreview
+        ? null
+        : exifNum(tags, 'EXIF ExifImageLength')?.round() ??
+              exifNum(tags, 'Image ImageLength')?.round(),
   );
+}
+
+/// Pulls the embedded preview JPEG out of the RAW at [path] via LibRaw and
+/// reads its EXIF tags. Returns an empty map on any failure.
+Future<Map<String, IfdTag>> _embeddedPreviewTags(
+  String libPath,
+  String path,
+) async {
+  try {
+    final bindings = FlutterLibRawBindings(DynamicLibrary.open(libPath));
+    final preview = extractRawThumbnail(bindings, path);
+    if (preview == null) return const {};
+    return await readExifFromBytes(preview);
+  } on Object {
+    return const {};
+  }
 }

@@ -112,7 +112,13 @@ class PreviewCache {
     if (cancel?.isCancelled ?? false) return null;
 
     final file = File(path);
-    if (!file.existsSync()) return null;
+    // One async stat covers the existence check and the cache key below. It
+    // must not be a sync call: the original may live on slow removable media
+    // (SD card), and this method runs on the UI isolate — a blocking syscall
+    // here is exactly what janks the grid scroll (§0.6).
+    // ignore: avoid_slow_async_io
+    final stat = await file.stat();
+    if (stat.type == FileSystemEntityType.notFound) return null;
 
     final longEdge = _longEdgeFor(tier);
 
@@ -131,12 +137,18 @@ class PreviewCache {
 
     // 2. Disk — survives across sessions. The size is in the key so changing a
     // tier's resolution naturally invalidates its old (wrong-size) cache files.
-    final key = await fileSignature(file, salt: '${tier.name}$longEdge');
+    final key = await fileSignature(
+      file,
+      salt: '${tier.name}$longEdge',
+      stat: stat,
+    );
     final dir = await _tierDir(tier);
     final cacheFile = File(p.join(dir.path, '$key.jpg'));
 
     Uint8List? bytes;
-    if (cacheFile.existsSync()) {
+    // Also deliberately async, like the stat above.
+    // ignore: avoid_slow_async_io
+    if (await cacheFile.exists()) {
       bytes = await cacheFile.readAsBytes();
     } else {
       // 3. Extract on the pool (skipped if still cancelled), then persist.

@@ -3,6 +3,20 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **Inspector showed no EXIF for Fuji `.RAF`:** the metadata inspector's
+  detail reader only understood JPEG/TIFF-style headers, so opaque RAW
+  containers like RAF left Lens/Shutter/Aperture/ISO/Focal length/Exp. comp.
+  all showing "—". It now falls back to reading the EXIF from the RAW's
+  embedded preview via LibRaw, the same way the folder scanner already did.
+- **Scroll jank when culling straight off a memory card:** the preview cache
+  stat'ed the original file with blocking calls on the UI isolate for every
+  grid cell — instant on an internal SSD, but a visible stutter on slow
+  removable media. Those lookups are now asynchronous, so scrolling stays
+  smooth regardless of how slow the source volume is.
+
 ## 1.2.7 — 2026-07-14
 
 ### Changed
