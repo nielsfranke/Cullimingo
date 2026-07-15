@@ -389,11 +389,29 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     );
   }
 
+  // The form reads top-to-bottom along the user's mental model — *what* to
+  // import (Source), *where* it goes (Destination), *what it's called*
+  // (Naming) — one card each, matching the export dialog's card language. The
+  // running total and the reason Import is disabled live in the always-visible
+  // footer (see `_actions`), never below the fold.
   Widget _form() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const DialogSection('Source'),
+        _sourceCard(),
+        const SizedBox(height: AppSpacing.md),
+        _destinationCard(),
+        const SizedBox(height: AppSpacing.md),
+        _namingCard(),
+      ],
+    );
+  }
+
+  Widget _sourceCard() {
+    final status = _scanStatus();
+    return DialogCard(
+      title: 'Source',
+      children: [
         Row(
           children: [
             Expanded(child: _sourceDropdown()),
@@ -404,87 +422,122 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
             ),
           ],
         ),
+        if (status != null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          status,
+        ],
         if (_dateCounts.length > 1) ...[
-          const SizedBox(height: AppSpacing.sm),
-          _dateFilterRow(),
+          const SizedBox(height: AppSpacing.md),
+          _dayFilter(),
         ],
-        const SizedBox(height: AppSpacing.lg),
-        const DialogSection('Destination'),
-        DialogPathRow(
-          path: _dest,
-          onPick: () => _pickDest(backup: false),
-          hint: 'Choose destination…',
-        ),
-        DialogCheckbox(
-          value: _backup,
-          onChanged: (v) => setState(() => _backup = v ?? false),
-          label: 'Also copy to a backup destination (verified, one pass)',
-        ),
-        if (_backup)
-          DialogPathRow(
-            path: _dest2,
-            onPick: () => _pickDest(backup: true),
-            hint: 'Choose backup…',
-          ),
-        DialogCheckbox(
-          value: _includeVideos,
-          onChanged: (v) {
-            setState(() => _includeVideos = v ?? true);
-            // Instant: the videos were already scanned, this just re-filters.
-            _rebuildPlan();
-          },
-          label: 'Include video files (copied alongside photos)',
-        ),
-        DialogCheckbox(
-          value: _includeJpegs,
-          onChanged: (v) {
-            setState(() => _includeJpegs = v ?? true);
-            // Instant re-filter of the cached scan (e.g. RAW+JPEG cards).
-            _rebuildPlan();
-          },
-          label: 'Include JPEGs (uncheck to import RAW only)',
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        const DialogSection('Organise'),
-        NameBuilder(
-          initial: _naming,
-          savedPresets: _savedNaming,
-          onChanged: (p) {
-            setState(() => _naming = p);
-            // Changing the pattern can add/remove {camera}, which drives whether
-            // the scan must read EXIF — so re-run the (cached) refresh.
-            unawaited(_refresh());
-          },
-          onSavePreset: _saveNaming,
-          onDeletePreset: _deleteNaming,
-          sampleShoot: _shoot.text.trim().isEmpty
-              ? 'Shoot'
-              : _shoot.text.trim(),
-        ),
-        // Only shown when the pattern actually uses the Job-name element, so it
-        // never sits there confusingly on a "Keep filenames"-style scheme.
-        if (_template.pattern.contains('{shoot}')) ...[
-          const SizedBox(height: AppSpacing.sm),
-          TextField(
-            controller: _shoot,
-            // Pure, instant rebuild from the cached scan — no re-scan/flicker.
-            onChanged: (_) => _rebuildPlan(),
-            decoration: dialogInputDecoration(
-              'Job name (fills the Job-name element above)',
+        const SizedBox(height: AppSpacing.xs),
+        // File-type filters belong to the source (they narrow what's taken
+        // from the card), so they sit here — not under Destination.
+        Row(
+          children: [
+            Expanded(
+              child: Tooltip(
+                message: 'Uncheck to import RAW files only',
+                child: DialogCheckbox(
+                  value: _includeJpegs,
+                  onChanged: (v) {
+                    setState(() => _includeJpegs = v ?? true);
+                    // Instant re-filter of the cached scan (RAW+JPEG cards).
+                    _rebuildPlan();
+                  },
+                  label: 'Include JPEGs',
+                ),
+              ),
             ),
-            style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
-          ),
-        ],
-        const SizedBox(height: AppSpacing.sm),
-        DialogCheckbox(
-          value: _verify,
-          onChanged: (v) => setState(() => _verify = v ?? true),
-          label: 'Verify each copy by checksum (recommended)',
+            Expanded(
+              child: Tooltip(
+                message: 'Videos are copied alongside the photos',
+                child: DialogCheckbox(
+                  value: _includeVideos,
+                  onChanged: (v) {
+                    setState(() => _includeVideos = v ?? true);
+                    // Instant: videos were already scanned, this re-filters.
+                    _rebuildPlan();
+                  },
+                  label: 'Include videos',
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: AppSpacing.lg),
-        const DialogSection('Preview'),
-        _preview(),
       ],
+    );
+  }
+
+  Widget _destinationCard() => DialogCard(
+    title: 'Destination',
+    children: [
+      DialogPathRow(
+        path: _dest,
+        onPick: () => _pickDest(backup: false),
+        hint: 'Choose where the photos are copied…',
+      ),
+      const SizedBox(height: AppSpacing.xs),
+      DialogCheckbox(
+        value: _verify,
+        onChanged: (v) => setState(() => _verify = v ?? true),
+        label: 'Verify each copy by checksum (recommended)',
+      ),
+      DialogCheckbox(
+        value: _backup,
+        onChanged: (v) => setState(() => _backup = v ?? false),
+        label: 'Also copy to a backup destination (verified, one pass)',
+      ),
+      if (_backup)
+        DialogPathRow(
+          path: _dest2,
+          onPick: () => _pickDest(backup: true),
+          hint: 'Choose backup…',
+        ),
+    ],
+  );
+
+  Widget _namingCard() => DialogCard(
+    title: 'Naming',
+    children: [
+      NameBuilder(
+        initial: _naming,
+        savedPresets: _savedNaming,
+        onChanged: (p) {
+          setState(() => _naming = p);
+          // Changing the pattern can add/remove {camera}, which drives whether
+          // the scan must read EXIF — so re-run the (cached) refresh.
+          unawaited(_refresh());
+        },
+        onSavePreset: _saveNaming,
+        onDeletePreset: _deleteNaming,
+        sampleShoot: _shoot.text.trim().isEmpty ? 'Shoot' : _shoot.text.trim(),
+        // The builder renders the Job-name row right under the preset picker
+        // (it's the one thing typed on a routine import) and hides the full
+        // pattern editor behind its "Customise…" disclosure.
+        shootController: _shoot,
+        // Pure, instant rebuild from the cached scan — no re-scan/flicker.
+        onShootChanged: (_) => _rebuildPlan(),
+        sampleInput: _sampleInput,
+      ),
+    ],
+  );
+
+  /// The first file the plan would copy, as the naming example's input — so
+  /// the "Example" line shows a real upcoming path, not a synthetic one.
+  RenameInput? get _sampleInput {
+    final first = excludeCaptureDates(
+      _visibleSources,
+      _excludedDates,
+    ).firstOrNull;
+    if (first == null) return null;
+    final shoot = _shoot.text.trim();
+    return RenameInput(
+      capturedAt: first.capturedAt,
+      originalName: p.basename(first.path),
+      sequence: 1,
+      camera: first.camera,
+      shoot: shoot.isEmpty ? 'Shoot' : shoot,
     );
   }
 
@@ -512,45 +565,111 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     );
   }
 
+  /// Excludes every capture date except the most recent one — the everyday
+  /// case: a card still carrying older shoots, but only today's is wanted.
+  void _selectNewestDayOnly() {
+    final days = _dateCounts.map((e) => e.key).toList();
+    if (days.isEmpty) return;
+    final newest = days.reduce((a, b) => a.isAfter(b) ? a : b);
+    setState(() {
+      _excludedDates
+        ..clear()
+        ..addAll(days.where((d) => d != newest));
+    });
+    _rebuildPlan();
+  }
+
   /// A day-per-chip breakdown of the scan, so a card carrying more than one
   /// shoot's leftovers (an old day mixed in with today's) can be narrowed down
   /// before import — tapping a day excludes/re-includes it. Only shown when
-  /// the scan actually found more than one distinct capture date.
-  Widget _dateFilterRow() {
+  /// the scan actually found more than one distinct capture date. Chips are
+  /// grouped by year (cards routinely span several) and run newest-first,
+  /// since the recent shoot is almost always the one being imported.
+  Widget _dayFilter() {
+    final counts = _dateCounts.reversed.toList(); // newest first
+    final byYear = <int, List<MapEntry<DateTime, int>>>{};
+    for (final entry in counts) {
+      byYear.putIfAbsent(entry.key.year, () => []).add(entry);
+    }
+    final included = counts
+        .where((e) => !_excludedDates.contains(e.key))
+        .length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const Expanded(
+            Expanded(
               child: Text(
-                'This card has more than one day on it — '
-                'tap to include/exclude:',
-                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                'Days on this card — $included of ${counts.length} included',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                ),
               ),
             ),
+            _dateActionButton('Newest day', _selectNewestDayOnly),
             _dateActionButton(
-              'Select all',
+              'All',
               () => _setAllDatesIncluded(included: true),
             ),
             _dateActionButton(
-              'Clear',
+              'None',
               () => _setAllDatesIncluded(included: false),
             ),
           ],
         ),
         const SizedBox(height: AppSpacing.xs),
-        Wrap(
-          spacing: AppSpacing.xs,
-          runSpacing: AppSpacing.xs,
-          children: [
-            for (final entry in _dateCounts)
-              _DateChip(
-                label: '${_formatDay(entry.key)} · ${entry.value}',
-                selected: !_excludedDates.contains(entry.key),
-                onTap: () => _toggleDate(entry.key),
-              ),
-          ],
+        // Cap the chip area so a leftovers-packed card can't push the rest of
+        // the dialog away — it scrolls inside instead.
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 148),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final year in byYear.keys)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 40,
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 5),
+                            child: Text(
+                              '$year',
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Wrap(
+                            spacing: AppSpacing.xs,
+                            runSpacing: AppSpacing.xs,
+                            children: [
+                              for (final entry in byYear[year]!)
+                                _DateChip(
+                                  label:
+                                      '${_formatDay(entry.key)} · '
+                                      '${entry.value}',
+                                  selected: !_excludedDates.contains(entry.key),
+                                  onTap: () => _toggleDate(entry.key),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ],
     );
@@ -567,7 +686,12 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       ),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       foregroundColor: AppColors.accent,
-      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      // Derived from the theme so the button keeps the app's typography (a
+      // bare TextStyle would fall back to the platform default font).
+      textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+      ),
     ),
     child: Text(label),
   );
@@ -590,93 +714,58 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     return date;
   }
 
-  Widget _preview() {
+  /// The source card's scan feedback line: whole-drive notice, spinner, error,
+  /// or "nothing to import" — null when the scan produced a non-empty plan
+  /// (the footer then carries the count/size summary).
+  Widget? _scanStatus() {
     if (_wholeDrive) {
       return const Text(
         'That looks like a whole drive. Choose a folder on it with Browse… '
         '(or insert a camera card) to scan.',
-        style: TextStyle(color: AppColors.textSecondary),
+        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
       );
     }
     if (_scanning) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            SizedBox(width: AppSpacing.sm),
-            Text(
-              'Scanning…',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ],
-        ),
+      return const Row(
+        children: [
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: AppSpacing.sm),
+          Text(
+            'Scanning…',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+        ],
       );
     }
     if (_scanError != null) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-        child: Text(
-          "Couldn't scan this source: $_scanError",
-          style: const TextStyle(color: AppColors.labelYellow),
-        ),
+      return Text(
+        "Couldn't scan this source: $_scanError",
+        style: const TextStyle(color: AppColors.labelYellow, fontSize: 13),
+      );
+    }
+    if (_source == null) {
+      return const Text(
+        'Select a card or folder to scan.',
+        style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
       );
     }
     final plan = _plan;
     if (plan == null || plan.items.isEmpty) {
-      return const Text(
-        'No photos found in the source.',
-        style: TextStyle(color: AppColors.textSecondary),
+      // Distinguish a genuinely empty source from one the filters emptied, so
+      // the fix (re-include a day / file type) is obvious.
+      final scannedSomething = (_sources ?? const []).isNotEmpty;
+      return Text(
+        scannedSomething
+            ? 'Everything is filtered out — re-include a day or file type.'
+            : 'No photos found in the source.',
+        style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
       );
     }
-    final sample = plan.items.take(6).toList();
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.bgBase,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '${plan.items.length} photos · ${_formatBytes(plan.totalBytes)}',
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          for (final item in sample)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 1),
-              child: Text(
-                '${p.basename(item.source)}  →  ${item.relPath}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 12,
-                ),
-              ),
-            ),
-          if (plan.items.length > sample.length)
-            Text(
-              '…and ${plan.items.length - sample.length} more',
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-              ),
-            ),
-        ],
-      ),
-    );
+    return null;
   }
 
   Widget _progressView() {
@@ -792,9 +881,10 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
         ],
       );
     }
+    final count = _plan?.items.length ?? 0;
     return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
       children: [
+        Expanded(child: _footerStatus()),
         TextButton(
           // During a run, Cancel stops after the current file; otherwise it
           // closes the dialog.
@@ -806,9 +896,58 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
         const SizedBox(width: AppSpacing.sm),
         FilledButton(
           onPressed: _canRun ? _run : null,
-          child: Text(_running ? 'Importing…' : 'Import'),
+          child: Text(
+            _running
+                ? 'Importing…'
+                : count > 0
+                ? 'Import $count photo${count == 1 ? '' : 's'}'
+                : 'Import',
+          ),
         ),
       ],
+    );
+  }
+
+  /// The footer's left half: the running total once a plan exists, plus —
+  /// crucially — *why* Import is still disabled (missing destination, …), so
+  /// a greyed-out button never leaves the user guessing.
+  Widget _footerStatus() {
+    final plan = _plan;
+    final hasPlan = plan != null && plan.items.isNotEmpty;
+    String? reason;
+    if (!_running) {
+      if (_source == null) {
+        reason = 'Select a source above';
+      } else if (hasPlan && _dest == null) {
+        reason = 'Choose a destination to import';
+      } else if (hasPlan && _backup && _dest2 == null) {
+        reason = 'Choose the backup destination';
+      }
+    }
+    return Text.rich(
+      TextSpan(
+        children: [
+          if (hasPlan)
+            TextSpan(
+              text:
+                  '${plan.items.length} photos · '
+                  '${_formatBytes(plan.totalBytes)}',
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          if (hasPlan && reason != null) const TextSpan(text: '   —   '),
+          if (reason != null)
+            TextSpan(
+              text: reason,
+              style: const TextStyle(color: AppColors.textSecondary),
+            ),
+        ],
+      ),
+      style: const TextStyle(fontSize: 13),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
     );
   }
 
@@ -825,9 +964,13 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
   }
 }
 
-/// A small toggle chip for one capture date in the import dialog's date
-/// filter — mirrors the cull grid's filter-bar chip styling (selected =
-/// filled accent).
+/// A small toggle chip for one capture date in the import dialog's day
+/// filter. Included days show a check + accent border on the elevated fill;
+/// excluded days fall back to a quiet outline. Deliberately *not* the filter
+/// bar's solid-accent style: with dozens of days on a real card, a wall of
+/// filled accent chips overwhelms the dialog and stops reading as toggles.
+/// The check icon keeps its slot when unchecked (transparent) so chips don't
+/// change width — and the Wrap doesn't reflow — when toggled.
 class _DateChip extends StatelessWidget {
   const _DateChip({
     required this.label,
@@ -841,23 +984,42 @@ class _DateChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-    color: selected ? AppColors.accent : AppColors.surfaceElevated,
+    color: selected ? AppColors.surfaceElevated : Colors.transparent,
     borderRadius: BorderRadius.circular(AppRadius.sm),
     child: InkWell(
       borderRadius: BorderRadius.circular(AppRadius.sm),
       onTap: onTap,
-      child: Padding(
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          border: Border.all(
+            color: selected ? AppColors.accent : AppColors.border,
+          ),
+        ),
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.sm,
-          vertical: 4,
+          vertical: 3,
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected ? Colors.white : AppColors.textSecondary,
-            fontWeight: FontWeight.w600,
-            fontSize: 12,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.check,
+              size: 12,
+              color: selected ? AppColors.accent : Colors.transparent,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ],
         ),
       ),
     ),

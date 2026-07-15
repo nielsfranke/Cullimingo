@@ -5,6 +5,18 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 
 ## Unreleased
 
+### Changed
+- **Import dialog redesigned:** the form now reads as three cards along the
+  natural flow — Source, Destination, Naming — matching the export dialog.
+  Days on the card are grouped by year (multi-year cards were ambiguous
+  before), run newest-first, and gained a "Newest day" quick action; the
+  chips themselves are calmer check-toggles instead of a wall of solid pink.
+  The Job-name field moved up right under the naming preset, and the full
+  pattern editor is tucked behind a "Customise…" disclosure. A new footer
+  always shows the running total ("104 photos · 20 MB") and — when Import is
+  greyed out — the reason ("Choose a destination to import"). The naming
+  example now previews the first file that will actually be copied.
+
 ### Fixed
 - **Inspector showed no EXIF for Fuji `.RAF`:** the metadata inspector's
   detail reader only understood JPEG/TIFF-style headers, so opaque RAW

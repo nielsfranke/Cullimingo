@@ -127,6 +127,61 @@ class DialogNavItem extends StatelessWidget {
   }
 }
 
+/// A quiet expand/collapse header row for a dialog's advanced sub-section
+/// (e.g. the naming builder's pattern editor). Progressive disclosure: the
+/// heavy controls stay hidden until the user asks for them, so the common
+/// path stays short.
+class DialogDisclosure extends StatelessWidget {
+  /// Creates the disclosure row.
+  const DialogDisclosure({
+    required this.label,
+    required this.open,
+    required this.onToggle,
+    super.key,
+  });
+
+  /// The row's text (e.g. `Customise filename & folders…`).
+  final String label;
+
+  /// Whether the section below is currently expanded.
+  final bool open;
+
+  /// Called when the row is clicked.
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onToggle,
+    borderRadius: BorderRadius.circular(AppRadius.sm),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            open ? Icons.expand_more : Icons.chevron_right,
+            size: 16,
+            color: AppColors.textSecondary,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 /// Wraps a control (dropdown, slider row, …) in an elevated, bordered box so it
 /// reads as a control rather than flat text on the panel.
 Widget dialogBox(Widget child) => Container(
@@ -176,7 +231,13 @@ class DialogDropdown<T> extends StatelessWidget {
       isExpanded: true,
       underline: const SizedBox.shrink(),
       dropdownColor: AppColors.surfaceElevated,
-      style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
+      // Derived from the theme (not a bare TextStyle) so the dropdown keeps
+      // the app's typography — a bare style would fall back to the platform
+      // default font.
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+        color: AppColors.textPrimary,
+        fontSize: 14,
+      ),
       hint: hint == null ? null : Text(hint!),
       items: items,
       onChanged: onChanged,

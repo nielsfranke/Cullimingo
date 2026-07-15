@@ -102,11 +102,43 @@ void main() {
       ),
     );
 
+    // `{origname}` matches the Keep-filenames preset, so the editor starts
+    // collapsed — open it first.
+    await tester.tap(find.textContaining('Customise'));
+    await tester.pump();
+
     // The first TextField is the filename field; typing replaces its content.
     await tester.enterText(find.byType(TextField).first, '{origname}_v2');
     await tester.pump();
 
     expect(emitted?.filePattern, '{origname}_v2');
+  });
+
+  testWidgets('a preset scheme starts collapsed; the disclosure opens it', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(initial: NamePreset.builtIns.first, onChanged: (_) {}),
+    );
+
+    // A known preset needs no pattern editing — the editor is folded away.
+    expect(find.text('Filename'), findsNothing);
+    expect(find.text('ELEMENTS'), findsNothing);
+
+    await tester.tap(find.text('Customise filename & folders'));
+    await tester.pump();
+
+    expect(find.text('Filename'), findsOneWidget);
+    expect(find.text('ELEMENTS'), findsOneWidget);
+  });
+
+  testWidgets('a custom scheme starts with the pattern editor open', (
+    tester,
+  ) async {
+    await tester.pumpWidget(host(initial: empty, onChanged: (_) {}));
+
+    expect(find.text('Filename'), findsOneWidget);
+    expect(find.text('ELEMENTS'), findsOneWidget);
   });
 
   testWidgets('selecting a preset loads its scheme and shows the example', (

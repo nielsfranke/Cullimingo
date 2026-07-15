@@ -547,7 +547,8 @@ class _ExportDialogState extends State<_ExportDialog> {
     ],
   );
 
-  /// The Naming card: the pattern builder plus the job-name field.
+  /// The Naming card: the pattern builder, which renders the job-name row
+  /// inline (right under the preset picker, only while the pattern uses it).
   Widget _namingCard() => DialogCard(
     title: 'Naming',
     children: [
@@ -558,13 +559,8 @@ class _ExportDialogState extends State<_ExportDialog> {
         onSavePreset: _saveNaming,
         onDeletePreset: _deleteNaming,
         sampleShoot: _shoot.text.trim().isEmpty ? 'Shoot' : _shoot.text.trim(),
-      ),
-      const SizedBox(height: AppSpacing.sm),
-      TextField(
-        controller: _shoot,
-        decoration: dialogInputDecoration('Job name (the Job-name element)'),
-        style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
-        onChanged: (_) => setState(() {}),
+        shootController: _shoot,
+        onShootChanged: (_) => setState(() {}),
       ),
     ],
   );

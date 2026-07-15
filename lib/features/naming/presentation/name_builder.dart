@@ -24,6 +24,9 @@ class NameBuilder extends StatefulWidget {
     required this.onDeletePreset,
     this.sampleShoot = 'Shoot',
     this.showFolder = true,
+    this.shootController,
+    this.onShootChanged,
+    this.sampleInput,
     super.key,
   });
 
@@ -49,6 +52,20 @@ class NameBuilder extends StatefulWidget {
   /// the file's folder, so it hides this and uses only the filename pattern.
   final bool showFolder;
 
+  /// When set, the builder renders a **Job name** row right under the preset
+  /// picker — but only while the current pattern actually uses the Job-name
+  /// element, so the field never sits there without effect. The host keeps
+  /// owning the controller (it drives the host's plan/preview).
+  final TextEditingController? shootController;
+
+  /// Called on every Job-name keystroke (host rebuilds its preview).
+  final ValueChanged<String>? onShootChanged;
+
+  /// When set, the live example renders this real file instead of the built-in
+  /// synthetic sample — so the host can show the first file that will actually
+  /// be imported/exported.
+  final RenameInput? sampleInput;
+
   @override
   State<NameBuilder> createState() => _NameBuilderState();
 }
@@ -71,13 +88,20 @@ class _NameBuilderState extends State<NameBuilder> {
   /// The field a palette insert targets (the last one the user touched).
   _Field _active = _Field.file;
 
-  RenameInput get _sample => RenameInput(
-    capturedAt: DateTime(2026, 7, 2, 14, 30, 5),
-    originalName: 'DSC0001.ARW',
-    sequence: 1,
-    camera: 'ILCE-7M4',
-    shoot: widget.sampleShoot,
-  );
+  /// Whether the pattern editor (Filename/Folder fields + element palette) is
+  /// expanded. Collapsed by default — most sessions just pick a preset and
+  /// type a job name; the editor opens automatically for a custom scheme.
+  bool _customiseOpen = false;
+
+  RenameInput get _sample =>
+      widget.sampleInput ??
+      RenameInput(
+        capturedAt: DateTime(2026, 7, 2, 14, 30, 5),
+        originalName: 'DSC0001.ARW',
+        sequence: 1,
+        camera: 'ILCE-7M4',
+        shoot: widget.sampleShoot,
+      );
 
   List<NamePreset> get _presets => [
     ...NamePreset.builtIns,
@@ -94,6 +118,24 @@ class _NameBuilderState extends State<NameBuilder> {
       if (_folderFocus.hasFocus) _active = _Field.folder;
     });
     _loadFrom(widget.initial);
+    // A custom scheme has no preset to stand for it — show its fields.
+    _customiseOpen = _selectedName == null;
+  }
+
+  @override
+  void didUpdateWidget(NameBuilder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Adopt an externally-changed scheme (e.g. the host restoring the last
+    // import's preset from settings after its async load). Guarded so the
+    // host echoing our own onChanged back as `initial` never resets the
+    // fields (and the caret) mid-typing: by then the editor already matches.
+    if (!oldWidget.initial.sameSchemeAs(widget.initial) &&
+        !widget.initial.sameSchemeAs(_current(name: ''))) {
+      setState(() {
+        _loadFrom(widget.initial);
+        _customiseOpen = _customiseOpen || _selectedName == null;
+      });
+    }
   }
 
   @override
@@ -169,38 +211,82 @@ class _NameBuilderState extends State<NameBuilder> {
     return path.isEmpty ? null : path;
   }
 
+  /// Whether the current pattern uses the Job-name element (drives the
+  /// Job-name row's visibility).
+  bool get _usesShoot =>
+      _current(name: '').toTemplate().pattern.contains('{shoot}');
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _presetRow(),
-        const SizedBox(height: AppSpacing.sm),
-        _fieldRow(
-          'Filename',
-          _fileCtrl,
-          _fileFocus,
-          _Field.file,
-          'Type here, or insert elements below…',
-        ),
-        if (widget.showFolder) ...[
-          const SizedBox(height: AppSpacing.xs),
-          _fieldRow(
-            'Folder',
-            _folderCtrl,
-            _folderFocus,
-            _Field.folder,
-            'Optional sub-folders, e.g. {YYYY}/{MM}',
-          ),
+        if (widget.shootController != null && _usesShoot) ...[
+          const SizedBox(height: AppSpacing.sm),
+          _shootRow(),
         ],
         const SizedBox(height: AppSpacing.sm),
         _exampleLine(),
-        const SizedBox(height: AppSpacing.md),
-        const DialogSection('Elements'),
-        _palette(),
+        const SizedBox(height: AppSpacing.xs),
+        DialogDisclosure(
+          label: widget.showFolder
+              ? 'Customise filename & folders'
+              : 'Customise filename',
+          open: _customiseOpen,
+          onToggle: () => setState(() => _customiseOpen = !_customiseOpen),
+        ),
+        if (_customiseOpen) ...[
+          const SizedBox(height: AppSpacing.xs),
+          _fieldRow(
+            'Filename',
+            _fileCtrl,
+            _fileFocus,
+            _Field.file,
+            'Type here, or insert elements below…',
+          ),
+          if (widget.showFolder) ...[
+            const SizedBox(height: AppSpacing.xs),
+            _fieldRow(
+              'Folder',
+              _folderCtrl,
+              _folderFocus,
+              _Field.folder,
+              'Optional sub-folders, e.g. {YYYY}/{MM}',
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          const DialogSection('Elements'),
+          _palette(),
+        ],
       ],
     );
   }
+
+  /// The Job-name input, aligned with the Filename/Folder/Example rows. Shown
+  /// right under the preset picker: it's the one thing a user types on a
+  /// routine import, so it must not hide below the pattern editor.
+  Widget _shootRow() => Row(
+    children: [
+      const SizedBox(
+        width: 64,
+        child: Text(
+          'Job name',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+        ),
+      ),
+      Expanded(
+        child: TextField(
+          controller: widget.shootController,
+          onChanged: widget.onShootChanged,
+          decoration: dialogInputDecoration(
+            'e.g. Wedding-Anna (used by the Job-name element)',
+          ).copyWith(isDense: true),
+          style: const TextStyle(color: AppColors.textPrimary, fontSize: 13),
+        ),
+      ),
+    ],
+  );
 
   Widget _presetRow() => Row(
     children: [
