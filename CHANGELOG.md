@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.2.8 — 2026-07-15
 
 ### Changed
 - **Import dialog redesigned:** the form now reads as three cards along the
