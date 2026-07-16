@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cullimingo/features/metadata/data/xmp_codec.dart';
+import 'package:cullimingo/features/metadata/data/xmp_merge.dart';
 import 'package:cullimingo/features/metadata/domain/xmp_data.dart';
 import 'package:path/path.dart' as p;
 
@@ -24,9 +25,35 @@ Future<XmpData?> readSidecar(String photoPath) async {
   }
 }
 
-/// Writes [data] to [photoPath]'s sidecar.
-Future<void> writeSidecar(String photoPath, XmpData data) =>
-    File(sidecarPath(photoPath)).writeAsString(encodeXmp(data), flush: true);
+/// Writes [data] to [photoPath]'s sidecar. An existing sidecar is *merged*
+/// ([mergeXmp]): only Cullimingo-owned properties are replaced, so Lightroom
+/// develop settings, GPS and other foreign tags survive a rating keystroke.
+/// A missing or unparseable sidecar gets a fresh packet.
+Future<void> writeSidecar(String photoPath, XmpData data) async {
+  final file = File(sidecarPath(photoPath));
+  String packet;
+  try {
+    packet = mergeXmp(await file.readAsString(), data);
+  } on Object {
+    // No sidecar yet, or one we can't parse (readers already treat that as
+    // "no marks") — start a fresh packet rather than failing the write.
+    packet = encodeXmp(data);
+  }
+  // Write-to-tmp + atomic rename: the sidecar is the durable source of truth,
+  // so a crash mid-write must never leave a truncated packet behind.
+  final tmp = File('${file.path}.culltmp');
+  try {
+    await tmp.writeAsString(packet, flush: true);
+    await tmp.rename(file.path);
+  } on Object {
+    try {
+      await tmp.delete();
+    } on Object {
+      // Best effort — a stray tmp next to the sidecar is harmless.
+    }
+    rethrow; // callers count sidecar-write failures
+  }
+}
 
 /// The sidecar's last-modified time for [photoPath], truncated to whole seconds
 /// (drift persists `DateTime` as unix seconds, so an un-truncated mtime would

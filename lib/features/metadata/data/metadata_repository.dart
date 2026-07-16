@@ -186,6 +186,7 @@ class MetadataRepository {
       for (var i = 0; i < targets.length; i++) {
         final (xmp, mtime) = reads[i];
         if (xmp == null) continue;
+        final turns = _turnsFromSidecar(targets[i].orientation, xmp);
         b.update(
           db.photos,
           PhotosCompanion(
@@ -208,11 +209,24 @@ class MetadataRepository {
             cropAngle: Value(xmp.crop?.angle),
             // Adopt a manual bracket-stack decision the sidecar carries.
             stackId: Value(xmp.stackId),
+            // Adopt an external rotation (see [_turnsFromSidecar]).
+            userRotation: turns == null ? const Value.absent() : Value(turns),
           ),
           where: (t) => t.id.equals(targets[i].id),
         );
       }
     });
+  }
+
+  /// The `userRotation` to adopt from a sidecar's `tiff:Orientation`, or null
+  /// to leave the stored value untouched: an absent orientation makes no
+  /// statement (both "never rotated" and "rotated back to normal" stay
+  /// silent), and a mirror-mismatched value can't be expressed as quarter
+  /// turns on top of the file's baked orientation.
+  static int? _turnsFromSidecar(int baseOrientation, XmpData xmp) {
+    final target = xmp.orientation;
+    if (target == null) return null;
+    return quarterTurnsBetween(baseOrientation, target);
   }
 
   /// Re-reads sidecars from disk for [importId] and reconciles them with the DB
@@ -253,7 +267,7 @@ class MetadataRepository {
 
       if (!localChanged) {
         // Only the sidecar moved → adopt it (last-writer-wins, trivially).
-        await _adoptSidecar(photo.id, photo.path, xmp, mtime: fileMtime);
+        await _adoptSidecar(photo, xmp, mtime: fileMtime);
         updated++;
         continue;
       }
@@ -261,13 +275,7 @@ class MetadataRepository {
       // Both sides changed since the last sync → conflict; newer mtime wins.
       conflicts++;
       if (fileMtime.isAfter(photo.marksMtime!)) {
-        await _adoptSidecar(
-          photo.id,
-          photo.path,
-          xmp,
-          mtime: fileMtime,
-          conflict: true,
-        );
+        await _adoptSidecar(photo, xmp, mtime: fileMtime, conflict: true);
         updated++;
       } else {
         // Local marks are newer: keep them, push back to the sidecar, but flag
@@ -282,13 +290,13 @@ class MetadataRepository {
   }
 
   Future<void> _adoptSidecar(
-    int photoId,
-    String path,
+    Photo photo,
     XmpData xmp, {
     DateTime? mtime,
     bool conflict = false,
   }) async {
-    await (db.update(db.photos)..where((t) => t.id.equals(photoId))).write(
+    final turns = _turnsFromSidecar(photo.orientation, xmp);
+    await (db.update(db.photos)..where((t) => t.id.equals(photo.id))).write(
       PhotosCompanion(
         rating: Value(xmp.rating),
         colorLabel: Value(xmp.color),
@@ -296,7 +304,7 @@ class MetadataRepository {
         keywords: Value(xmp.keywords),
         iptc: Value(xmp.iptc),
         hasXmp: const Value(true),
-        xmpMtime: Value(mtime ?? await _sidecarMtime(path)),
+        xmpMtime: Value(mtime ?? await _sidecarMtime(photo.path)),
         // The DB now matches the sidecar, so there is no pending local change.
         marksMtime: const Value(null),
         xmpConflict: Value(conflict),
@@ -307,6 +315,8 @@ class MetadataRepository {
         cropBottom: Value(xmp.crop?.bottom),
         cropAngle: Value(xmp.crop?.angle),
         stackId: Value(xmp.stackId),
+        // Adopt an external rotation (see [_turnsFromSidecar]).
+        userRotation: turns == null ? const Value.absent() : Value(turns),
       ),
     );
   }

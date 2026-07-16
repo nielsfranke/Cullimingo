@@ -490,15 +490,19 @@ String _seq(String prop, String value) =>
 /// read from either an attribute or an element (Lightroom/Bridge write elements).
 XmpData decodeXmp(String source) {
   final doc = XmlDocument.parse(source);
-  final desc = doc.descendants
+  final descs = doc.descendants
       .whereType<XmlElement>()
       .where((e) => e.name.local == 'Description')
-      .firstOrNull;
-  if (desc == null) return const XmpData();
+      .toList();
+  if (descs.isEmpty) return const XmpData();
 
+  // Attribute lookup across *all* descriptions — exiftool splits the packet
+  // into one rdf:Description per namespace, so a mark can sit on any of them.
   String? attr(String local) {
-    for (final a in desc.attributes) {
-      if (a.name.local == local) return a.value;
+    for (final desc in descs) {
+      for (final a in desc.attributes) {
+        if (a.name.local == local) return a.value;
+      }
     }
     return null;
   }
@@ -527,6 +531,19 @@ XmpData decodeXmp(String source) {
       .whereType<XmlElement>()
       .where((e) => e.name.local == local && !inStructuredArray(e))
       .firstOrNull;
+
+  // Like [simple], but preserves "absent" (null) — an attribute wins (even an
+  // empty one), else a leaf element's text, else null. The cull marks need
+  // this: attribute-only reads silently dropped ratings/labels from
+  // element-form sidecars (exiftool, digiKam), and StackId's null/""/id
+  // trichotomy must survive the round-trip.
+  String? simpleOrNull(String local) {
+    final a = attr(local);
+    if (a != null) return a;
+    final el = element(local);
+    if (el != null && el.childElements.isEmpty) return el.innerText.trim();
+    return null;
+  }
 
   // A plain string property: attribute form first, else a leaf element's text.
   String simple(String local) {
@@ -723,16 +740,16 @@ XmpData decodeXmp(String source) {
   );
 
   return XmpData(
-    rating: int.tryParse(attr('Rating') ?? '') ?? 0,
-    color: _labelFromXmp(attr('Label')),
-    flag: _flagFromXmp(attr('flag')),
+    rating: int.tryParse(simpleOrNull('Rating') ?? '') ?? 0,
+    color: _labelFromXmp(simpleOrNull('Label')),
+    flag: _flagFromXmp(simpleOrNull('flag')),
     keywords: lisUnder('subject'),
     iptc: iptc,
     dateCreated: DateTime.tryParse(simple('DateCreated')),
-    orientation: _orientationFromXmp(attr('Orientation')),
-    crop: _cropFromXmp(attr),
+    orientation: _orientationFromXmp(simpleOrNull('Orientation')),
+    crop: _cropFromXmp(simpleOrNull),
     // Preserves the null (absent) / "" (unstacked) / id (stacked) trichotomy.
-    stackId: attr('StackId'),
+    stackId: simpleOrNull('StackId'),
   );
 }
 

@@ -35,3 +35,14 @@ int rotateOrientation(int exif, int quarterTurnsCW) {
 /// Normalises a quarter-turn count to the 0–3 range (handles negatives from a
 /// counter-clockwise turn). The value stored in `photos.userRotation`.
 int normalizeQuarterTurns(int quarterTurnsCW) => ((quarterTurnsCW % 4) + 4) % 4;
+
+/// The clockwise quarter-turn count (0–3) that rotates [fromExif] into
+/// [toExif], or null when no pure rotation connects them (one is mirrored,
+/// the other isn't). Used to adopt an external sidecar's `tiff:Orientation`
+/// back into `photos.userRotation` on top of the file's baked orientation.
+int? quarterTurnsBetween(int fromExif, int toExif) {
+  for (var t = 0; t < 4; t++) {
+    if (rotateOrientation(fromExif, t) == toExif) return t;
+  }
+  return null;
+}

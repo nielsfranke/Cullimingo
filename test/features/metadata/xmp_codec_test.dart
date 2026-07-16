@@ -616,6 +616,29 @@ void main() {
       expect(decodeXmp(xml).keywords, ['news']);
     });
 
+    test('reads cull marks written in element form (exiftool/digiKam)', () {
+      // exiftool and digiKam write the marks as child elements, not
+      // attributes — the attribute-only read used to drop exactly these.
+      const xml = '''
+<x:xmpmeta xmlns:x="adobe:ns:meta/">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
+    xmlns:tiff="http://ns.adobe.com/tiff/1.0/">
+   <xmp:Rating>4</xmp:Rating>
+   <xmp:Label>Blue</xmp:Label>
+   <tiff:Orientation>6</tiff:Orientation>
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>''';
+      final data = decodeXmp(xml);
+      expect(data.rating, 4);
+      expect(data.color, ColorLabel.blue);
+      expect(data.orientation, 6);
+      // Absent StackId stays null (not the empty string) in element form too.
+      expect(data.stackId, isNull);
+    });
+
     test('a LocationShown-only city never leaks into the flat City', () {
       // A payload whose ONLY location data is a LocationShown row: reading it
       // back must not invent a flat city (the element fallback used to grab
