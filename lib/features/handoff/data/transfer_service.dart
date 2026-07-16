@@ -176,15 +176,21 @@ Stream<TransferProgress> runTransfer({
           verify: verify,
         );
         if (result.ok && item.sidecar != null && !stopped) {
-          await copier(
+          final sidecarResult = await copier(
             source: item.sidecar!.source,
             destinations: [p.join(destinationRoot, item.sidecar!.relPath)],
             verify: verify,
           );
-          if (mode == TransferMode.move) _deleteQuietly(item.sidecar!.source);
+          // Only a verified sidecar copy may delete the source — a failed
+          // copy would otherwise erase the marks' one remaining home.
+          if (mode == TransferMode.move && sidecarResult.ok) {
+            _deleteQuietly(item.sidecar!.source);
+          }
         }
         // Delete the source only once its copy is safely at the destination.
-        if (result.ok && mode == TransferMode.move) {
+        // The !stopped guard matches the sidecar block above: a cancel between
+        // the two must not move the photo while stranding its sidecar.
+        if (result.ok && mode == TransferMode.move && !stopped) {
           _deleteQuietly(item.source);
         }
       }
