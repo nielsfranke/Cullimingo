@@ -192,7 +192,12 @@ mixin _CullGrid on _CullNotices {
     if (!_scroll.hasClients || _columns < 1) return;
     final row = index ~/ _columns;
     final rowTop = row * (_cellExtent + _cellSpacing);
-    final rowBottom = rowTop + _cellExtent;
+    // The GridView's top padding (AppSpacing.md) shifts every row down by one
+    // padding; without it the bottom check undershot by exactly that amount,
+    // leaving the focused row clipped at the viewport's bottom edge when
+    // navigating down. (rowTop deliberately stays padding-free: scrolling up
+    // to it leaves the same md gap above the row as the grid's own top.)
+    final rowBottom = rowTop + AppSpacing.md + _cellExtent;
     final offset = _scroll.offset;
     if (rowTop < offset) {
       unawaited(

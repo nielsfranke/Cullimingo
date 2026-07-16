@@ -75,10 +75,14 @@ class LibraryRepository {
   }
 
   /// Re-scans [root] for an already-open [importId]: inserts files that
-  /// appeared on disk, removes rows whose file is gone, and reads marks for the
-  /// new files only (existing photos keep their current DB marks, so a local
-  /// edit isn't clobbered). Returns `(added, removed)` counts for the UI.
-  Future<(int added, int removed)> refreshImport(
+  /// appeared on disk, removes rows whose file is gone, updates rows whose
+  /// file changed in place (new mtime — the row keeps its marks but follows
+  /// the file), and reads marks for the new files only (existing photos keep
+  /// their current DB marks, so a local edit isn't clobbered). Returns counts
+  /// for the UI plus the changed paths, so the caller can drop their stale
+  /// RAM previews (the disk cache self-invalidates via the mtime in its key;
+  /// the RAM tier is keyed by path alone).
+  Future<({int added, int removed, List<String> changedPaths})> refreshImport(
     int importId,
     String root, {
     bool recursive = true,
@@ -93,6 +97,7 @@ class LibraryRepository {
       db.photos,
     )..where((t) => t.importId.equals(importId))).get();
     final existingPaths = existing.map((row) => row.path).toSet();
+    final rowByPath = {for (final row in existing) row.path: row};
 
     // Files this import doesn't already own — new to disk *or* owned by another
     // import (e.g. a subfolder opened separately). Both get claimed to this
@@ -123,11 +128,39 @@ class LibraryRepository {
     if (removedPaths.isNotEmpty) {
       await db.deletePhotosByPaths(importId, removedPaths);
     }
+
+    // Files overwritten/edited in place: the on-disk mtime moved past the
+    // stored row (compared at whole seconds — drift persists seconds). The
+    // marks stay; mtime and EXIF-derived columns follow the new content.
+    int secs(DateTime t) => t.millisecondsSinceEpoch ~/ 1000;
+    final changedFiles = [
+      for (final f in files)
+        if (rowByPath[f.path] case final row?
+            when secs(f.mtime) != secs(row.mtime))
+          f,
+    ];
+    if (changedFiles.isNotEmpty) {
+      await db.batch((b) {
+        for (final f in changedFiles) {
+          b.update(
+            db.photos,
+            PhotosCompanion(mtime: Value(f.mtime)),
+            where: (t) => t.path.equals(f.path),
+          );
+        }
+      });
+      await _backfillExif(changedFiles.map((f) => f.path).toList());
+    }
+
     // Backfill exposure fields for rows imported before the v8 schema. Runs
     // once per legacy row (sentinel-guarded), so a reopened shoot picks up
     // bracket detection without a manual re-import.
     await _backfillExposure(existing);
-    return (newFiles.length, removedPaths.length);
+    return (
+      added: newFiles.length,
+      removed: removedPaths.length,
+      changedPaths: [for (final f in changedFiles) f.path],
+    );
   }
 
   /// Convenience that finds/creates and fully populates an import (tests).

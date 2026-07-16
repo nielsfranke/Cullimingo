@@ -5,6 +5,21 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 
 ## Unreleased
 
+### Fixed
+- **Externally changed photos now refresh their previews:** a file
+  overwritten in place (re-exported from an editor, re-copied from a card)
+  kept showing its old RAM-cached thumbnail until restart. Folder refresh
+  (⌘R and the background resync) now detects moved mtimes, updates the row's
+  EXIF-derived data and drops the stale previews.
+- **Import summary no longer claims "all ok" when a sidecar failed to copy:**
+  a photo whose `.xmp`/`.thm` companion errored now counts as failed, so
+  marks can't silently stay behind on the card.
+- **IPTC Date Created no longer turns into an explicit value on round-trip:**
+  the sidecar's capture-time fallback was read back as if the user had set
+  it; syncing now clears the echo so "empty = follows capture time" sticks.
+- **Keyboard navigation no longer clips the focused row at the bottom edge**
+  (the scroll math missed the grid's padding).
+
 ### Changed
 - **Marking got much cheaper in big folders:** burst, RAW+JPEG and bracket
   grouping no longer recompute on every rating/flag/colour keystroke (they

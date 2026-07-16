@@ -301,22 +301,28 @@ Stream<IngestProgress> runIngest({
       final dests = [
         for (final root in destinationRoots) p.join(root, item.relPath),
       ];
-      final result = await copier(
+      var result = await copier(
         source: item.source,
         destinations: dests,
         verify: verify,
       );
       // Carry the companions (sidecars) along once the media itself is safe.
+      // The item reports its *worst* outcome: a photo that landed but lost
+      // its `.xmp`/`.thm` used to count as fully ok — the summary said
+      // "all imported" while the marks quietly stayed behind on the card.
       if (result.ok) {
         for (final c in item.companions) {
           if (stopped) break;
-          await copier(
+          final companion = await copier(
             source: c.source,
             destinations: [
               for (final root in destinationRoots) p.join(root, c.relPath),
             ],
             verify: verify,
           );
+          if (result.ok && !companion.ok) {
+            result = CopyResult(source: c.source, outcome: companion.outcome);
+          }
         }
       }
       if (stopped) return;

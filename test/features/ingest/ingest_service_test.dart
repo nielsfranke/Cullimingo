@@ -238,6 +238,49 @@ void main() {
       );
     });
 
+    test('a failed companion copy surfaces in the summary', () async {
+      final media = File(p.join(tmp.path, 'IMG.arw'))..writeAsStringSync('raw');
+      final xmp = File(p.join(tmp.path, 'IMG.xmp'))
+        ..writeAsStringSync('<xmp/>');
+      final dest = p.join(tmp.path, 'out');
+      final plan = IngestPlan([
+        IngestItem(
+          source: media.path,
+          relPath: '2026/IMG.arw',
+          companions: [(source: xmp.path, relPath: '2026/IMG.xmp')],
+        ),
+      ]);
+
+      // The photo copies fine; the sidecar's copy errors. The item must not
+      // count as fully ok — the marks stayed behind on the card.
+      Future<CopyResult> failCompanions({
+        required String source,
+        required List<String> destinations,
+        bool verify = true,
+      }) async {
+        if (source == xmp.path) {
+          return CopyResult(source: source, outcome: CopyOutcome.error);
+        }
+        return verifiedCopy(
+          source: source,
+          destinations: destinations,
+          verify: verify,
+        );
+      }
+
+      final ticks = await runIngest(
+        plan: plan,
+        destinationRoots: [dest],
+        copier: failCompanions,
+      ).toList();
+
+      final summary = IngestSummary([for (final t in ticks) t.last]);
+      expect(summary.failed, 1);
+      expect(summary.allOk, isFalse);
+      // The media itself still landed.
+      expect(File(p.join(dest, '2026', 'IMG.arw')).readAsStringSync(), 'raw');
+    });
+
     test('summary counts a missing source as failed', () async {
       final plan = IngestPlan([
         IngestItem(source: p.join(tmp.path, 'gone.txt'), relPath: 'x.txt'),

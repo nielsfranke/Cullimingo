@@ -235,7 +235,10 @@ void main() {
       final (parentId, _) = await repo.findOrCreateImport(tmp.path);
       expect(await repo.watchImport(parentId).first, isEmpty);
 
-      final (added, removed) = await repo.refreshImport(parentId, tmp.path);
+      final (:added, :removed, changedPaths: _) = await repo.refreshImport(
+        parentId,
+        tmp.path,
+      );
       expect(added, 1);
       expect(removed, 0);
       expect(await repo.watchImport(parentId).first, hasLength(1));
@@ -253,7 +256,10 @@ void main() {
       writeJpeg('c.jpg');
       File(p.join(tmp.path, 'a.jpg')).deleteSync();
 
-      final (added, removed) = await repo.refreshImport(importId, tmp.path);
+      final (:added, :removed, changedPaths: _) = await repo.refreshImport(
+        importId,
+        tmp.path,
+      );
 
       expect(added, 1);
       expect(removed, 1);
@@ -273,7 +279,7 @@ void main() {
       await db.setRating(photo.id, 4);
 
       writeJpeg('new.jpg');
-      final (added, removed) = await metaRepo.refreshImport(
+      final (:added, :removed, changedPaths: _) = await metaRepo.refreshImport(
         importId,
         tmp.path,
       );

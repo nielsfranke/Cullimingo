@@ -428,36 +428,50 @@ mixin _CullWorkspace on _CullGrid {
     final importId = ref.read(currentImportProvider);
     final root = _openSourcePath;
     if (importId == null || root == null) return;
-    final (added, removed) = await ref
+    final result = await ref
         .read(libraryRepositoryProvider)
         .refreshImport(importId, root, recursive: _includeSubfolders);
+    _evictChangedPreviews(result.changedPaths);
     if (!mounted) return;
-    final upToDate = added == 0 && removed == 0;
+    final upToDate =
+        result.added == 0 && result.removed == 0 && result.changedPaths.isEmpty;
     _notify(
       upToDate
           ? 'Folder up to date'
-          : 'Refreshed: +$added / −$removed photo(s)',
+          : 'Refreshed: +${result.added} / −${result.removed} photo(s)'
+                '${result.changedPaths.isEmpty ? '' : ' · '
+                          '${result.changedPaths.length} changed'}',
       kind: upToDate ? NoticeKind.info : NoticeKind.success,
     );
+  }
+
+  /// Drops the RAM previews of externally changed files so the grid/loupe
+  /// re-decode — the RAM tier is keyed by path alone (the disk tier
+  /// self-invalidates via the mtime in its key).
+  void _evictChangedPreviews(List<String> paths) {
+    if (paths.isEmpty) return;
+    paths.forEach(ref.read(previewCacheProvider).evict);
   }
 
   Future<void> _backgroundResync(int importId, String root) async {
     // First re-scan for files added/removed on disk (recursively per the
     // toggle), so a reopened folder reflects its current contents — and an
     // empty import finally populates. Then sync marks edited externally.
-    final (added, removed) = await ref
+    final scan = await ref
         .read(libraryRepositoryProvider)
         .refreshImport(importId, root, recursive: _includeSubfolders);
+    if (mounted) _evictChangedPreviews(scan.changedPaths);
     final marks = await ref
         .read(metadataRepositoryProvider)
         .syncSidecarsFromDisk(importId);
     if (!mounted) return;
 
-    final scanChanged = added > 0 || removed > 0;
+    final scanChanged =
+        scan.added > 0 || scan.removed > 0 || scan.changedPaths.isNotEmpty;
     if (!scanChanged && marks.isEmpty) return; // nothing changed → stay quiet
 
     final parts = <String>[
-      if (scanChanged) '+$added / −$removed file(s)',
+      if (scanChanged) '+${scan.added} / −${scan.removed} file(s)',
       if (marks.updated > 0) '${marks.updated} mark(s) from disk',
     ];
     final conflicts = marks.conflicts > 0

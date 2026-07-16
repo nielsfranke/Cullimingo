@@ -2,6 +2,7 @@ import 'package:cullimingo/core/db/database.dart';
 import 'package:cullimingo/core/raw/orientation_math.dart';
 import 'package:cullimingo/features/metadata/data/marks_reader.dart';
 import 'package:cullimingo/features/metadata/data/xmp_sidecar.dart';
+import 'package:cullimingo/features/metadata/domain/iptc_core.dart';
 import 'package:cullimingo/features/metadata/domain/xmp_data.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart' show compute;
@@ -194,7 +195,7 @@ class MetadataRepository {
             colorLabel: Value(xmp.color),
             flag: Value(xmp.flag),
             keywords: Value(xmp.keywords),
-            iptc: Value(xmp.iptc),
+            iptc: Value(_adoptedIptc(targets[i], xmp)),
             hasXmp: const Value(true),
             xmpMtime: Value(mtime),
             // DB now matches the sidecar → no pending local change.
@@ -227,6 +228,24 @@ class MetadataRepository {
     final target = xmp.orientation;
     if (target == null) return null;
     return quarterTurnsBetween(baseOrientation, target);
+  }
+
+  /// [xmp]'s IPTC to adopt, with a Date Created that merely echoes the
+  /// capture time cleared back to "unset". The encoder writes the capture
+  /// time as `photoshop:DateCreated` fallback for C1/LR; adopting that echo
+  /// as an explicit value would flip the field's "empty = follows capture
+  /// time" semantics on the first round-trip. Compared at whole seconds
+  /// (drift persists seconds; the XMP value has second precision).
+  static IptcCore _adoptedIptc(Photo photo, XmpData xmp) {
+    final dateCreated = xmp.iptc.dateCreatedParsed;
+    final captured = photo.capturedAt;
+    if (dateCreated == null || captured == null) return xmp.iptc;
+    final echoesCapture =
+        dateCreated.millisecondsSinceEpoch ~/ 1000 ==
+        captured.millisecondsSinceEpoch ~/ 1000;
+    return echoesCapture
+        ? xmp.iptc.withOverrides({IptcField.dateCreated: ''})
+        : xmp.iptc;
   }
 
   /// Re-reads sidecars from disk for [importId] and reconciles them with the DB
@@ -323,7 +342,7 @@ class MetadataRepository {
                 colorLabel: Value(xmp.color),
                 flag: Value(xmp.flag),
                 keywords: Value(xmp.keywords),
-                iptc: Value(xmp.iptc),
+                iptc: Value(_adoptedIptc(photo, xmp)),
                 hasXmp: const Value(true),
                 xmpMtime: Value(mtime ?? await _sidecarMtime(photo.path)),
                 // DB now matches the sidecar → no pending local change.
