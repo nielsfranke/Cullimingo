@@ -5,7 +5,38 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 
 ## Unreleased
 
+### Changed
+- **Marking got much cheaper in big folders:** burst, RAW+JPEG and bracket
+  grouping no longer recompute on every rating/flag/colour keystroke (they
+  only depend on capture time, names and exposure data), and exports now run
+  through a small pool of long-lived render workers that load LibRaw once
+  instead of once per file — a 500-RAW export used to spawn 500 isolates.
+
 ### Fixed
+- **A mark made while a folder was still syncing can no longer be lost:** the
+  background sidecar resync ran from a snapshot, so rating a photo right
+  after opening a folder with externally-changed sidecars could be silently
+  overwritten by the disk state. The sync now only adopts a sidecar while the
+  photo has no fresh local change; otherwise it surfaces as a conflict.
+- **Import dialog: overlapping card scans could import the wrong files** — a
+  slow scan finishing after you'd switched sources landed its files under the
+  new source's name. Stale scans are now discarded.
+- **Settings save is no longer all-or-nothing:** one failing write (e.g. a
+  keychain error) used to silently skip every remaining setting, including a
+  just-picked performance preset. Each write now proceeds independently and
+  failures are logged.
+- **Cameras with an unset clock no longer sort to year 0:** the EXIF
+  placeholder date "0000:00:00" was parsed as a real (absurd) date, pushing
+  those photos to the top of the grid and into rename tokens.
+- Smaller fixes: a failed delivery connection no longer leaks a socket per
+  retry; "Move to Trash" no longer miscounts already-trashed files as
+  failures after a partial refusal; clearing the preview cache no longer
+  races photos still being decoded; the serial captioning walk can't
+  double-apply on a fast ⌘Enter, and a slow GPS lookup can't fill the wrong
+  photo's location fields; multiline IPTC fields (Instructions, AI prompt
+  info) survive the XMP round-trip; libvips' error buffer is cleared after
+  failed decodes (slow native-memory growth on folders with corrupt files);
+  full-resolution previews reach the UI without an extra 10–40 MB copy.
 - **Marking a photo no longer wipes foreign XMP data:** writing the sidecar
   used to replace the whole file, so a single rating keystroke destroyed
   Lightroom develop settings, crops, GPS and hierarchical keywords that lived

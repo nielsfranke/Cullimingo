@@ -210,21 +210,6 @@ Future<List<IngestSource>> scanSources(
   ];
 }
 
-/// Convenience: scan [sourceRoot] then build the plan for [template]/[shoot].
-Future<IngestPlan> planIngest({
-  required String sourceRoot,
-  required RenameTemplate template,
-  String shoot = '',
-  bool includeVideos = true,
-}) async {
-  final sources = await scanSources(
-    sourceRoot,
-    includeVideos: includeVideos,
-    withCamera: template.pattern.contains('{camera}'),
-  );
-  return buildPlan(sources: sources, template: template, shoot: shoot);
-}
-
 /// Progress tick during a run: [done] of [total] processed, with the [last]
 /// result.
 class IngestProgress {

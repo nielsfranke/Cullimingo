@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cullimingo/app/theme/tokens.dart';
 import 'package:cullimingo/core/cache/memory_budget.dart';
 import 'package:cullimingo/core/files/directory_picker.dart';
+import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/secrets/secret_store.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:cullimingo/core/settings/performance_preset.dart';
@@ -229,24 +230,69 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
     required Map<String, dynamic> hotCodes,
     PerformancePreset? preset,
   }) async {
+    // Runs fire-and-forget after the dialog already popped: one failing write
+    // (e.g. a keychain error in saveCsCredentials) must neither skip the
+    // remaining, independent writes nor vanish as an unhandled async error —
+    // it used to silently drop everything after the throwing step, including
+    // the performance preset the page was already showing a restart hint for.
+    Future<void> guard(String what, Future<void> Function() write) async {
+      try {
+        await write();
+      } on Object catch (e) {
+        appTalker.warning('Settings save failed ($what): $e');
+      }
+    }
+
     final settings = await AppSettings.load();
-    await saveCsCredentials(secrets, baseUrl: baseUrl, token: token);
-    await settings.setReopenLastFolders(reopenLastFolders);
-    await settings.setCheckForUpdatesEnabled(checkForUpdates);
-    await settings.setSendToEditors(editors);
-    await settings.setDeliveryServers(servers);
+    await guard(
+      'ContactSheet credentials',
+      () => saveCsCredentials(secrets, baseUrl: baseUrl, token: token),
+    );
+    await guard(
+      'reopen last folders',
+      () => settings.setReopenLastFolders(reopenLastFolders),
+    );
+    await guard(
+      'update check',
+      () => settings.setCheckForUpdatesEnabled(checkForUpdates),
+    );
+    await guard('send-to editors', () => settings.setSendToEditors(editors));
+    await guard(
+      'delivery servers',
+      () => settings.setDeliveryServers(servers),
+    );
     for (final entry in serverPasswords.entries) {
-      await secrets.write(deliveryPasswordKey(entry.key), entry.value);
+      await guard(
+        'server password',
+        () => secrets.write(deliveryPasswordKey(entry.key), entry.value),
+      );
     }
     for (final id in removedServerIds) {
-      await secrets.delete(deliveryPasswordKey(id));
+      await guard(
+        'server password removal',
+        () => secrets.delete(deliveryPasswordKey(id)),
+      );
     }
-    await settings.setMetadataTemplates(snapshots);
-    await settings.setRecentIptcValues(recentValues);
-    await settings.setApplyTemplateOnIngest(applyTemplateOnIngest);
-    await settings.setCodeReplacements(codes);
-    await settings.setHotCodes(hotCodes);
-    if (preset != null) await settings.setPerformancePresetName(preset.name);
+    await guard(
+      'metadata templates',
+      () => settings.setMetadataTemplates(snapshots),
+    );
+    await guard(
+      'recent IPTC values',
+      () => settings.setRecentIptcValues(recentValues),
+    );
+    await guard(
+      'apply template on ingest',
+      () => settings.setApplyTemplateOnIngest(applyTemplateOnIngest),
+    );
+    await guard('code replacements', () => settings.setCodeReplacements(codes));
+    await guard('hot codes', () => settings.setHotCodes(hotCodes));
+    if (preset != null) {
+      await guard(
+        'performance preset',
+        () => settings.setPerformancePresetName(preset.name),
+      );
+    }
   }
 
   /// Picks an application and appends it as a "Send to" editor (label derived

@@ -58,6 +58,10 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
   // flicker. Re-scan only when source / includeVideos / camera-need changes.
   List<IngestSource>? _sources;
   String? _scannedKey;
+
+  // Monotonic scan counter: only the newest in-flight scan may write state
+  // back (see `_refresh`), so overlapping scans can't race each other.
+  int _scanSeq = 0;
   bool _scanning = false;
   // Set when a scan fails, so the dialog shows the reason instead of spinning
   // on "Scanning…" forever.
@@ -194,6 +198,12 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     // instant and never re-scans the card. So it's not part of the scan key.
     final key = '$source|$needsCamera';
     if (_sources == null || _scannedKey != key) {
+      // Overlapping scans (slow card scan still running while the user picks
+      // another source) used to land in completion order — source A's files
+      // could end up under source B's dropdown and get imported. Only the
+      // newest scan may touch the state, and its result is only adopted when
+      // the source it scanned is still the one selected.
+      final seq = ++_scanSeq;
       setState(() {
         _scanning = true;
         _scanError = null;
@@ -206,19 +216,22 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       } on Object catch (e) {
         // Never leave the dialog stuck on "Scanning…": surface the failure and
         // let the user pick another source or retry.
-        if (!mounted) return;
+        if (!mounted || seq != _scanSeq) return;
         setState(() {
           _scanning = false;
           _scanError = '$e';
         });
         return;
       }
-      if (!mounted) return;
-      _sources = sources;
-      _scannedKey = key;
-      // A fresh scan may cover different capture dates than before, so any
-      // earlier exclusions no longer mean anything — start unfiltered.
-      _excludedDates.clear();
+      if (!mounted || seq != _scanSeq) return;
+      final desiredKey = '$_source|${_template.pattern.contains('{camera}')}';
+      if (key == desiredKey) {
+        _sources = sources;
+        _scannedKey = key;
+        // A fresh scan may cover different capture dates than before, so any
+        // earlier exclusions no longer mean anything — start unfiltered.
+        _excludedDates.clear();
+      }
       setState(() => _scanning = false);
     }
     _rebuildPlan();

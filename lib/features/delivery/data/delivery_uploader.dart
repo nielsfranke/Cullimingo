@@ -123,8 +123,21 @@ Stream<DeliveryProgress> runDelivery({
     Future<DeliveryClient> ensureConnected() async {
       if (client != null) return client!;
       final fresh = connectClient();
-      await fresh.connect();
-      await fresh.ensureRemoteDir(remoteDir);
+      try {
+        await fresh.connect();
+        await fresh.ensureRemoteDir(remoteDir);
+      } on Object {
+        // connect() can fail *after* the socket is attached (login, TLS,
+        // mkdir) — close the half-open client here, or every retry leaks a
+        // socket + stream subscription (`client` is still null, so the
+        // caller's `client?.close()` cleanup can't reach it).
+        try {
+          await fresh.close();
+        } on Object {
+          // Best effort — the connection is already broken.
+        }
+        rethrow;
+      }
       return client = fresh;
     }
 
