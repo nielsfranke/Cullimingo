@@ -267,8 +267,18 @@ class MetadataRepository {
 
       if (!localChanged) {
         // Only the sidecar moved → adopt it (last-writer-wins, trivially).
-        await _adoptSidecar(photo, xmp, mtime: fileMtime);
-        updated++;
+        // `onlyIfClean` re-checks marksMtime *inside* the UPDATE: this loop
+        // runs from a snapshot while the grid is already live (background
+        // resync on folder open), so the user may have marked this photo
+        // since — blindly adopting would silently erase that fresh mark.
+        // A skipped row is left dirty and surfaces as a conflict next sync.
+        final adopted = await _adoptSidecar(
+          photo,
+          xmp,
+          mtime: fileMtime,
+          onlyIfClean: true,
+        );
+        if (adopted) updated++;
         continue;
       }
 
@@ -289,36 +299,50 @@ class MetadataRepository {
     return SyncResult(updated: updated, conflicts: conflicts);
   }
 
-  Future<void> _adoptSidecar(
+  /// Adopts [xmp] into [photo]'s row. With [onlyIfClean] the UPDATE only
+  /// applies while the row still has no pending local change (`marksMtime`
+  /// IS NULL) — the guard against a mark made while a background sync was
+  /// running from its snapshot. Returns whether the row was written.
+  Future<bool> _adoptSidecar(
     Photo photo,
     XmpData xmp, {
     DateTime? mtime,
     bool conflict = false,
+    bool onlyIfClean = false,
   }) async {
     final turns = _turnsFromSidecar(photo.orientation, xmp);
-    await (db.update(db.photos)..where((t) => t.id.equals(photo.id))).write(
-      PhotosCompanion(
-        rating: Value(xmp.rating),
-        colorLabel: Value(xmp.color),
-        flag: Value(xmp.flag),
-        keywords: Value(xmp.keywords),
-        iptc: Value(xmp.iptc),
-        hasXmp: const Value(true),
-        xmpMtime: Value(mtime ?? await _sidecarMtime(photo.path)),
-        // The DB now matches the sidecar, so there is no pending local change.
-        marksMtime: const Value(null),
-        xmpConflict: Value(conflict),
-        hasCrop: Value(xmp.crop != null),
-        cropLeft: Value(xmp.crop?.left),
-        cropTop: Value(xmp.crop?.top),
-        cropRight: Value(xmp.crop?.right),
-        cropBottom: Value(xmp.crop?.bottom),
-        cropAngle: Value(xmp.crop?.angle),
-        stackId: Value(xmp.stackId),
-        // Adopt an external rotation (see [_turnsFromSidecar]).
-        userRotation: turns == null ? const Value.absent() : Value(turns),
-      ),
-    );
+    final rows =
+        await (db.update(db.photos)..where(
+              (t) => onlyIfClean
+                  ? t.id.equals(photo.id) & t.marksMtime.isNull()
+                  : t.id.equals(photo.id),
+            ))
+            .write(
+              PhotosCompanion(
+                rating: Value(xmp.rating),
+                colorLabel: Value(xmp.color),
+                flag: Value(xmp.flag),
+                keywords: Value(xmp.keywords),
+                iptc: Value(xmp.iptc),
+                hasXmp: const Value(true),
+                xmpMtime: Value(mtime ?? await _sidecarMtime(photo.path)),
+                // DB now matches the sidecar → no pending local change.
+                marksMtime: const Value(null),
+                xmpConflict: Value(conflict),
+                hasCrop: Value(xmp.crop != null),
+                cropLeft: Value(xmp.crop?.left),
+                cropTop: Value(xmp.crop?.top),
+                cropRight: Value(xmp.crop?.right),
+                cropBottom: Value(xmp.crop?.bottom),
+                cropAngle: Value(xmp.crop?.angle),
+                stackId: Value(xmp.stackId),
+                // Adopt an external rotation (see [_turnsFromSidecar]).
+                userRotation: turns == null
+                    ? const Value.absent()
+                    : Value(turns),
+              ),
+            );
+    return rows > 0;
   }
 
   // Whole-second-truncated sidecar mtime (see [readSidecarMtime]); shared with

@@ -814,4 +814,10 @@ String _escape(String s) => s
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
+    .replaceAll('"', '&quot;')
+    // XML attribute-value normalisation folds raw newlines/tabs into spaces,
+    // so multiline fields (Instructions, AI prompt info…) only survive the
+    // round-trip as character references. Harmless in element text.
+    .replaceAll('\n', '&#10;')
+    .replaceAll('\r', '&#13;')
+    .replaceAll('\t', '&#9;');

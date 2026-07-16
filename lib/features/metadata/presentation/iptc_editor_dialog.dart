@@ -558,11 +558,22 @@ class _IptcEditorDialogState extends State<IptcEditorDialog> {
     _serialIptcs[_index] = updated;
   }
 
+  // True while a serial navigation is applying + loading; a second ⌘Enter
+  // during the await would start an overlapping walk (double-apply, skipped
+  // photo), so re-entrant calls are dropped instead.
+  bool _navigating = false;
+
   /// Moves the walk to [next]: auto-saves the current photo, then loads the
   /// next one's values into the fields.
   Future<void> _goTo(int next) async {
     if (next < 0 || next >= _serialIptcs.length || next == _index) return;
-    await _applyCurrent();
+    if (_navigating) return;
+    _navigating = true;
+    try {
+      await _applyCurrent();
+    } finally {
+      _navigating = false;
+    }
     if (!mounted) return;
     setState(() {
       _index = next;
@@ -587,8 +598,12 @@ class _IptcEditorDialogState extends State<IptcEditorDialog> {
   /// prefill the location fields. The values land in the text controllers, so
   /// they're editable before the normal save path writes them.
   Future<void> _fillFromGps() async {
-    final place = await widget.serial!.onGeocode!(_index);
+    final index = _index;
+    final place = await widget.serial!.onGeocode!(index);
     if (place == null || !mounted) return;
+    // The user may have walked on while the geocoder ran — the previous
+    // photo's location must not land in the new photo's fields.
+    if (index != _index) return;
     _controllers[IptcField.city]!.text = place.city;
     _controllers[IptcField.state]!.text = place.state;
     _controllers[IptcField.country]!.text = place.country;
