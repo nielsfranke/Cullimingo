@@ -32,7 +32,7 @@ class _Job {
 /// the per-call `PreviewService` (which spawned an isolate and reloaded libraw
 /// for every single thumbnail).
 class PreviewPool implements PreviewExtractor {
-  /// Creates a pool. [workers] defaults to cores-1 (clamped 1–6); [librawPath]
+  /// Creates a pool. [workers] defaults to cores-1 (clamped 1–8); [librawPath]
   /// overrides dylib discovery.
   PreviewPool({int? workers, String? librawPath, this.enableVips = true})
     : _workerCount = (workers ?? (Platform.numberOfProcessors - 1)).clamp(1, 8),
@@ -53,7 +53,13 @@ class PreviewPool implements PreviewExtractor {
   /// slow external-drive read.
   static const Duration _jobTimeout = Duration(seconds: 12);
 
-  final List<Isolate> _isolates = [];
+  // Live workers by id, with the reverse port→id map filled at registration —
+  // so a job timeout can identify and kill exactly the worker that hung, and a
+  // late answer from an already-killed worker is recognisably stale.
+  final Map<int, Isolate> _workers = {};
+  final Map<SendPort, int> _portOwner = {};
+  // Which worker each in-flight job was dispatched to.
+  final Map<int, SendPort> _dispatched = {};
   final List<SendPort> _free = [];
   // Two FIFOs so on-screen cells jump ahead of off-screen prefetch batches
   // (`BUILD_PLAN.md` §2): _dispatch always drains _visible before _prefetch,
@@ -84,27 +90,44 @@ class PreviewPool implements PreviewExtractor {
 
   Future<void> _spawnWorker() async {
     if (_disposed) return;
+    final workerId = _spawnCount++;
     final iso = await Isolate.spawn(
       _previewWorkerMain,
-      [_results!.sendPort, _librawPath, enableVips],
-      debugName: 'preview-worker-${_spawnCount++}',
+      [_results!.sendPort, _librawPath, enableVips, workerId],
+      debugName: 'preview-worker-$workerId',
     );
-    _isolates.add(iso);
+    if (_disposed) {
+      // dispose() ran while the spawn was in flight — don't leak the isolate.
+      iso.kill(priority: Isolate.immediate);
+      return;
+    }
+    _workers[workerId] = iso;
   }
 
   void _onMessage(Object? message) {
     // Never let a malformed message throw out of here: an uncaught error in the
     // results listener would silently freeze the entire pool.
     try {
-      if (message is SendPort) {
-        _free.add(message); // a worker registering as free
+      final list = message! as List<Object?>;
+      if (list.length == 2) {
+        // A worker registering as free: [workerId, port].
+        final workerId = list[0]! as int;
+        final port = list[1]! as SendPort;
+        if (!_workers.containsKey(workerId)) return; // killed before it spoke
+        _portOwner[port] = workerId;
+        _free.add(port);
         _dispatch();
         return;
       }
-      final result = message! as List<Object?>;
-      final id = result[0]! as int;
-      final bytes = result[1] as Uint8List?;
-      final worker = result[2]! as SendPort;
+      // A job result: [jobId, bytes, port].
+      final id = list[0]! as int;
+      final bytes = list[1] as Uint8List?;
+      final worker = list[2]! as SendPort;
+      _dispatched.remove(id);
+      // A worker the watchdog already killed can still have an answer sitting
+      // in the mailbox — drop it, its replacement is running. Re-adding it
+      // used to grow the pool by one on every slow-but-alive timeout.
+      if (!_portOwner.containsKey(worker)) return;
       _timers.remove(id)?.cancel();
       _waiting.remove(id)?.complete(bytes);
       _free.add(worker);
@@ -126,7 +149,8 @@ class PreviewPool implements PreviewExtractor {
         _waiting.remove(job.id)?.complete(null);
         continue;
       }
-      _free.removeLast().send([job.id, job.path, job.longEdge]);
+      final port = _free.removeLast()..send([job.id, job.path, job.longEdge]);
+      _dispatched[job.id] = port;
       _timers[job.id] = Timer(_jobTimeout, () => _onJobTimeout(job.id));
     }
   }
@@ -139,17 +163,24 @@ class PreviewPool implements PreviewExtractor {
   }
 
   // A dispatched job didn't answer in time → its worker likely crashed or hung
-  // on a native decode. Unstick the waiting cell (placeholder) and top the pool
-  // back up with a fresh worker. The lost worker is abandoned; if it ever does
-  // answer, _onMessage re-adds it harmlessly.
+  // on a native decode. Unstick the waiting cell (placeholder), kill the hung
+  // worker (it holds an isolate plus native libraw/vips state — merely
+  // abandoning it leaked one worker per timeout, and a late answer grew the
+  // pool by one), and top the pool back up with a fresh one.
   void _onJobTimeout(int id) {
     _timers.remove(id);
     final completer = _waiting.remove(id);
     if (completer == null || completer.isCompleted) return;
     appTalker.warning(
       'PreviewPool worker timed out on job $id '
-      '(likely crashed/OOM); respawning',
+      '(likely crashed/OOM/hung); killing it and respawning',
     );
+    final port = _dispatched.remove(id);
+    if (port != null) {
+      final workerId = _portOwner.remove(port);
+      final iso = workerId == null ? null : _workers.remove(workerId);
+      iso?.kill(priority: Isolate.immediate);
+    }
     completer.complete(null);
     unawaited(_spawnWorker());
   }
@@ -163,6 +194,10 @@ class PreviewPool implements PreviewExtractor {
   }) async {
     if (_disposed || (cancel?.isCancelled ?? false)) return null;
     await _ensureStarted();
+    // Re-check after the await: a dispose() racing the first worker spawn has
+    // already emptied the queues — enqueueing now would hang this future
+    // forever (no worker, no timer, nobody to complete it).
+    if (_disposed) return null;
 
     final id = _nextId++;
     final completer = Completer<Uint8List?>();
@@ -181,10 +216,12 @@ class PreviewPool implements PreviewExtractor {
       t.cancel();
     }
     _timers.clear();
-    for (final iso in _isolates) {
+    for (final iso in _workers.values) {
       iso.kill(priority: Isolate.immediate);
     }
-    _isolates.clear();
+    _workers.clear();
+    _portOwner.clear();
+    _dispatched.clear();
     _free.clear();
     _visible.clear();
     _prefetch.clear();
@@ -212,6 +249,7 @@ void _previewWorkerMain(List<Object?> init) {
   // Load libvips once per worker for fast native downscale + EXIF auto-rotate.
   final enableVips = init[2]! as bool;
   final vips = enableVips ? Vips.tryLoad() : null;
+  final workerId = init[3]! as int;
 
   inbox.listen((message) {
     final job = message! as List<Object?>;
@@ -227,7 +265,7 @@ void _previewWorkerMain(List<Object?> init) {
     toMain.send([id, bytes, inbox.sendPort]);
   });
 
-  toMain.send(inbox.sendPort); // register as free
+  toMain.send([workerId, inbox.sendPort]); // register as free
 }
 
 Uint8List? _extractInWorker(

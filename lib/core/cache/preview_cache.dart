@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
@@ -95,6 +96,12 @@ class PreviewCache {
     return Directory(p.join(base.path, 'previews'));
   }
 
+  /// In-flight loads keyed `tier:path`: concurrent requests for the same
+  /// preview (a visible cell + the viewport prefetch, grid + filmstrip) share
+  /// one extraction instead of each dispatching its own pool job — on a cold
+  /// folder open the doubled requests used to extract every visible RAW twice.
+  final Map<String, Future<Uint8List?>> _inflight = {};
+
   /// Returns cached preview bytes for [path] at [tier], rendering and storing
   /// them on a miss. Returns `null` if no preview can be produced (e.g. the
   /// RAW path before LibRaw is wired).
@@ -111,6 +118,41 @@ class PreviewCache {
     if (cached != null) return cached;
     if (cancel?.isCancelled ?? false) return null;
 
+    final pending = _inflight[memKey];
+    if (pending != null) {
+      final joined = await pending;
+      if (joined != null) return joined;
+      if (cancel?.isCancelled ?? false) return null;
+      // The shared load produced nothing — possibly only because *its*
+      // initiator cancelled. We're still live, so run our own (a genuinely
+      // unreadable file simply returns null again).
+      return get(path, tier, cancel: cancel, priority: priority);
+    }
+
+    final future = _load(
+      path,
+      tier,
+      memKey,
+      cancel: cancel,
+      priority: priority,
+    );
+    _inflight[memKey] = future;
+    try {
+      return await future;
+    } finally {
+      // The removed value is this same (already-settled) future — nothing to
+      // await; unawaited() just satisfies the lint.
+      unawaited(_inflight.remove(memKey));
+    }
+  }
+
+  Future<Uint8List?> _load(
+    String path,
+    PreviewTier tier,
+    String memKey, {
+    required CancelToken? cancel,
+    required JobPriority priority,
+  }) async {
     final file = File(path);
     // One async stat covers the existence check and the cache key below. It
     // must not be a sync call: the original may live on slow removable media
@@ -149,8 +191,14 @@ class PreviewCache {
     // Also deliberately async, like the stat above.
     // ignore: avoid_slow_async_io
     if (await cacheFile.exists()) {
-      bytes = await cacheFile.readAsBytes();
-    } else {
+      try {
+        bytes = await cacheFile.readAsBytes();
+      } on IOException {
+        // The file vanished between exists() and the read (startup prune,
+        // clear-cache) — treat it as a miss instead of erroring the cell.
+      }
+    }
+    if (bytes == null) {
       // 3. Extract on the pool (skipped if still cancelled), then persist.
       bytes = await extractor.thumbnail(
         path,
@@ -158,15 +206,38 @@ class PreviewCache {
         cancel: cancel,
         priority: priority,
       );
-      // No flush: previews are reproducible (re-extracted on a miss), so we
-      // don't need fsync durability here — and flushing every thumbnail
-      // amplifies I/O badly on a cold scan of a large folder.
-      if (bytes != null) await cacheFile.writeAsBytes(bytes);
+      if (bytes != null) await _persist(cacheFile, bytes);
     }
 
     if (bytes != null) _memory.put(memKey, bytes);
     return bytes;
   }
+
+  // Persists freshly extracted bytes via write-to-tmp + rename. The write must
+  // be atomic: the key is never re-validated on a read, so a torn write (crash,
+  // full disk, or a concurrent reader catching the file mid-write) would serve
+  // a corrupt preview forever — across sessions — until the cache is cleared.
+  // No flush: previews are reproducible (re-extracted on a miss), so we don't
+  // need fsync durability here — and flushing every thumbnail amplifies I/O
+  // badly on a cold scan of a large folder. Failures are swallowed: the caller
+  // already has the bytes; the disk copy is only a lost optimisation.
+  Future<void> _persist(File target, Uint8List bytes) async {
+    final tmp = File('${target.path}.${_tmpSeq++}.tmp');
+    try {
+      await tmp.writeAsBytes(bytes);
+      await tmp.rename(target.path);
+    } on IOException {
+      try {
+        await tmp.delete();
+      } on IOException {
+        // Best effort — a stray .tmp is collected by the startup prune.
+      }
+    }
+  }
+
+  /// Distinguishes concurrent tmp files for the same cache key (everything
+  /// runs on the UI isolate, so a plain counter is race-free).
+  int _tmpSeq = 0;
 
   /// Convenience for the grid thumbnail tier.
   Future<Uint8List?> thumbnail(

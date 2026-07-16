@@ -151,6 +151,13 @@ class _FilmstripCell extends ConsumerWidget {
                             fit: BoxFit.contain,
                             gaplessPlayback: true,
                             height: LoupeFilmstrip._thumbHeight,
+                            // Decode at cell size: the source is the ~1024px
+                            // grid thumbnail, so a full decode per strip cell
+                            // costs 2–4 MB of ImageCache and visible jank.
+                            cacheHeight:
+                                (LoupeFilmstrip._thumbHeight *
+                                        MediaQuery.devicePixelRatioOf(context))
+                                    .round(),
                           ),
                         ),
                 ),

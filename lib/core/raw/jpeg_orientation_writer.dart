@@ -22,7 +22,23 @@ Future<bool> writeEmbeddedOrientation(String path, int orientation) async {
       orientation,
     );
     if (patched == null) return false;
-    File(path).writeAsBytesSync(patched, flush: true);
+    // Write-to-tmp + atomic rename: an in-place write truncates first, so a
+    // crash mid-write would destroy the user's original — and the file *is*
+    // the durable source of truth. The tmp lives in the same folder so the
+    // rename never crosses a volume.
+    final tmp = File('$path.cullrotate.tmp');
+    try {
+      tmp
+        ..writeAsBytesSync(patched, flush: true)
+        ..renameSync(path);
+    } on IOException {
+      try {
+        tmp.deleteSync();
+      } on IOException {
+        // Best effort — a stray tmp next to the photo is harmless.
+      }
+      return false; // original untouched; the sidecar still has the rotation
+    }
     return true;
   });
 }

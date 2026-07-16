@@ -75,11 +75,20 @@ mixin _CullGrid on _CullNotices {
       0,
       photos.length,
     );
+    // The visible cells' own thumbnailProvider requests are already running —
+    // warm only the ring around the viewport, not the viewport itself, so the
+    // prefetch never competes with (or duplicates) what's on screen.
+    final visStart = (firstRow * _columns).clamp(0, photos.length);
+    final visEnd = ((firstRow + visibleRows) * _columns).clamp(
+      0,
+      photos.length,
+    );
 
     _prefetchToken?.cancel();
     final token = _prefetchToken = CancelToken();
     final cache = ref.read(previewCacheProvider);
     for (var i = start; i < end; i++) {
+      if (i >= visStart && i < visEnd) continue;
       unawaited(
         cache.thumbnail(
           photos[i].path,
