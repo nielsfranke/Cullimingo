@@ -269,8 +269,36 @@ class PreviewCache {
     _memory.clear();
     _tierDirs.clear();
     final dir = await _cacheDirProvider();
-    if (dir.existsSync()) {
-      await Isolate.run(() => Directory(dir.path).deleteSync(recursive: true));
+    // Async on purpose — this runs on the UI isolate (§0.6).
+    // ignore: avoid_slow_async_io
+    if (!await dir.exists()) return;
+    // Move the tree aside first: parallel get()s recreate tier dirs and write
+    // into them immediately, and a recursive delete racing those writers
+    // either throws or eats a freshly written preview. After the rename the
+    // writers repopulate a fresh tree while the old one is deleted safely.
+    final doomed = Directory('${dir.path}.clearing');
+    try {
+      // A leftover from an earlier interrupted clear would fail the rename.
+      // ignore: avoid_slow_async_io
+      if (await doomed.exists()) await doomed.delete(recursive: true);
+      await dir.rename(doomed.path);
+    } on IOException {
+      // Couldn't move it aside — delete in place, swallowing race errors.
+      try {
+        await Isolate.run(
+          () => Directory(dir.path).deleteSync(recursive: true),
+        );
+      } on Object {
+        // Best effort; the startup prune keeps the budget regardless.
+      }
+      return;
+    }
+    try {
+      await Isolate.run(
+        () => Directory(doomed.path).deleteSync(recursive: true),
+      );
+    } on Object {
+      // Best effort — a leftover .clearing tree is removed on the next clear.
     }
   }
 

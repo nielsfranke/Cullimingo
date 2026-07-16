@@ -119,9 +119,10 @@ class PreviewPool implements PreviewExtractor {
         _dispatch();
         return;
       }
-      // A job result: [jobId, bytes, port].
+      // A job result: [jobId, transferable bytes, port].
       final id = list[0]! as int;
-      final bytes = list[1] as Uint8List?;
+      final transfer = list[1] as TransferableTypedData?;
+      final bytes = transfer?.materialize().asUint8List();
       final worker = list[2]! as SendPort;
       _dispatched.remove(id);
       // A worker the watchdog already killed can still have an answer sitting
@@ -262,7 +263,15 @@ void _previewWorkerMain(List<Object?> init) {
     } on Object {
       bytes = null;
     }
-    toMain.send([id, bytes, inbox.sendPort]);
+    // TransferableTypedData moves the buffer instead of copying it — a plain
+    // send deep-copies, which is fine for a 200 KB grid thumb but a real stall
+    // for the full tier (a 45-MP RAW's embedded JPEG is 10–40 MB, copied right
+    // when the user expects the 100% zoom to be instant).
+    toMain.send([
+      id,
+      if (bytes == null) null else TransferableTypedData.fromList([bytes]),
+      inbox.sendPort,
+    ]);
   });
 
   toMain.send([workerId, inbox.sendPort]); // register as free

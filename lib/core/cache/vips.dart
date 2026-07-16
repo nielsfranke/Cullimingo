@@ -60,6 +60,10 @@ typedef _PtrVoidDart = void Function(Pointer<Void>);
 typedef _ConcurrencyNative = Void Function(Int);
 typedef _ConcurrencyDart = void Function(int);
 
+// vips_error_clear() -> void
+typedef _ErrorClearNative = Void Function();
+typedef _ErrorClearDart = void Function();
+
 /// Filename prefixes for each lib when bundled in the packaged app's
 /// `Contents/libs` (§6.1); preferred over the Homebrew [_candidates].
 const Map<String, String> _bundledPrefix = {
@@ -100,13 +104,14 @@ const Map<String, List<String>> _candidates = {
 /// auto-rotate). Replaces the slow pure-Dart resize for the preview pipeline
 /// (`BUILD_PLAN.md` §2/§6.1). Load once per isolate via [tryLoad].
 class Vips {
-  Vips._(this._thumb, this._save, this._gFree, this._gUnref)
+  Vips._(this._thumb, this._save, this._gFree, this._gUnref, this._errorClear)
     : _heightKey = 'height'.toNativeUtf8();
 
   final _ThumbDart _thumb;
   final _SaveDart _save;
   final _PtrVoidDart _gFree;
   final _PtrVoidDart _gUnref;
+  final _ErrorClearDart _errorClear;
   final Pointer<Utf8> _heightKey;
 
   static bool _warmedUp = false;
@@ -194,6 +199,9 @@ class Vips {
         vips.lookupFunction<_SaveNative, _SaveDart>('vips_jpegsave_buffer'),
         glib.lookupFunction<_PtrVoidNative, _PtrVoidDart>('g_free'),
         gobject.lookupFunction<_PtrVoidNative, _PtrVoidDart>('g_object_unref'),
+        vips.lookupFunction<_ErrorClearNative, _ErrorClearDart>(
+          'vips_error_clear',
+        ),
       );
     } on Object {
       return null;
@@ -219,10 +227,19 @@ class Vips {
         longEdge,
         nullptr,
       );
-      if (rc != 0) return null;
+      if (rc != 0) {
+        // Clear the process-global error buffer: every failed decode appends
+        // to it, so a folder full of corrupt/exotic files slowly grew native
+        // memory (the encoder in core/vips already does this).
+        _errorClear();
+        return null;
+      }
       haveImage = true;
 
-      if (_save(outImage.value, outBuf, outLen, nullptr) != 0) return null;
+      if (_save(outImage.value, outBuf, outLen, nullptr) != 0) {
+        _errorClear();
+        return null;
+      }
       final bytes = Uint8List.fromList(
         outBuf.value.cast<Uint8>().asTypedList(outLen.value),
       );

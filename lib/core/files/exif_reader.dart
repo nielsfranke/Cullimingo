@@ -192,10 +192,17 @@ DateTime? _parseExifDate(String? raw) {
     r'^(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2}):(\d{2})',
   ).firstMatch(raw.trim());
   if (m == null) return null;
+  final month = int.parse(m[2]!);
+  final day = int.parse(m[3]!);
+  // The all-zero placeholder ("0000:00:00 00:00:00", camera clock never set)
+  // matches the regex, and DateTime() would happily normalise month/day 0 to
+  // a year ~-1 date — sorting the photo to the top of the grid and feeding
+  // nonsense into rename tokens. Treat any impossible date as "unknown".
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
   return DateTime(
     int.parse(m[1]!),
-    int.parse(m[2]!),
-    int.parse(m[3]!),
+    month,
+    day,
     int.parse(m[4]!),
     int.parse(m[5]!),
     int.parse(m[6]!),

@@ -76,8 +76,13 @@ Future<TrashResult> moveToTrash(
       final result = await run(exe, args);
       if (result.exitCode != 0) {
         // The chunk had at least one refusal; retry one-by-one to attribute
-        // the failures to the actual files.
+        // the failures to the actual files. `gio trash` keeps going after a
+        // refusal, so part of the chunk may already be in the trash — a
+        // now-missing file is a success, not a "no such file" failure.
         for (final path in chunk) {
+          // Async on purpose — this can run on the UI isolate (see above).
+          // ignore: avoid_slow_async_io
+          if (!await File(path).exists()) continue;
           final (exe1, args1) = command([path]);
           final single = await run(exe1, args1);
           if (single.exitCode != 0) failed.add(path);
