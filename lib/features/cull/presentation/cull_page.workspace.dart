@@ -46,7 +46,12 @@ mixin _CullWorkspace on _CullGrid {
       // Active folder gone? (card ejected, folder deleted) → close its tab and
       // fall back to a neighbour, then tell the user.
       final src = _openSourcePath;
-      if (src != null && !Directory(src).existsSync()) {
+      // Async on purpose: this stat is the one that detects a yanked SD card
+      // or hung network share — exactly the volumes where a *sync* stat can
+      // block the UI isolate for minutes (the rest of this poll already hops
+      // to an isolate for the same reason).
+      // ignore: avoid_slow_async_io
+      if (src != null && !await Directory(src).exists()) {
         final tabs = ref.read(workspaceProvider).tabs;
         final idx = tabs.indexWhere((t) => t.sourcePath == src);
         if (idx >= 0) ref.read(workspaceProvider.notifier).close(idx);

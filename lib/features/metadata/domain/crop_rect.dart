@@ -1,11 +1,14 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show immutable;
+
 /// A non-destructive crop read from a Lightroom / Camera-Raw develop record
 /// (the XMP `crs:` namespace). Cullimingo only ever *displays* this — it is
 /// never a crop editor (Hard Rule 7: not a RAW developer).
 ///
 /// [left]/[top]/[right]/[bottom] are fractions of the full frame (0–1), as
 /// Camera Raw stores them; [angle] is the straighten angle in degrees.
+@immutable
 class CropRect {
   /// Creates a crop rectangle.
   const CropRect({
@@ -79,4 +82,20 @@ class CropRect {
 
     return [rotate(l, t), rotate(r, t), rotate(r, b), rotate(l, b)];
   }
+
+  // Value equality: the loupe rebuilds derive a fresh CropRect from the photo
+  // row each frame, and the crop-overlay painter's shouldRepaint compares
+  // delegates — identity equality would repaint on every rebuild.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CropRect &&
+          other.left == left &&
+          other.top == top &&
+          other.right == right &&
+          other.bottom == bottom &&
+          other.angle == angle;
+
+  @override
+  int get hashCode => Object.hash(left, top, right, bottom, angle);
 }

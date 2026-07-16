@@ -965,6 +965,17 @@ class CullController extends _$CullController {
   Future<void> applyColor(ColorLabel label) =>
       _setColorAll(_effectiveMarkTargets, label);
 
+  /// Sets [rating] on exactly [ids], independent of the live selection — the
+  /// batch path for pulled ContactSheet marks: one UPDATE, one stream emit,
+  /// one sidecar batch (applying pulled marks one by one ran the whole
+  /// grid-rebuild pipeline once per photo).
+  Future<void> setRatingForIds(Set<int> ids, int rating) =>
+      _setRatingAll(ids, rating);
+
+  /// Sets [label] on exactly [ids] (see [setRatingForIds]).
+  Future<void> setColorForIds(Set<int> ids, ColorLabel label) =>
+      _setColorAll(ids, label);
+
   /// Rotates every effective mark target by [quarterTurnsCW] clockwise
   /// quarter-turns (negative = counter-clockwise). Batch rotate.
   Future<void> applyRotation(int quarterTurnsCW) =>

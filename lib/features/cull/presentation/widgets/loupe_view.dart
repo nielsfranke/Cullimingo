@@ -1343,7 +1343,8 @@ class _CropOverlayPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_CropOverlayPainter oldDelegate) => true;
+  bool shouldRepaint(_CropOverlayPainter oldDelegate) =>
+      oldDelegate.crop != crop || oldDelegate.imageAspect != imageAspect;
 }
 
 /// The rect [image] occupies inside a [canvas] area under `BoxFit.contain` —

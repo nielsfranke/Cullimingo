@@ -286,11 +286,19 @@ mixin _CullJobs on _CullSelections {
   }
 
   void _deleteTemp(Directory? dir) {
-    try {
-      dir?.deleteSync(recursive: true);
-    } on Object {
-      // Best effort — a leftover temp dir is harmless.
-    }
+    if (dir == null) return;
+    final path = dir.path;
+    // Off the UI isolate: after a delivery/contact-sheet run the temp dir
+    // holds hundreds of rendered files — a recursive sync delete janks.
+    unawaited(
+      Isolate.run(() {
+        try {
+          Directory(path).deleteSync(recursive: true);
+        } on Object {
+          // Best effort — a leftover temp dir is harmless.
+        }
+      }),
+    );
   }
 
   void _cancelExport() {
@@ -693,10 +701,17 @@ mixin _CullJobs on _CullSelections {
       }
       if (cancel.cancelled) return;
 
-      final files = tempDir
-          .listSync(recursive: true)
-          .whereType<File>()
-          .toList();
+      // Listed on an isolate: hundreds of rendered files, and directory
+      // listing is blocking I/O (§0.6).
+      final tempPath = tempDir.path;
+      final filePaths = await Isolate.run(
+        () => Directory(tempPath)
+            .listSync(recursive: true)
+            .whereType<File>()
+            .map((f) => f.path)
+            .toList(),
+      );
+      final files = [for (final path in filePaths) File(path)];
       if (files.isEmpty) {
         throw const ContactSheetException('Nothing was rendered to upload');
       }
@@ -757,11 +772,7 @@ mixin _CullJobs on _CullSelections {
       if (mounted) _notify('Send failed: $e', kind: NoticeKind.warning);
     } finally {
       client.close();
-      try {
-        tempDir.deleteSync(recursive: true);
-      } on Object {
-        // Best effort — a leftover temp dir is harmless.
-      }
+      _deleteTemp(tempDir);
       if (mounted) {
         ref.read(backgroundJobsProvider.notifier).clearContactSheet();
       }
@@ -800,22 +811,40 @@ mixin _CullJobs on _CullSelections {
               .updateContactSheet(verb: 'Applying', total: resolved.length);
         }
         final controller = ref.read(cullControllerProvider.notifier);
-        var done = 0;
+        // Group by value and apply as batch marks: one UPDATE + one stream
+        // emit + one sidecar batch per distinct value. Per-photo setRating/
+        // setColor ran the full update→re-emit→grid-rebuild→sidecar pipeline
+        // once per pulled mark — hundreds of times for a busy gallery.
+        final byRating = <int, Set<int>>{};
+        final byColor = <ColorLabel, Set<int>>{};
         for (final mark in resolved) {
-          if (cancel.cancelled) break;
           if (mark.rating != null) {
-            await controller.setRating(mark.photoId, mark.rating!);
+            (byRating[mark.rating!] ??= {}).add(mark.photoId);
           }
           if (mark.color != null) {
-            await controller.setColor(mark.photoId, mark.color!);
+            (byColor[mark.color!] ??= {}).add(mark.photoId);
           }
-          done++;
+        }
+        var done = 0;
+        void tickApplied(int count) {
+          done = (done + count).clamp(0, resolved.length);
           if (mounted) {
             ref
                 .read(backgroundJobsProvider.notifier)
                 .updateContactSheet(done: done);
           }
         }
+
+        for (final entry in byRating.entries) {
+          if (cancel.cancelled) break;
+          await controller.setRatingForIds(entry.value, entry.key);
+          tickApplied(entry.value.length);
+        }
+        for (final entry in byColor.entries) {
+          if (cancel.cancelled) break;
+          await controller.setColorForIds(entry.value, entry.key);
+        }
+        if (!cancel.cancelled) tickApplied(resolved.length);
         // The client only ever saw the normal exposures, so their picks
         // re-attach the ±EV bracket siblings when auto-expand is on.
         _applySelectionMaybeExpanding({for (final m in resolved) m.photoId});
@@ -922,7 +951,16 @@ mixin _CullJobs on _CullSelections {
         final loaded = await Future.wait(
           chunk.map((p) async {
             try {
-              return (id: p.id, bytes: await cache.thumbnail(p.path));
+              // Prefetch priority: the whole-folder hashing pass must queue
+              // *behind* the cells the user is looking at, not compete with
+              // them — at visible priority it starved live scrolling.
+              return (
+                id: p.id,
+                bytes: await cache.thumbnail(
+                  p.path,
+                  priority: JobPriority.prefetch,
+                ),
+              );
             } on Object {
               return (id: p.id, bytes: null);
             }

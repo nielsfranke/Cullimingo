@@ -11,6 +11,7 @@ import 'package:cullimingo/features/filter/domain/filter_preset.dart';
 import 'package:cullimingo/features/filter/domain/photo_filter.dart';
 import 'package:cullimingo/features/filter/domain/photo_sort.dart';
 import 'package:cullimingo/shared/models/cull_marks.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -139,26 +140,85 @@ class PhotoSortController extends _$PhotoSortController {
   void restore(PhotoSort sort) => state = sort;
 }
 
+/// Deep-equality wrapper for the grouping inputs below. A Provider only
+/// notifies dependents when `old != new`, so exposing each grouping's *input
+/// slice* through this class cuts the chain: a mark keystroke re-emits the
+/// whole photo stream, but rating/flag/colour aren't part of any projection —
+/// the groupings (sort + map-building + bracket detection, O(N) each) used to
+/// recompute on every single keystroke in a 5–10k folder.
+@immutable
+class _Projection<T> {
+  const _Projection(this.items);
+
+  /// The projected records, one per photo.
+  final List<T> items;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _Projection<T> && listEquals(other.items, items);
+
+  @override
+  int get hashCode => Object.hashAll(items);
+}
+
+/// The slice of the photo stream the burst grouping depends on.
+final _burstInputProvider = Provider<_Projection<GroupablePhoto>>((ref) {
+  final photos = ref.watch(photosProvider).value ?? const <Photo>[];
+  return _Projection([
+    for (final p in photos)
+      (id: p.id, capturedAt: p.capturedAt, camera: p.camera),
+  ]);
+}, name: 'burstInput');
+
 /// Capture-time burst grouping over the current import's photos (§8). Classic
 /// provider — it reads the drift-generated `Photo` type via [photosProvider].
-final burstGroupsProvider = Provider<BurstGroups>((ref) {
+final burstGroupsProvider = Provider<BurstGroups>(
+  (ref) =>
+      BurstGroups(groupByCaptureTime(ref.watch(_burstInputProvider).items)),
+  name: 'burstGroups',
+);
+
+/// The slice of the photo stream the RAW+JPEG pairing depends on.
+final _pairInputProvider = Provider<_Projection<PairablePhoto>>((ref) {
   final photos = ref.watch(photosProvider).value ?? const <Photo>[];
-  return BurstGroups(
-    groupByCaptureTime([
-      for (final p in photos)
-        (id: p.id, capturedAt: p.capturedAt, camera: p.camera),
-    ]),
-  );
-}, name: 'burstGroups');
+  return _Projection([
+    for (final p in photos) (id: p.id, path: p.path, isRaw: p.isRaw),
+  ]);
+}, name: 'pairInput');
 
 /// RAW+JPEG pairing over the current import's photos (§8). Classic provider —
 /// it reads the drift-generated `Photo` type via [photosProvider].
-final rawJpegPairsProvider = Provider<RawJpegPairs>((ref) {
+final rawJpegPairsProvider = Provider<RawJpegPairs>(
+  (ref) => RawJpegPairs(ref.watch(_pairInputProvider).items),
+  name: 'rawJpegPairs',
+);
+
+/// One photo's slice of the bracket-grouping input (see [_Projection]).
+typedef _BracketInput = ({
+  BracketablePhoto photo,
+  String? stackId,
+  String path,
+});
+
+/// The slice of the photo stream the bracket grouping depends on.
+final _bracketInputProvider = Provider<_Projection<_BracketInput>>((ref) {
   final photos = ref.watch(photosProvider).value ?? const <Photo>[];
-  return RawJpegPairs([
-    for (final p in photos) (id: p.id, path: p.path, isRaw: p.isRaw),
+  return _Projection([
+    for (final p in photos)
+      (
+        photo: (
+          id: p.id,
+          capturedAt: p.capturedAt,
+          camera: p.camera,
+          exposureBias: p.exposureBias,
+          exposureTime: p.exposureTime,
+        ),
+        stackId: p.stackId,
+        path: p.path,
+      ),
   ]);
-}, name: 'rawJpegPairs');
+}, name: 'bracketInput');
 
 /// Exposure-bracket grouping over the current import's photos (§8). Classic
 /// provider — it reads the drift-generated `Photo` type via [photosProvider].
@@ -172,29 +232,22 @@ final rawJpegPairsProvider = Provider<RawJpegPairs>((ref) {
 /// rule) and folded back in afterwards so expanding a selection grabs both
 /// files.
 final bracketGroupsProvider = Provider<BracketGroups>((ref) {
-  final photos = ref.watch(photosProvider).value ?? const <Photo>[];
+  final photos = ref.watch(_bracketInputProvider).items;
   final hiddenJpeg = ref.watch(rawJpegPairsProvider).hiddenJpegIds;
 
   final byId = <int, BracketablePhoto>{
-    for (final p in photos)
-      p.id: (
-        id: p.id,
-        capturedAt: p.capturedAt,
-        camera: p.camera,
-        exposureBias: p.exposureBias,
-        exposureTime: p.exposureTime,
-      ),
+    for (final p in photos) p.photo.id: p.photo,
   };
 
   // Manual stacks: photos with a non-empty stackId, grouped by that id.
   final manualById = <String, List<int>>{};
-  final autoInput = <Photo>[];
+  final autoInput = <_BracketInput>[];
   for (final p in photos) {
     final sid = p.stackId;
     if (sid == null) {
       autoInput.add(p); // NULL → automatic detection decides
     } else if (sid.isNotEmpty) {
-      manualById.putIfAbsent(sid, () => []).add(p.id);
+      manualById.putIfAbsent(sid, () => []).add(p.photo.id);
     }
     // Empty string → manually unstacked: excluded from both (a singleton).
   }
@@ -203,18 +256,18 @@ final bracketGroupsProvider = Provider<BracketGroups>((ref) {
   // side of a pair, folding siblings back in afterwards.
   final autoVisible = [
     for (final p in autoInput)
-      if (!hiddenJpeg.contains(p.id)) p,
+      if (!hiddenJpeg.contains(p.photo.id)) p,
   ];
   final hiddenByName = <String, List<int>>{};
   for (final p in autoInput) {
-    if (hiddenJpeg.contains(p.id)) {
-      hiddenByName.putIfAbsent(normalizeName(p.path), () => []).add(p.id);
+    if (hiddenJpeg.contains(p.photo.id)) {
+      hiddenByName.putIfAbsent(normalizeName(p.path), () => []).add(p.photo.id);
     }
   }
-  final pathById = {for (final p in autoVisible) p.id: p.path};
+  final pathById = {for (final p in autoVisible) p.photo.id: p.path};
   final autoStacks = [
     for (final group in groupExposureBrackets([
-      for (final p in autoVisible) byId[p.id]!,
+      for (final p in autoVisible) p.photo,
     ]))
       [
         for (final id in group) ...[
