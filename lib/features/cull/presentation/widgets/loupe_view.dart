@@ -428,12 +428,22 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
     );
     if (photos.isEmpty) return const SizedBox.shrink();
 
-    final index = photos
-        .indexWhere((ph) => ph.id == focusedId)
-        .clamp(
-          0,
-          photos.length - 1,
-        );
+    var index = photos.indexWhere((ph) => ph.id == focusedId);
+    if (index < 0) {
+      // The focused photo fell out of the filtered set (filter changed while
+      // the loupe was open): show the first visible photo and realign the
+      // focus to it after this frame, so marks/rotate act on what's on screen.
+      index = 0;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final visible = ref.read(filteredPhotosProvider);
+        final focused = ref.read(cullControllerProvider).focusedId;
+        if (visible.isNotEmpty &&
+            visible.indexWhere((ph) => ph.id == focused) < 0) {
+          ref.read(cullControllerProvider.notifier).focus(visible.first.id);
+        }
+      });
+    }
     final photo = photos[index];
     final controller = ref.read(cullControllerProvider.notifier);
 

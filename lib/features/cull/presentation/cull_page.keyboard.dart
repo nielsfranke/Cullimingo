@@ -105,12 +105,15 @@ mixin _CullKeyboard on _CullJobs {
       controller.focus(photos.first.id);
       return KeyEventResult.handled;
     }
-    final index = photos
-        .indexWhere((p) => p.id == focusedId)
-        .clamp(
-          0,
-          photos.length - 1,
-        );
+    final index = photos.indexWhere((p) => p.id == focusedId);
+    if (index < 0) {
+      // The focused photo fell out of the filtered set (the filter changed
+      // after it was focused). Refocus the first visible photo instead of
+      // acting on photos[0] while markTargets still point at the hidden one —
+      // clamping to 0 here used to write marks to the wrong photo.
+      controller.focus(photos.first.id);
+      return KeyEventResult.handled;
+    }
     final photo = photos[index];
     final id = photo.id;
     final key = event.logicalKey;

@@ -17,10 +17,17 @@ Future<void> showKeywordEditor(BuildContext context, WidgetRef ref) async {
   final targetIds = selection.markTargets.toList();
   if (targetIds.isEmpty) return;
 
-  final focused = photos.firstWhere(
-    (p) => p.id == (selection.focusedId ?? targetIds.first),
-    orElse: () => photos.firstWhere((p) => p.id == targetIds.first),
-  );
+  // Prefill from the actual target photo, resolved against the *unfiltered*
+  // set: the focused/selected photo may be hidden by the active filter, and
+  // the old filtered-only double firstWhere threw a StateError then — the K
+  // key looked dead.
+  final all = ref.read(photosProvider).value ?? const [];
+  final focused =
+      all
+          .where((p) => p.id == (selection.focusedId ?? targetIds.first))
+          .firstOrNull ??
+      all.where((p) => p.id == targetIds.first).firstOrNull ??
+      photos.first;
 
   final result = await showDialog<List<String>>(
     context: context,
