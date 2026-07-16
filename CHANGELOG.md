@@ -3,7 +3,14 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.3.0 — 2026-07-16
+
+### Changed
+- **Marking got much cheaper in big folders:** burst, RAW+JPEG and bracket
+  grouping no longer recompute on every rating/flag/colour keystroke (they
+  only depend on capture time, names and exposure data), and exports now run
+  through a small pool of long-lived render workers that load LibRaw once
+  instead of once per file — a 500-RAW export used to spawn 500 isolates.
 
 ### Fixed
 - **Externally changed photos now refresh their previews:** a file
@@ -19,15 +26,6 @@ All notable user-facing changes to Cullimingo. The format loosely follows
   it; syncing now clears the echo so "empty = follows capture time" sticks.
 - **Keyboard navigation no longer clips the focused row at the bottom edge**
   (the scroll math missed the grid's padding).
-
-### Changed
-- **Marking got much cheaper in big folders:** burst, RAW+JPEG and bracket
-  grouping no longer recompute on every rating/flag/colour keystroke (they
-  only depend on capture time, names and exposure data), and exports now run
-  through a small pool of long-lived render workers that load LibRaw once
-  instead of once per file — a 500-RAW export used to spawn 500 isolates.
-
-### Fixed
 - **A mark made while a folder was still syncing can no longer be lost:** the
   background sidecar resync ran from a snapshot, so rating a photo right
   after opening a folder with externally-changed sidecars could be silently
