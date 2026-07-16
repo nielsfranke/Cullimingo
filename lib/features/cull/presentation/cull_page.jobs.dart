@@ -340,6 +340,7 @@ mixin _CullJobs on _CullSelections {
   Future<void> _openSettings() async {
     final changed = await showSettingsDialog(
       context,
+      secrets: ref.read(secretStoreProvider),
       onClearCache: _clearCache,
     );
     if (!mounted) return;

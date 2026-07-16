@@ -164,7 +164,7 @@ final class FilterPresetsProvider
   }
 }
 
-String _$filterPresetsHash() => r'0b2f3c81d69a63076b198a5a6fd706a6409b204b';
+String _$filterPresetsHash() => r'4a72bc3ce7870447e8a1a1f1a37e7035fa04e387';
 
 /// The user's saved, named grid-filter presets (`BUILD_PLAN.md` §5). Global —
 /// a filter carries no import-specific data — so a preset is offered on every

@@ -68,8 +68,11 @@ void main() {
           home: Scaffold(
             body: Builder(
               builder: (context) => TextButton(
-                onPressed: () =>
-                    showSettingsDialog(context, onClearCache: () async {}),
+                onPressed: () => showSettingsDialog(
+                  context,
+                  secrets: secrets,
+                  onClearCache: () async {},
+                ),
                 child: const Text('open'),
               ),
             ),

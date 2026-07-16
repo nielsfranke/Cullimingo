@@ -73,6 +73,7 @@ void main() {
                 onPressed: () async {
                   result = await showSettingsDialog(
                     context,
+                    secrets: InMemorySecretStore(),
                     onClearCache: onClearCache ?? () async {},
                   );
                 },

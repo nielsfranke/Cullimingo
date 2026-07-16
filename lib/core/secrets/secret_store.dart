@@ -1,5 +1,8 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart';
+
+part 'secret_store.g.dart';
 
 /// Where delivery-server passwords live: the platform secret store — Keychain
 /// on macOS, libsecret (Secret Service) on Linux — never `settings.json`
@@ -49,7 +52,10 @@ class SecureSecretStore implements SecretStore {
   Future<String?> read(String key) async {
     try {
       return await _storage.read(key: key);
-    } on Object {
+    } on Object catch (e) {
+      // Null (= "no secret") keeps callers simple, but a failing keychain is
+      // worth a trace — it looks identical to "never configured" otherwise.
+      appTalker.warning('Secret store read failed ($key): $e');
       return null;
     }
   }
@@ -81,7 +87,6 @@ class InMemorySecretStore implements SecretStore {
 }
 
 /// The app-wide secret store; tests override this with an
-/// [InMemorySecretStore]. Classic provider — no codegen needed for a constant.
-final secretStoreProvider = Provider<SecretStore>(
-  (_) => const SecureSecretStore(),
-);
+/// [InMemorySecretStore].
+@Riverpod(keepAlive: true)
+SecretStore secretStore(Ref ref) => const SecureSecretStore();

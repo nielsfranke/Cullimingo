@@ -59,7 +59,7 @@ final class NoticesControllerProvider
   }
 }
 
-String _$noticesControllerHash() => r'd341d1ccdcb38aa3618d37e875886c24c76525f9';
+String _$noticesControllerHash() => r'bd3fda69c0bfb62da9405bbd102af0dd385fcc27';
 
 /// The single app-wide notification surface (`BUILD_PLAN.md` §7), as state:
 /// the page's bottom bar watches this, and long-running jobs (which outlive

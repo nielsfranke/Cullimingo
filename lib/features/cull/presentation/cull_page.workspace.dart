@@ -415,7 +415,7 @@ mixin _CullWorkspace on _CullGrid {
     final ws = ref.read(workspaceProvider);
     final paths = [for (final t in ws.tabs) t.sourcePath];
     unawaited(
-      AppSettings.load().then(
+      updateSettings(
         (s) => s.setLastFoldersWithActive(paths, ws.activeIndex),
       ),
     );

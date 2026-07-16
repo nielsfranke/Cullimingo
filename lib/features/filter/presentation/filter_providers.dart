@@ -119,7 +119,7 @@ class FilterPresets extends _$FilterPresets {
 
   void _persist() {
     final snapshot = FilterPreset.encodeList(state);
-    unawaited(AppSettings.load().then((s) => s.setFilterPresets(snapshot)));
+    unawaited(updateSettings((s) => s.setFilterPresets(snapshot)));
   }
 }
 

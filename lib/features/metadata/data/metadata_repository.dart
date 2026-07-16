@@ -1,4 +1,5 @@
 import 'package:cullimingo/core/db/database.dart';
+import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/raw/orientation_math.dart';
 import 'package:cullimingo/features/metadata/data/marks_reader.dart';
 import 'package:cullimingo/features/metadata/data/xmp_sidecar.dart';
@@ -38,10 +39,12 @@ class MetadataRepository {
   /// whose sidecar couldn't be written (a read-only volume, a full disk, a
   /// removed drive), so the UI can warn instead of the failure being invisible.
   /// Both are left null in tests / where the write isn't user-visible.
-  const MetadataRepository(this.db, {this.onSync, this.onWriteError});
+  const MetadataRepository(AppDatabase db, {this.onSync, this.onWriteError})
+    : _db = db;
 
-  /// The read-model database.
-  final AppDatabase db;
+  // The read-model database. Private: queries stay behind named AppDatabase
+  // methods so the schema never becomes this repository's public API.
+  final AppDatabase _db;
 
   /// Sidecar-write progress reporter (see the constructor).
   final void Function(int deltaPhotos)? onSync;
@@ -62,9 +65,7 @@ class MetadataRepository {
   /// grid rebuilds once after a batch mark (§0.6).
   Future<void> writeSidecarsForPhotos(List<int> photoIds) async {
     if (photoIds.isEmpty) return;
-    final rows = await (db.select(
-      db.photos,
-    )..where((t) => t.id.isIn(photoIds))).get();
+    final rows = await _db.photosByIds(photoIds);
     if (rows.isEmpty) return;
 
     onSync?.call(rows.length);
@@ -110,7 +111,10 @@ class MetadataRepository {
             ),
           );
           mtimes[photo.id] = await _sidecarMtime(photo.path);
-        } on Object {
+        } on Object catch (e) {
+          // Counted (the caller warns with the total); the *reason* would be
+          // lost without a trace — read-only volume vs full disk matters.
+          appTalker.warning('Sidecar write failed (${photo.path}): $e');
           failed.add(photo.id);
         }
       }
@@ -128,10 +132,10 @@ class MetadataRepository {
         if (!failed.contains(p.id)) p,
     ];
     if (written.isNotEmpty) {
-      await db.transaction(() async {
+      await _db.transaction(() async {
         for (final photo in written) {
-          await (db.update(
-            db.photos,
+          await (_db.update(
+            _db.photos,
           )..where((t) => t.id.equals(photo.id))).write(
             PhotosCompanion(
               hasXmp: const Value(true),
@@ -163,9 +167,7 @@ class MetadataRepository {
 
   Future<void> _applyMarks(int importId, {Set<String>? onlyPaths}) async {
     if (onlyPaths != null && onlyPaths.isEmpty) return;
-    final rows = await (db.select(
-      db.photos,
-    )..where((t) => t.importId.equals(importId))).get();
+    final rows = await _db.photosForImport(importId);
     final targets = [
       for (final photo in rows)
         if (onlyPaths == null || onlyPaths.contains(photo.path)) photo,
@@ -183,13 +185,13 @@ class MetadataRepository {
     // per photo. A per-row write made ratings/flags trickle in after the
     // thumbnails and forced every visible cell (and the burst grouping) to
     // rebuild N times as the marks landed.
-    await db.batch((b) {
+    await _db.batch((b) {
       for (var i = 0; i < targets.length; i++) {
         final (xmp, mtime) = reads[i];
         if (xmp == null) continue;
         final turns = _turnsFromSidecar(targets[i].orientation, xmp);
         b.update(
-          db.photos,
+          _db.photos,
           PhotosCompanion(
             rating: Value(xmp.rating),
             colorLabel: Value(xmp.color),
@@ -253,9 +255,7 @@ class MetadataRepository {
   /// a photo changed on both sides keeps whichever mtime is newer and is
   /// flagged as a conflict. Returns counts for the UI to surface.
   Future<SyncResult> syncSidecarsFromDisk(int importId) async {
-    final rows = await (db.select(
-      db.photos,
-    )..where((t) => t.importId.equals(importId))).get();
+    final rows = await _db.photosForImport(importId);
     if (rows.isEmpty) return const SyncResult();
 
     // Scan every sidecar's mtime + (when changed) parse its marks on a
@@ -310,7 +310,9 @@ class MetadataRepository {
         // Local marks are newer: keep them, push back to the sidecar, but flag
         // that an external change was overruled.
         await writeSidecarForPhoto(photo.id);
-        await (db.update(db.photos)..where((t) => t.id.equals(photo.id))).write(
+        await (_db.update(
+          _db.photos,
+        )..where((t) => t.id.equals(photo.id))).write(
           const PhotosCompanion(xmpConflict: Value(true)),
         );
       }
@@ -331,7 +333,7 @@ class MetadataRepository {
   }) async {
     final turns = _turnsFromSidecar(photo.orientation, xmp);
     final rows =
-        await (db.update(db.photos)..where(
+        await (_db.update(_db.photos)..where(
               (t) => onlyIfClean
                   ? t.id.equals(photo.id) & t.marksMtime.isNull()
                   : t.id.equals(photo.id),

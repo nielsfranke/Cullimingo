@@ -101,7 +101,7 @@ class _TransferDialogState extends State<_TransferDialog> {
     final root = _resolvedDestination();
     if (root == null) return;
     unawaited(
-      AppSettings.load().then((s) => s.setLastDestination(_destination!)),
+      updateSettings((s) => s.setLastDestination(_destination!)),
     );
     Navigator.of(context).pop(
       TransferRequest(

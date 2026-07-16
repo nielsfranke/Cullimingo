@@ -92,7 +92,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       _naming = preset;
     });
     unawaited(
-      AppSettings.load().then(
+      updateSettings(
         (s) => s.setNamePresets([for (final p in _savedNaming) p.toJson()]),
       ),
     );
@@ -107,7 +107,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       ];
     });
     unawaited(
-      AppSettings.load().then(
+      updateSettings(
         (s) => s.setNamePresets([for (final p in _savedNaming) p.toJson()]),
       ),
     );
@@ -317,7 +317,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     if (plan == null || dest == null) return;
     // Remember this run's naming + options for the next import.
     unawaited(
-      AppSettings.load().then(
+      updateSettings(
         (s) => s.setLastImport({
           'naming': _naming.toJson(),
           'verify': _verify,
@@ -355,7 +355,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       _running = false;
     });
     // Remember the destination so it's pre-filled next time.
-    unawaited(AppSettings.load().then((s) => s.setLastDestination(dest)));
+    unawaited(updateSettings((s) => s.setLastDestination(dest)));
   }
 
   void _cancel() => setState(() => _cancelled = true);

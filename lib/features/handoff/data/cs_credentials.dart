@@ -1,3 +1,4 @@
+import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/secrets/secret_store.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
 
@@ -47,8 +48,10 @@ Future<void> saveCsCredentials(
     } else {
       await secrets.write(contactSheetTokenKey, token);
     }
-  } on Object {
+  } on Object catch (e) {
     // Best effort (matches AppSettings' stance): a lost token only means
     // re-entering it, and the in-flight request already carries this one.
+    // Logged, though — a broken keychain would otherwise be invisible.
+    appTalker.warning('ContactSheet token save failed: $e');
   }
 }

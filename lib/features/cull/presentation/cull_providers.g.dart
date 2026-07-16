@@ -507,7 +507,7 @@ final class GridCellWidthProvider
   }
 }
 
-String _$gridCellWidthHash() => r'24cb2f54aefbf5e9d161fbeec4d7f533b7429105';
+String _$gridCellWidthHash() => r'43ef7e0992b28aee149c22a17444f7a607a729dc';
 
 /// Target grid cell width in logical pixels, driven by the toolbar size slider.
 /// Only changes how big thumbnails are *drawn* — the cached source stays 512px,
@@ -622,7 +622,7 @@ final class TooltipsEnabledProvider
   }
 }
 
-String _$tooltipsEnabledHash() => r'16832f26c4980fe51361c45d1fe4a1b76cc3f581';
+String _$tooltipsEnabledHash() => r'ae34c38afd93e87441d7194f1dcf78585fb189ee';
 
 /// Whether button tooltips are shown app-wide (Settings → Interface). Applies
 /// immediately (the app wraps its UI in `TooltipVisibility`) and is persisted.
@@ -738,7 +738,7 @@ final class AutoAdvanceAfterMarkProvider
 }
 
 String _$autoAdvanceAfterMarkHash() =>
-    r'65cc4f3eb5c14f927ddd5c922abb562878488c84';
+    r'60add5bfdd4f3526ec1245c74adae8fe60fd9688';
 
 /// Whether marking a single photo advances focus to the next one,
 /// Photo-Mechanic style (Settings → Interface). Read in the keyboard handler;
@@ -849,7 +849,7 @@ final class PropagateMarksToStackProvider
 }
 
 String _$propagateMarksToStackHash() =>
-    r'2441b6b89de76d47bc88d0dcec62018a6cb255e5';
+    r'3bf7ae18f0cf1497c0ae77db314216471d81ea05';
 
 /// Whether marking a photo also marks the rest of its exposure bracket
 /// (Settings → Interface). Read by [CullController]; persisted.
@@ -961,7 +961,7 @@ final class AutoExpandBracketsOnSelectProvider
 }
 
 String _$autoExpandBracketsOnSelectHash() =>
-    r'28f75d40bdc8cfeec68aec0d77a194348912c631';
+    r'093536144edd562b321514723756f8f777bd42a2';
 
 /// Whether pulling client picks in auto-expands the selection to each pick's
 /// exposure bracket (Settings → Interface). Read by the page; persisted.
@@ -1082,7 +1082,7 @@ final class ShortcutsHintSeenProvider
   }
 }
 
-String _$shortcutsHintSeenHash() => r'6aa5ce5d3184ef8f10f6050ff06cfa590a50f310';
+String _$shortcutsHintSeenHash() => r'ec23afff0feb72b3414b7c870b50506668532603';
 
 /// Whether the first-run keyboard cheat sheet has already been shown. The cull
 /// page pops the sheet once when this is false, then calls [ShortcutsHintSeen.
@@ -1200,7 +1200,7 @@ final class MarkConfirmationEnabledProvider
 }
 
 String _$markConfirmationEnabledHash() =>
-    r'782b02216bf7658011afbb8ad1f29a15316fa25e';
+    r'b67722dd501aee2ca43bfb9fa77b5d2737354077';
 
 /// Whether the loupe flashes an ephemeral mark-confirmation HUD (Settings →
 /// Interface). Read live by the loupe; persisted.
@@ -1318,7 +1318,7 @@ final class FilmstripVisibleProvider
   }
 }
 
-String _$filmstripVisibleHash() => r'8c6c63059b7c1875ea4c4e78404c660642b20d2c';
+String _$filmstripVisibleHash() => r'37c7ae128d21976c28020d5626c3ea71ff87aaad';
 
 /// Whether the loupe shows its thumbnail filmstrip. Toggled from the loupe;
 /// persisted.
@@ -1434,7 +1434,7 @@ final class LoupeHistogramVisibleProvider
 }
 
 String _$loupeHistogramVisibleHash() =>
-    r'e6da0cf75a6d6bb89c1169f7740097bec3516085';
+    r'7bbe6c7339b3e1b1d8b10f23a1c7a83d58736fe7';
 
 /// Whether the loupe shows the RGB histogram panel. Sticky: once turned on it
 /// stays on across photos, loupe sessions and relaunches until turned off
@@ -1545,7 +1545,7 @@ final class LoupeClippingVisibleProvider
 }
 
 String _$loupeClippingVisibleHash() =>
-    r'3adca141fb8568c7398825ebdbfd1e14ddafb754';
+    r'27e7b1d938d27451ed66cb0922750e293190660b';
 
 /// Whether the loupe tints blown highlights (red) and crushed shadows (blue)
 /// over the photo. Sticky: stays on until toggled off; persisted.
@@ -1659,7 +1659,7 @@ final class LoupeFocusPeakingVisibleProvider
 }
 
 String _$loupeFocusPeakingVisibleHash() =>
-    r'c9a878e4832133c232109d2dcfc059d66314f3be';
+    r'eb0faffee59533ac3edd0899cf5eeff18cdf134e';
 
 /// Whether the loupe overlays a focus-peaking edge map over the photo (pure
 /// gradient-magnitude signal processing, not AI). Sticky: stays on until
@@ -1778,7 +1778,7 @@ final class AutoOpenImportOnCardInsertProvider
 }
 
 String _$autoOpenImportOnCardInsertHash() =>
-    r'afd64bd44d139619a9ed20f40d72bc5bc96569a9';
+    r'108b7d959e316ee23373690b41388277d0f9c9ce';
 
 /// Whether inserting a memory card opens the Import dialog directly instead
 /// of only offering a notice (Settings → General → Ingest). Persisted.
@@ -1889,7 +1889,7 @@ final class RecentFoldersProvider
   }
 }
 
-String _$recentFoldersHash() => r'b22fa61141edaff451d87eb800c25cdac8f2662b';
+String _$recentFoldersHash() => r'abd4231af06de63844ffe1400a762eff2209d912';
 
 /// The recently-opened folders (most-recent-first) behind the "Open recent"
 /// menu. Updated whenever a folder is opened; persisted.
@@ -2068,7 +2068,7 @@ final class CullShortcutsControllerProvider
 }
 
 String _$cullShortcutsControllerHash() =>
-    r'6708d526630e0d33a5e29d5ce478f41d7d4101f2';
+    r'b4356a6dfaeb755707c0203335d731c2f3b9a718';
 
 /// The resolved cull keymap (defaults + user rebindings), used by the grid key
 /// handler and the shortcuts UI. Rebinding applies immediately and persists.
@@ -2244,6 +2244,54 @@ abstract class _$Workspace extends $Notifier<WorkspaceState> {
     return element.handleCreate(ref, build);
   }
 }
+
+/// The currently open import (folder), derived from the active tab, or `null`
+/// before any folder is opened.
+
+@ProviderFor(currentImport)
+final currentImportProvider = CurrentImportProvider._();
+
+/// The currently open import (folder), derived from the active tab, or `null`
+/// before any folder is opened.
+
+final class CurrentImportProvider extends $FunctionalProvider<int?, int?, int?>
+    with $Provider<int?> {
+  /// The currently open import (folder), derived from the active tab, or `null`
+  /// before any folder is opened.
+  CurrentImportProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'currentImportProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$currentImportHash();
+
+  @$internal
+  @override
+  $ProviderElement<int?> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  int? create(Ref ref) {
+    return currentImport(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(int? value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<int?>(value),
+    );
+  }
+}
+
+String _$currentImportHash() => r'aaf222fd9b60eabcd14a179031451dbb5a98647f';
 
 /// Whether the preview providers retry a transient null. **Defaults to false**
 /// so the retry's back-off timers never linger in widget tests (which render
@@ -2661,7 +2709,7 @@ final class CullControllerProvider
   }
 }
 
-String _$cullControllerHash() => r'39ec7d59e077e46b9df6d66637aa04654a0cf4b3';
+String _$cullControllerHash() => r'0034ee6e4e45f092eb97565beeb077616d14cc43';
 
 /// Owns grid focus/selection and writes cull marks straight to the read model
 /// (the reactive `photos` stream reflects them immediately).

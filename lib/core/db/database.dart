@@ -182,6 +182,21 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
+  /// One-shot list of an import's photos (see [watchPhotosForImport] for the
+  /// reactive variant that drives the grid).
+  Future<List<Photo>> photosForImport(int importId) =>
+      (select(photos)..where((t) => t.importId.equals(importId))).get();
+
+  /// The current rows for [ids] (missing ids are simply absent).
+  Future<List<Photo>> photosByIds(List<int> ids) {
+    if (ids.isEmpty) return Future.value(const []);
+    return (select(photos)..where((t) => t.id.isIn(ids))).get();
+  }
+
+  /// The row for [photoId], or null when it no longer exists.
+  Future<Photo?> photoById(int photoId) =>
+      (select(photos)..where((t) => t.id.equals(photoId))).getSingleOrNull();
+
   /// Watches all photos for an import, ordered by capture time then path.
   Stream<List<Photo>> watchPhotosForImport(int importId) {
     return (select(photos)

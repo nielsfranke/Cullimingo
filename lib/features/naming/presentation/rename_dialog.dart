@@ -92,7 +92,7 @@ class _RenameDialogState extends State<_RenameDialog> {
       _naming = preset;
     });
     unawaited(
-      AppSettings.load().then(
+      updateSettings(
         (s) => s.setNamePresets([for (final p in _savedNaming) p.toJson()]),
       ),
     );
@@ -106,7 +106,7 @@ class _RenameDialogState extends State<_RenameDialog> {
       ];
     });
     unawaited(
-      AppSettings.load().then(
+      updateSettings(
         (s) => s.setNamePresets([for (final p in _savedNaming) p.toJson()]),
       ),
     );

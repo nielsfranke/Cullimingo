@@ -39,7 +39,7 @@ class _FindSimilarDialogState extends State<_FindSimilarDialog> {
   void _run() {
     final chosen = _selected;
     unawaited(
-      AppSettings.load().then((s) => s.setSimilaritySensitivity(chosen.name)),
+      updateSettings((s) => s.setSimilaritySensitivity(chosen.name)),
     );
     Navigator.of(context).pop(chosen);
   }

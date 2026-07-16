@@ -20,7 +20,10 @@ packages/
 
 ## Key decisions
 - **State:** Riverpod 3 with codegen (`@riverpod`). Repositories/isolates read
-  state without `BuildContext`.
+  state without `BuildContext`. Convention: providers that expose a
+  drift-generated row type (`Photo`, `SavedSelection`) stay classic — the
+  generator can't resolve part-file types (InvalidTypeException); everything
+  else uses codegen.
 - **Read model vs. truth:** drift (SQLite) is the fast read model the UI binds
   to; the filesystem + XMP sidecars are the durable source of truth. Sync on
   import and on manual refresh (⌘R re-scans the folder; sidecars resync on

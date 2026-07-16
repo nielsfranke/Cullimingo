@@ -11,10 +11,11 @@ import 'package:path/path.dart' as p;
 class LibraryRepository {
   /// Creates a repository over [db]. When [metadata] is given, existing XMP
   /// sidecars seed the read model on import.
-  const LibraryRepository(this.db, {this.metadata});
+  const LibraryRepository(AppDatabase db, {this.metadata}) : _db = db;
 
-  /// The read-model database.
-  final AppDatabase db;
+  // The read-model database. Private: queries stay behind named AppDatabase
+  // methods so the schema never becomes this repository's public API.
+  final AppDatabase _db;
 
   /// Optional metadata repository for sidecar sync.
   final MetadataRepository? metadata;
@@ -25,12 +26,12 @@ class LibraryRepository {
   /// import would insertOrIgnore nothing and show an empty grid).
   Future<(int, bool)> findOrCreateImport(String root) async {
     final existing =
-        await (db.select(db.imports)
+        await (_db.select(_db.imports)
               ..where((t) => t.sourcePath.equals(root))
               ..limit(1))
             .getSingleOrNull();
     if (existing != null) return (existing.id, false);
-    final id = await db.createImport(
+    final id = await _db.createImport(
       sourcePath: root,
       cardLabel: p.basename(root),
     );
@@ -53,7 +54,7 @@ class LibraryRepository {
       recursive: recursive,
       includeVideos: true,
     );
-    await db.claimPhotos(
+    await _db.claimPhotos(
       importId,
       files.map(
         (f) => PhotosCompanion.insert(
@@ -93,9 +94,7 @@ class LibraryRepository {
       includeVideos: true,
     );
     final diskPaths = files.map((f) => f.path).toSet();
-    final existing = await (db.select(
-      db.photos,
-    )..where((t) => t.importId.equals(importId))).get();
+    final existing = await _db.photosForImport(importId);
     final existingPaths = existing.map((row) => row.path).toSet();
     final rowByPath = {for (final row in existing) row.path: row};
 
@@ -108,7 +107,7 @@ class LibraryRepository {
     final removedPaths = existingPaths.difference(diskPaths).toList();
 
     if (newFiles.isNotEmpty) {
-      await db.claimPhotos(
+      await _db.claimPhotos(
         importId,
         newFiles.map(
           (f) => PhotosCompanion.insert(
@@ -126,7 +125,7 @@ class LibraryRepository {
       );
     }
     if (removedPaths.isNotEmpty) {
-      await db.deletePhotosByPaths(importId, removedPaths);
+      await _db.deletePhotosByPaths(importId, removedPaths);
     }
 
     // Files overwritten/edited in place: the on-disk mtime moved past the
@@ -140,10 +139,10 @@ class LibraryRepository {
           f,
     ];
     if (changedFiles.isNotEmpty) {
-      await db.batch((b) {
+      await _db.batch((b) {
         for (final f in changedFiles) {
           b.update(
-            db.photos,
+            _db.photos,
             PhotosCompanion(mtime: Value(f.mtime)),
             where: (t) => t.path.equals(f.path),
           );
@@ -173,10 +172,10 @@ class LibraryRepository {
   Future<void> _backfillExif(List<String> paths) async {
     final exif = await scanExif(paths);
     if (exif.isEmpty) return;
-    await db.batch((b) {
+    await _db.batch((b) {
       for (final e in exif) {
         b.update(
-          db.photos,
+          _db.photos,
           PhotosCompanion(
             capturedAt: Value(e.capturedAt),
             camera: Value(e.camera),
@@ -209,10 +208,10 @@ class LibraryRepository {
     if (stale.isEmpty) return;
     final exif = await scanExif(stale);
     if (exif.isEmpty) return;
-    await db.batch((b) {
+    await _db.batch((b) {
       for (final e in exif) {
         b.update(
-          db.photos,
+          _db.photos,
           PhotosCompanion(
             exposureBias: Value(e.exposureBias),
             exposureTime: Value(e.exposureTime ?? 0),
@@ -225,5 +224,5 @@ class LibraryRepository {
 
   /// Reactive stream of the photos in [importId], ordered for the grid.
   Stream<List<Photo>> watchImport(int importId) =>
-      db.watchPhotosForImport(importId);
+      _db.watchPhotosForImport(importId);
 }

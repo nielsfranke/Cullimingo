@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -497,11 +499,22 @@ class AppSettings {
           flush: true,
         );
         tmp.renameSync(file.path);
-      } on Object {
+      } on Object catch (e) {
         // Best effort — a missing setting just means no pre-fill next time.
+        // Logged, though: a *persistently* failing write (read-only config
+        // dir, full disk) would otherwise be invisible.
+        appTalker.warning('Settings write failed: $e');
       }
     });
     _writeQueue = next;
     return next;
   }
 }
+
+/// Loads the settings and applies [change] — the one-liner for the very
+/// common fire-and-forget UI persistence (`unawaited(updateSettings((s) =>
+/// s.setX(...)))`), which used to be spelled `AppSettings.load().then(...)`
+/// at every call site.
+Future<void> updateSettings(
+  FutureOr<void> Function(AppSettings settings) change,
+) async => change(await AppSettings.load());

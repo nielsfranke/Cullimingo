@@ -248,7 +248,7 @@ class _ExportDialogState extends State<_ExportDialog> {
       _naming = preset;
     });
     unawaited(
-      AppSettings.load().then(
+      updateSettings(
         (s) => s.setNamePresets([for (final p in _savedNaming) p.toJson()]),
       ),
     );
@@ -263,7 +263,7 @@ class _ExportDialogState extends State<_ExportDialog> {
       ];
     });
     unawaited(
-      AppSettings.load().then(
+      updateSettings(
         (s) => s.setNamePresets([for (final p in _savedNaming) p.toJson()]),
       ),
     );

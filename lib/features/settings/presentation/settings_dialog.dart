@@ -40,12 +40,12 @@ import 'package:path/path.dart' as p;
 /// is run inline from the Cache section.
 Future<PerformancePreset?> showSettingsDialog(
   BuildContext context, {
+  required SecretStore secrets,
   required Future<void> Function() onClearCache,
 }) async {
   // Load settings BEFORE building the dialog and pass the values in. Loading
   // async inside the dialog (and setState-ing) races the user: a late load can
   // overwrite a toggle they just flipped (this dropped "reopen folders").
-  final secrets = ProviderScope.containerOf(context).read(secretStoreProvider);
   final creds = await loadCsCredentials(secrets);
   final settings = await AppSettings.load();
   final preset =

@@ -180,7 +180,7 @@ class GridCellWidth extends _$GridCellWidth {
     _saveDebounce?.cancel();
     _saveDebounce = Timer(const Duration(milliseconds: 400), () {
       final saved = state;
-      unawaited(AppSettings.load().then((s) => s.setGridCellWidth(saved)));
+      unawaited(updateSettings((s) => s.setGridCellWidth(saved)));
     });
   }
 }
@@ -201,7 +201,7 @@ class TooltipsEnabled extends _$TooltipsEnabled {
   // ignore: avoid_positional_boolean_parameters — simple flag setter.
   void set(bool value) {
     state = value;
-    unawaited(AppSettings.load().then((s) => s.setShowTooltips(value)));
+    unawaited(updateSettings((s) => s.setShowTooltips(value)));
   }
 }
 
@@ -222,7 +222,7 @@ class AutoAdvanceAfterMark extends _$AutoAdvanceAfterMark {
   // ignore: avoid_positional_boolean_parameters — simple flag setter.
   void set(bool value) {
     state = value;
-    unawaited(AppSettings.load().then((s) => s.setAutoAdvanceAfterMark(value)));
+    unawaited(updateSettings((s) => s.setAutoAdvanceAfterMark(value)));
   }
 }
 
@@ -242,7 +242,7 @@ class PropagateMarksToStack extends _$PropagateMarksToStack {
   void set(bool value) {
     state = value;
     unawaited(
-      AppSettings.load().then((s) => s.setPropagateMarksToStack(value)),
+      updateSettings((s) => s.setPropagateMarksToStack(value)),
     );
   }
 }
@@ -263,7 +263,7 @@ class AutoExpandBracketsOnSelect extends _$AutoExpandBracketsOnSelect {
   void set(bool value) {
     state = value;
     unawaited(
-      AppSettings.load().then((s) => s.setAutoExpandBracketsOnSelect(value)),
+      updateSettings((s) => s.setAutoExpandBracketsOnSelect(value)),
     );
   }
 }
@@ -287,7 +287,7 @@ class ShortcutsHintSeen extends _$ShortcutsHintSeen {
   void markSeen() {
     if (state) return;
     state = true;
-    unawaited(AppSettings.load().then((s) => s.setHasSeenShortcutsHint(true)));
+    unawaited(updateSettings((s) => s.setHasSeenShortcutsHint(true)));
   }
 }
 
@@ -309,7 +309,7 @@ class MarkConfirmationEnabled extends _$MarkConfirmationEnabled {
   void set(bool value) {
     state = value;
     unawaited(
-      AppSettings.load().then((s) => s.setMarkConfirmationOverlay(value)),
+      updateSettings((s) => s.setMarkConfirmationOverlay(value)),
     );
   }
 }
@@ -332,7 +332,7 @@ class FilmstripVisible extends _$FilmstripVisible {
   // ignore: avoid_positional_boolean_parameters — simple flag setter.
   void set(bool value) {
     state = value;
-    unawaited(AppSettings.load().then((s) => s.setFilmstripVisible(value)));
+    unawaited(updateSettings((s) => s.setFilmstripVisible(value)));
   }
 }
 
@@ -353,7 +353,7 @@ class LoupeHistogramVisible extends _$LoupeHistogramVisible {
   void toggle() {
     final value = !state;
     state = value;
-    unawaited(AppSettings.load().then((s) => s.setLoupeHistogram(value)));
+    unawaited(updateSettings((s) => s.setLoupeHistogram(value)));
   }
 }
 
@@ -372,7 +372,7 @@ class LoupeClippingVisible extends _$LoupeClippingVisible {
   void toggle() {
     final value = !state;
     state = value;
-    unawaited(AppSettings.load().then((s) => s.setLoupeClipping(value)));
+    unawaited(updateSettings((s) => s.setLoupeClipping(value)));
   }
 }
 
@@ -392,7 +392,7 @@ class LoupeFocusPeakingVisible extends _$LoupeFocusPeakingVisible {
   void toggle() {
     final value = !state;
     state = value;
-    unawaited(AppSettings.load().then((s) => s.setLoupeFocusPeaking(value)));
+    unawaited(updateSettings((s) => s.setLoupeFocusPeaking(value)));
   }
 }
 
@@ -414,7 +414,7 @@ class AutoOpenImportOnCardInsert extends _$AutoOpenImportOnCardInsert {
   void set(bool value) {
     state = value;
     unawaited(
-      AppSettings.load().then((s) => s.setAutoOpenImportOnCardInsert(value)),
+      updateSettings((s) => s.setAutoOpenImportOnCardInsert(value)),
     );
   }
 }
@@ -436,7 +436,7 @@ class RecentFolders extends _$RecentFolders {
     final next = promoteRecentFolder(state, path);
     if (listEquals(next, state)) return;
     state = next;
-    unawaited(AppSettings.load().then((s) => s.setRecentFolders(next)));
+    unawaited(updateSettings((s) => s.setRecentFolders(next)));
   }
 
   /// Drops [path] from the list (e.g. a folder that no longer exists).
@@ -447,7 +447,7 @@ class RecentFolders extends _$RecentFolders {
         if (p != path) p,
     ];
     final next = state;
-    unawaited(AppSettings.load().then((s) => s.setRecentFolders(next)));
+    unawaited(updateSettings((s) => s.setRecentFolders(next)));
   }
 }
 
@@ -527,7 +527,7 @@ class CullShortcutsController extends _$CullShortcutsController {
   void _persist() {
     final overrides = state.toOverrides();
     unawaited(
-      AppSettings.load().then((s) => s.setShortcutOverrides(overrides)),
+      updateSettings((s) => s.setShortcutOverrides(overrides)),
     );
   }
 }
@@ -691,10 +691,8 @@ class Workspace extends _$Workspace {
 
 /// The currently open import (folder), derived from the active tab, or `null`
 /// before any folder is opened.
-final currentImportProvider = Provider<int?>(
-  (ref) => ref.watch(workspaceProvider).active?.importId,
-  name: 'currentImport',
-);
+@Riverpod(keepAlive: true)
+int? currentImport(Ref ref) => ref.watch(workspaceProvider).active?.importId;
 
 /// Reactive list of photos for the open import (empty when none is open).
 ///
@@ -1091,7 +1089,7 @@ class CullController extends _$CullController {
   /// The current rows for [ids] (missing ids are simply absent) — the
   /// before-values an undo entry captures.
   Future<List<Photo>> _photosByIds(Set<int> ids) =>
-      (_db.select(_db.photos)..where((t) => t.id.isIn(ids.toList()))).get();
+      _db.photosByIds(ids.toList());
 
   // The batch mark paths: one UPDATE for the whole batch (single stream emit,
   // one grid rebuild), then the sidecar mirror as one batch (§0.6).
@@ -1183,9 +1181,7 @@ class CullController extends _$CullController {
   /// we keep the rotation as a widget-layer delta. Either way the new effective
   /// orientation is mirrored to the XMP sidecar (`tiff:Orientation`).
   Future<void> _rotateOne(int photoId, int quarterTurnsCW) async {
-    final photo = await (_db.select(
-      _db.photos,
-    )..where((t) => t.id.equals(photoId))).getSingleOrNull();
+    final photo = await _db.photoById(photoId);
     if (photo == null) return;
 
     final effective = rotateOrientation(
