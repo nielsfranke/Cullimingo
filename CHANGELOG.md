@@ -3,6 +3,56 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **Marking a photo no longer wipes foreign XMP data:** writing the sidecar
+  used to replace the whole file, so a single rating keystroke destroyed
+  Lightroom develop settings, crops, GPS and hierarchical keywords that lived
+  in the same `.xmp`. Sidecar writes now merge: only Cullimingo's own fields
+  are replaced, everything else passes through untouched. Sidecar writes are
+  also atomic now (temp file + rename).
+- **Ratings/labels from exiftool- or digiKam-written sidecars were ignored:**
+  the reader only understood the attribute form of `xmp:Rating`/`xmp:Label`/
+  `tiff:Orientation`; the element form (and marks split across multiple
+  `rdf:Description` blocks) now parses too.
+- **A rotation made in Lightroom now shows up in Cullimingo:** the sidecar's
+  `tiff:Orientation` was read but never adopted, so an external rotate was
+  silently overwritten on the next mark. Sync now translates it into the
+  photo's rotation (mirror-mismatched values are left alone).
+- **Marks could land on the wrong photo after a filter change:** if the
+  focused photo was hidden by a new filter, a mark key silently acted on the
+  first visible photo while the actual target stayed hidden — and the keyword
+  editor (K) died with an internal error. Both now refocus the first visible
+  photo instead.
+- **Preview pool no longer leaks workers on slow media:** a job timeout used
+  to spawn a replacement but never kill the stuck worker, so every timeout on
+  a slow NAS/SD grew the pool (and its native LibRaw/libvips memory) by one —
+  permanently. The watchdog now kills the hung worker and drops its late
+  answers.
+- **Cold folder opens no longer decode every visible photo twice:** the
+  viewport prefetch re-requested the cells already on screen, and nothing
+  coalesced concurrent requests for the same preview — each visible RAW was
+  extracted twice on first open. Requests now share one in-flight extraction
+  and the prefetch warms only the ring around the viewport.
+- **A failed move could lose culling marks:** when "Send to…" moved photos and
+  the sidecar's copy failed verification, the original `.xmp` was deleted
+  anyway — the ratings/keywords then existed nowhere. The source sidecar (and,
+  on cancel, the photo) is now only removed after its copy verified.
+- **Rotating a JPEG is now crash-safe:** the lossless EXIF patch used to
+  rewrite the original in place, so a crash mid-write could destroy the photo.
+  It now writes a temp file next to it and swaps it in atomically.
+- **Corrupt thumbnails could stick forever:** a crash (or a concurrent read)
+  during a preview-cache write could leave a torn cache file that kept being
+  served across sessions until the cache was cleared manually. Cache writes
+  are now atomic, and a vanished cache file re-extracts instead of erroring
+  the cell.
+- **Loupe filmstrip got cheaper:** each strip cell decoded the full ~1024 px
+  thumbnail for an 84×60 frame; it now decodes at cell size. Marking photos in
+  a long-lived library also got snappier — the photo query that refreshes the
+  grid on every mark is now index-backed instead of scanning every import ever
+  opened.
+
 ## 1.2.8 — 2026-07-15
 
 ### Changed

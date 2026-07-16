@@ -10,7 +10,8 @@ Feature-first, layered Flutter desktop app. One window, no router yet.
 lib/
   main.dart            # entrypoint: window_manager + ProviderScope
   app/                 # MaterialApp, dark theme, design tokens (§7)
-  core/                # cross-cutting: isolates, cache, db, raw, files, logging
+  core/                # cross-cutting: isolates, cache, db, raw/vips/native
+                       # (FFI), files, logging, settings, secrets, update
   features/<name>/     # each owns data / domain / presentation
   shared/              # reusable widgets + freezed models
 packages/
@@ -22,11 +23,15 @@ packages/
   state without `BuildContext`.
 - **Read model vs. truth:** drift (SQLite) is the fast read model the UI binds
   to; the filesystem + XMP sidecars are the durable source of truth. Sync on
-  import and on external change.
+  import and on manual refresh (⌘R re-scans the folder; sidecars resync on
+  focus/refresh) — there is **no** filesystem watcher.
 - **UI isolate is sacred:** decode/encode/hash/large I/O/XMP go through the
   isolate pool (built in Phase 2). The UI only ever receives results.
 - **Two-tier disk cache:** grid thumbnails + screen-res loupe previews, keyed by
-  `contentHash + mtime + orientation`. Decode-once, reuse.
+  `path + size + mtime` (+ tier/long-edge salt; no file content is read — see
+  `core/cache/file_signature.dart`). Orientation is covered indirectly: a JPEG
+  rotate rewrites EXIF (new mtime), a RAW rotate is a widget-layer turn.
+  Decode-once, reuse.
 
 ## Deviations from BUILD_PLAN.md (keep this list honest)
 - **Naming:** package `cullimingo`; native package `packages/cullimingo_raw/`.
