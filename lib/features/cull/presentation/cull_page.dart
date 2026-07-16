@@ -7,25 +7,22 @@ import 'package:cullimingo/core/db/database.dart';
 import 'package:cullimingo/core/files/filename_match.dart';
 import 'package:cullimingo/core/files/open_external.dart';
 import 'package:cullimingo/core/files/supported_files.dart';
-import 'package:cullimingo/core/files/verified_copy.dart';
 import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
-import 'package:cullimingo/core/secrets/secret_store.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:cullimingo/core/update/update_checker.dart';
 import 'package:cullimingo/core/update/update_providers.dart';
-import 'package:cullimingo/features/cull/data/phash_compute.dart';
 import 'package:cullimingo/features/cull/data/reject_deleter.dart';
 import 'package:cullimingo/features/cull/domain/compare_focus.dart';
 import 'package:cullimingo/features/cull/domain/cull_key_mappings.dart';
 import 'package:cullimingo/features/cull/domain/cull_shortcuts.dart';
 import 'package:cullimingo/features/cull/domain/dropped_folders.dart';
-import 'package:cullimingo/features/cull/domain/duplicate_groups.dart';
 import 'package:cullimingo/features/cull/domain/grid_navigation.dart';
 import 'package:cullimingo/features/cull/domain/grid_zoom_anchor.dart';
-import 'package:cullimingo/features/cull/domain/perceptual_hash.dart';
 import 'package:cullimingo/features/cull/presentation/background_jobs.dart';
+import 'package:cullimingo/features/cull/presentation/cull_job_runner.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
+import 'package:cullimingo/features/cull/presentation/notices_provider.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/compare_view.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/cull_tab_bar.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/cull_top_bar.dart';
@@ -38,10 +35,6 @@ import 'package:cullimingo/features/cull/presentation/widgets/keyboard_shortcuts
 import 'package:cullimingo/features/cull/presentation/widgets/loupe_view.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/notice_bar.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/status_bar.dart';
-import 'package:cullimingo/features/delivery/data/delivery_client.dart';
-import 'package:cullimingo/features/delivery/data/delivery_uploader.dart';
-import 'package:cullimingo/features/delivery/domain/delivery_server.dart';
-import 'package:cullimingo/features/export/data/export_service.dart';
 import 'package:cullimingo/features/export/domain/export_plan.dart';
 import 'package:cullimingo/features/export/presentation/export_dialog.dart';
 import 'package:cullimingo/features/filter/data/selection_source.dart';
@@ -49,11 +42,8 @@ import 'package:cullimingo/features/filter/domain/photo_filter.dart';
 import 'package:cullimingo/features/filter/domain/photo_sort.dart';
 import 'package:cullimingo/features/filter/presentation/filter_bar.dart';
 import 'package:cullimingo/features/filter/presentation/filter_providers.dart';
-import 'package:cullimingo/features/handoff/data/contactsheet_client.dart';
 import 'package:cullimingo/features/handoff/data/transfer_service.dart';
 import 'package:cullimingo/features/handoff/domain/external_editor.dart';
-import 'package:cullimingo/features/handoff/domain/pull_collections.dart';
-import 'package:cullimingo/features/handoff/domain/pull_marks.dart';
 import 'package:cullimingo/features/handoff/presentation/contactsheet_dialog.dart';
 import 'package:cullimingo/features/handoff/presentation/send_to_providers.dart';
 import 'package:cullimingo/features/handoff/presentation/transfer_dialog.dart';
@@ -73,7 +63,6 @@ import 'package:cullimingo/features/settings/presentation/settings_dialog.dart';
 import 'package:cullimingo/shared/models/cull_marks.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -150,13 +139,11 @@ class _CullPageState extends ConsumerState<CullPage>
 
   @override
   void dispose() {
+    // Running background jobs deliberately survive this dispose — they live
+    // in the keepAlive CullJobRunner and are stopped with the container.
     _prefetchTimer?.cancel();
     _prefetchToken?.cancel();
     _cardPollTimer?.cancel();
-    _noticeTimer?.cancel();
-    unawaited(_exportSub?.cancel());
-    unawaited(_transferSub?.cancel());
-    _csCancel?.cancelled = true;
     _gridFocus.dispose();
     _scroll.dispose();
     super.dispose();
@@ -358,7 +345,7 @@ class _CullPageState extends ConsumerState<CullPage>
                     verb: jobs.findSimilar!.verb,
                     done: jobs.findSimilar!.done,
                     total: jobs.findSimilar!.total,
-                    onCancel: () => _hashCancel?.cancelled = true,
+                    onCancel: _cancelFindSimilar,
                   ),
                 ),
               if (jobs.transfer != null)
@@ -525,12 +512,4 @@ class _CullPageState extends ConsumerState<CullPage>
       ),
     );
   }
-}
-
-/// A cancel token for a running background job, flipped by the card's Cancel
-/// button (or on dispose) and polled by the runner between ticks/batches. Kept
-/// as a plain object — not [backgroundJobsProvider] state — so the async loop
-/// can still read it after the page is disposed (a provider read would throw).
-class _JobCancel {
-  bool cancelled = false;
 }

@@ -1,36 +1,43 @@
 part of 'cull_page.dart';
 
-/// The single app-wide notification surface (`BUILD_PLAN.md` §7).
+/// The page's face of the app-wide notification surface (`BUILD_PLAN.md` §7):
+/// thin forwarders onto [NoticesController] — where the state and the
+/// auto-dismiss timer live, so long-running jobs report without a
+/// `BuildContext` — plus the bar's build-time read.
 mixin _CullNotices on ConsumerState<CullPage> {
-  // The single app-wide notification surface: a coloured bottom bar. Transient
-  // messages (info/success) auto-dismiss; ones with actions or a warning/error
-  // stay until dismissed. Null = nothing showing.
-  Notice? _notice;
+  // Captured at init: `ref` is unsafe in dispose, but the auto-dismiss timer
+  // must die with the page — widget tests assert no pending timers after
+  // teardown. Only the timer: mutating the provider's state here would
+  // notify the very element being unmounted.
+  NoticesController? _noticesForDispose;
 
-  Timer? _noticeTimer;
-
-  void _dismissNotice() {
-    _noticeTimer?.cancel();
-    if (mounted) setState(() => _notice = null);
+  @override
+  void initState() {
+    super.initState();
+    _noticesForDispose = ref.read(noticesControllerProvider.notifier);
   }
 
-  /// The single entry point for every app notification. Shows [notice] in the
-  /// bottom bar; transient ones (no actions, info/success) clear themselves
-  /// after a few seconds so the layout doesn't keep a stale message.
-  void _showNotice(Notice notice) {
-    _noticeTimer?.cancel();
-    setState(() => _notice = notice);
-    final transient =
-        notice.actions.isEmpty &&
-        (notice.kind == NoticeKind.info || notice.kind == NoticeKind.success);
-    if (transient) {
-      _noticeTimer = Timer(const Duration(seconds: 4), _dismissNotice);
-    }
+  @override
+  void dispose() {
+    _noticesForDispose?.stopAutoDismiss();
+    super.dispose();
   }
+
+  /// The notice currently showing, watched so the bar rebuilds with it.
+  /// Only read during build.
+  Notice? get _notice => ref.watch(noticesControllerProvider);
+
+  void _dismissNotice() =>
+      ref.read(noticesControllerProvider.notifier).dismiss();
+
+  /// The single entry point for every app notification — see
+  /// [NoticesController.show].
+  void _showNotice(Notice notice) =>
+      ref.read(noticesControllerProvider.notifier).show(notice);
 
   /// Convenience for a plain message (the common case, replaces SnackBars).
   void _notify(String message, {NoticeKind kind = NoticeKind.info}) =>
-      _showNotice(Notice.of(kind, message));
+      ref.read(noticesControllerProvider.notifier).notify(message, kind: kind);
 
   /// Announces a newer release found by the startup update check, with a
   /// "Download" action that opens the GitHub release page in the browser. Has
