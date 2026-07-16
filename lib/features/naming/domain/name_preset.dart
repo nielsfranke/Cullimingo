@@ -1,4 +1,4 @@
-import 'package:cullimingo/features/ingest/domain/rename_template.dart';
+import 'package:cullimingo/core/naming/rename_template.dart';
 
 /// A named, savable filename + folder naming scheme — the "Voreinstellung" in
 /// the Capture-One-style naming builder (`features/naming/`). It splits the

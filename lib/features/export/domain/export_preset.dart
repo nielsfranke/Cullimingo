@@ -1,4 +1,4 @@
-import 'package:cullimingo/features/ingest/domain/rename_template.dart';
+import 'package:cullimingo/core/naming/rename_template.dart';
 
 /// Output container for an export (`BUILD_PLAN.md` §6). JPEG encodes via the
 /// `image` package (with the proven XMP/IIM byte splicing); WebP and AVIF

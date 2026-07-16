@@ -1,4 +1,4 @@
-import 'package:cullimingo/features/filter/domain/filename_match.dart';
+import 'package:cullimingo/core/files/filename_match.dart';
 
 /// RAW+JPEG pairing (`BUILD_PLAN.md` §8, Photo-Mechanic style) — **no ML, no
 /// timestamps**: pairs are photos that share a normalized basename where *both*

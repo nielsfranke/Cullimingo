@@ -1,6 +1,6 @@
+import 'package:cullimingo/core/naming/rename_template.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
 import 'package:cullimingo/features/export/domain/export_preset.dart';
-import 'package:cullimingo/features/ingest/domain/rename_template.dart';
 import 'package:cullimingo/features/metadata/domain/xmp_data.dart';
 import 'package:path/path.dart' as p;
 

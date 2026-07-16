@@ -4,8 +4,10 @@ import 'dart:isolate';
 
 import 'package:cullimingo/app/theme/tokens.dart';
 import 'package:cullimingo/core/db/database.dart';
+import 'package:cullimingo/core/files/filename_match.dart';
 import 'package:cullimingo/core/files/open_external.dart';
 import 'package:cullimingo/core/files/supported_files.dart';
+import 'package:cullimingo/core/files/verified_copy.dart';
 import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
 import 'package:cullimingo/core/secrets/secret_store.dart';
@@ -43,7 +45,6 @@ import 'package:cullimingo/features/export/data/export_service.dart';
 import 'package:cullimingo/features/export/domain/export_plan.dart';
 import 'package:cullimingo/features/export/presentation/export_dialog.dart';
 import 'package:cullimingo/features/filter/data/selection_source.dart';
-import 'package:cullimingo/features/filter/domain/filename_match.dart';
 import 'package:cullimingo/features/filter/domain/photo_filter.dart';
 import 'package:cullimingo/features/filter/domain/photo_sort.dart';
 import 'package:cullimingo/features/filter/presentation/filter_bar.dart';
@@ -57,7 +58,6 @@ import 'package:cullimingo/features/handoff/presentation/contactsheet_dialog.dar
 import 'package:cullimingo/features/handoff/presentation/send_to_providers.dart';
 import 'package:cullimingo/features/handoff/presentation/transfer_dialog.dart';
 import 'package:cullimingo/features/ingest/data/removable_media.dart';
-import 'package:cullimingo/features/ingest/data/verified_copy.dart';
 import 'package:cullimingo/features/ingest/data/volume_detector.dart';
 import 'package:cullimingo/features/ingest/presentation/ingest_dialog.dart';
 import 'package:cullimingo/features/inspector/presentation/inspector_panel.dart';
@@ -81,12 +81,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
-part 'cull_page.notices.dart';
 part 'cull_page.grid.dart';
-part 'cull_page.workspace.dart';
-part 'cull_page.selections.dart';
 part 'cull_page.jobs.dart';
 part 'cull_page.keyboard.dart';
+part 'cull_page.notices.dart';
+part 'cull_page.selections.dart';
+part 'cull_page.workspace.dart';
 
 /// Spacing between cells.
 const double _cellSpacing = AppSpacing.sm;

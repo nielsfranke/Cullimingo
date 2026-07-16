@@ -1,6 +1,6 @@
+import 'package:cullimingo/core/naming/rename_template.dart';
 import 'package:cullimingo/features/export/domain/export_plan.dart';
 import 'package:cullimingo/features/export/domain/export_preset.dart';
-import 'package:cullimingo/features/ingest/domain/rename_template.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 ExportSource _src(String path, DateTime when, {String? camera}) => ExportSource(

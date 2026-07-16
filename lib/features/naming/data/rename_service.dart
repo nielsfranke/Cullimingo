@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:cullimingo/features/ingest/domain/rename_template.dart';
+import 'package:cullimingo/core/naming/rename_template.dart';
 import 'package:cullimingo/features/metadata/data/xmp_sidecar.dart';
 import 'package:path/path.dart' as p;
 

@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:cullimingo/core/db/database.dart';
+import 'package:cullimingo/core/files/filename_match.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:cullimingo/features/cull/domain/duplicate_groups.dart';
 import 'package:cullimingo/features/cull/domain/exposure_brackets.dart';
 import 'package:cullimingo/features/cull/domain/raw_jpeg_pairs.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
-import 'package:cullimingo/features/filter/domain/filename_match.dart';
 import 'package:cullimingo/features/filter/domain/filter_preset.dart';
 import 'package:cullimingo/features/filter/domain/photo_filter.dart';
 import 'package:cullimingo/features/filter/domain/photo_sort.dart';

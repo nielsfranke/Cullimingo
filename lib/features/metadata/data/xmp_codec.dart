@@ -1,3 +1,4 @@
+import 'package:cullimingo/core/format/dates.dart';
 import 'package:cullimingo/features/metadata/domain/crop_rect.dart';
 import 'package:cullimingo/features/metadata/domain/iptc_core.dart';
 import 'package:cullimingo/features/metadata/domain/iptc_structured.dart';
@@ -52,7 +53,7 @@ String encodeXmp(XmpData data) {
   // back to the capture time so untouched photos keep today's behaviour.
   final dateCreated = iptc.dateCreatedParsed ?? data.dateCreated;
   if (dateCreated != null) {
-    attrs.write(' photoshop:DateCreated="${_isoLocal(dateCreated)}"');
+    attrs.write(' photoshop:DateCreated="${isoLocal(dateCreated)}"');
   }
 
   simple('photoshop:Headline', iptc.headline);
@@ -232,14 +233,6 @@ String encodeXmp(XmpData data) {
       ' </rdf:RDF>\n'
       '</x:xmpmeta>\n'
       '<?xpacket end="w"?>';
-}
-
-/// ISO 8601 without sub-seconds or zone (XMP treats a naive local time as
-/// "local to where it was taken", which is exactly what EXIF gives us).
-String _isoLocal(DateTime t) {
-  String two(int n) => n.toString().padLeft(2, '0');
-  return '${t.year.toString().padLeft(4, '0')}-${two(t.month)}-${two(t.day)}'
-      'T${two(t.hour)}:${two(t.minute)}:${two(t.second)}';
 }
 
 /// A language-alternative property (`<prop><rdf:Alt><rdf:li xml:lang=…>`).

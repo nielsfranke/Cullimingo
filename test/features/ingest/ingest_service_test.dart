@@ -1,8 +1,8 @@
 import 'dart:io';
 
+import 'package:cullimingo/core/files/verified_copy.dart';
+import 'package:cullimingo/core/naming/rename_template.dart';
 import 'package:cullimingo/features/ingest/data/ingest_service.dart';
-import 'package:cullimingo/features/ingest/data/verified_copy.dart';
-import 'package:cullimingo/features/ingest/domain/rename_template.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 

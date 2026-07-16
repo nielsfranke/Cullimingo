@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cullimingo/app/theme/tokens.dart';
 import 'package:cullimingo/core/db/database.dart';
+import 'package:cullimingo/core/format/dates.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
 import 'package:cullimingo/features/filter/presentation/filter_providers.dart';
@@ -1578,7 +1579,7 @@ class _DateCreatedFieldState extends State<_DateCreatedField> {
     if (!mounted) return;
     final t = time ?? TimeOfDay.fromDateTime(base);
     final dt = DateTime(date.year, date.month, date.day, t.hour, t.minute);
-    setState(() => widget.controller.text = _isoNoMillis(dt));
+    setState(() => widget.controller.text = isoLocal(dt));
   }
 
   void _clear() => setState(() => widget.controller.text = '');
@@ -1606,7 +1607,7 @@ class _DateCreatedFieldState extends State<_DateCreatedField> {
                   label: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      current == null ? 'Not set' : _formatDateTime(current),
+                      current == null ? 'Not set' : displayDateTime(current),
                       style: const TextStyle(fontSize: 13),
                     ),
                   ),
@@ -1632,20 +1633,6 @@ class _DateCreatedFieldState extends State<_DateCreatedField> {
       ),
     );
   }
-}
-
-/// Formats [dt] as `YYYY-MM-DD HH:MM` for display.
-String _formatDateTime(DateTime dt) {
-  String two(int n) => n.toString().padLeft(2, '0');
-  return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
-      '${two(dt.hour)}:${two(dt.minute)}';
-}
-
-/// ISO 8601 local timestamp without milliseconds, for storage in the field.
-String _isoNoMillis(DateTime dt) {
-  String two(int n) => n.toString().padLeft(2, '0');
-  return '${dt.year.toString().padLeft(4, '0')}-${two(dt.month)}-'
-      '${two(dt.day)}T${two(dt.hour)}:${two(dt.minute)}:${two(dt.second)}';
 }
 
 /// One labelled text field. Multi-line fields (caption, alt-text, instructions)

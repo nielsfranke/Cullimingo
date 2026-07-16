@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:cullimingo/app/theme/tokens.dart';
+import 'package:cullimingo/core/naming/rename_template.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
-import 'package:cullimingo/features/ingest/domain/rename_template.dart';
 import 'package:cullimingo/features/naming/data/rename_service.dart';
 import 'package:cullimingo/features/naming/domain/name_preset.dart';
 import 'package:cullimingo/features/naming/presentation/name_builder.dart';

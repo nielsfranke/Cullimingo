@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cullimingo/app/theme/tokens.dart';
 import 'package:cullimingo/core/db/database.dart';
+import 'package:cullimingo/core/format/dates.dart';
 import 'package:cullimingo/features/cull/domain/orientation_math.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
 import 'package:cullimingo/features/inspector/data/exif_detail.dart';
@@ -348,14 +349,13 @@ class InspectorPanelBody extends StatelessWidget {
           'Cropped (LR) · '
               '${formatCrop(d.crop!.width, d.crop!.height, d.crop!.angle)}',
         ),
-      _Kv('Captured', d.capturedAt == null ? null : _formatDate(d.capturedAt!)),
+      _Kv(
+        'Captured',
+        d.capturedAt == null
+            ? null
+            : displayDateTime(d.capturedAt!, seconds: true),
+      ),
     ];
-  }
-
-  static String _formatDate(DateTime t) {
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${t.year}-${two(t.month)}-${two(t.day)} '
-        '${two(t.hour)}:${two(t.minute)}:${two(t.second)}';
   }
 }
 

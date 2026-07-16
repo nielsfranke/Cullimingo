@@ -1,4 +1,4 @@
-import 'package:cullimingo/features/filter/domain/filename_match.dart';
+import 'package:cullimingo/core/files/filename_match.dart';
 import 'package:cullimingo/features/handoff/domain/cs_models.dart';
 import 'package:cullimingo/shared/models/cull_marks.dart';
 

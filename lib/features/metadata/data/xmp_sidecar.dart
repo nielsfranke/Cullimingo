@@ -1,14 +1,13 @@
 import 'dart:io';
 
+import 'package:cullimingo/core/files/sidecar_path.dart';
 import 'package:cullimingo/features/metadata/data/xmp_codec.dart';
 import 'package:cullimingo/features/metadata/data/xmp_merge.dart';
 import 'package:cullimingo/features/metadata/domain/xmp_data.dart';
-import 'package:path/path.dart' as p;
 
-/// Sidecar path for [photoPath]: same folder, basename + `.xmp` — the
-/// Lightroom/Bridge convention for proprietary RAW (`DSC0001.ARW` →
-/// `DSC0001.xmp`).
-String sidecarPath(String photoPath) => p.setExtension(photoPath, '.xmp');
+// The path convention moved to core (cross-feature flows pair sidecars with
+// their photos); re-exported here so metadata callers keep one import.
+export 'package:cullimingo/core/files/sidecar_path.dart';
 
 /// Reads and parses the sidecar for [photoPath], or `null` if none exists or it
 /// can't be parsed.

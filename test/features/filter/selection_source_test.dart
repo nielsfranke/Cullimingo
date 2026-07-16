@@ -1,6 +1,6 @@
 import 'package:cullimingo/core/db/database.dart';
+import 'package:cullimingo/core/files/filename_match.dart';
 import 'package:cullimingo/features/filter/data/selection_source.dart';
-import 'package:cullimingo/features/filter/domain/filename_match.dart';
 import 'package:cullimingo/features/metadata/domain/iptc_core.dart';
 import 'package:cullimingo/shared/models/cull_marks.dart';
 import 'package:flutter_test/flutter_test.dart';

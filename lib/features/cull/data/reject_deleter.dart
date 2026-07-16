@@ -1,6 +1,6 @@
 import 'package:cullimingo/core/db/database.dart';
 import 'package:cullimingo/core/files/move_to_trash.dart';
-import 'package:cullimingo/features/metadata/data/xmp_sidecar.dart';
+import 'package:cullimingo/core/files/sidecar_path.dart';
 
 /// The trash step, injectable so tests run without touching the OS trash.
 typedef Trasher =

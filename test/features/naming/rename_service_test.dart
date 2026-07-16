@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:cullimingo/features/ingest/domain/rename_template.dart';
+import 'package:cullimingo/core/naming/rename_template.dart';
 import 'package:cullimingo/features/naming/data/rename_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;

@@ -1,4 +1,4 @@
-import 'package:cullimingo/features/filter/domain/filename_match.dart';
+import 'package:cullimingo/core/files/filename_match.dart';
 import 'package:cullimingo/features/handoff/domain/cs_models.dart';
 
 /// A ContactSheet collection resolved to local photo ids, ready to persist as a

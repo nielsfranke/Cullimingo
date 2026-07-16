@@ -1,4 +1,4 @@
-import 'package:cullimingo/features/ingest/domain/rename_template.dart';
+import 'package:cullimingo/core/naming/rename_template.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

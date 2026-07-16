@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:cullimingo/features/ingest/data/verified_copy.dart';
-import 'package:cullimingo/features/metadata/data/xmp_sidecar.dart';
+import 'package:cullimingo/core/files/sidecar_path.dart';
+import 'package:cullimingo/core/files/verified_copy.dart';
 import 'package:path/path.dart' as p;
 
 /// Whether a transfer copies files to the destination or *moves* them — a move
@@ -56,7 +56,7 @@ Future<List<TransferItem>> buildTransferPlan(
     if (includeSidecars) {
       final sidecarSrc = sidecarPath(source);
       // Async exists() (not existsSync) so a plan over an iCloud-synced folder
-      // never stalls the UI isolate (matches xmp_sidecar.dart).
+      // never stalls the UI isolate (matches the metadata sidecar readers).
       // ignore: avoid_slow_async_io
       if (await File(sidecarSrc).exists()) {
         sidecar = (source: sidecarSrc, relPath: p.setExtension(rel, '.xmp'));

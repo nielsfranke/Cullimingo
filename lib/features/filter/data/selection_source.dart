@@ -1,4 +1,4 @@
-import 'package:cullimingo/features/filter/domain/filename_match.dart';
+import 'package:cullimingo/core/files/filename_match.dart';
 
 /// A named list of filenames to turn into a selection (`BUILD_PLAN.md` §5).
 class SelectionList {
