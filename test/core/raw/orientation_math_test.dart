@@ -1,4 +1,4 @@
-import 'package:cullimingo/features/cull/domain/orientation_math.dart';
+import 'package:cullimingo/core/raw/orientation_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

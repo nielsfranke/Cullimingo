@@ -1,4 +1,4 @@
-import 'package:cullimingo/features/cull/domain/exposure_brackets.dart';
+import 'package:cullimingo/shared/grouping/exposure_brackets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 DateTime _t(int s) => DateTime(2026, 5, 29, 12, 44).add(Duration(seconds: s));

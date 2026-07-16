@@ -1,4 +1,4 @@
-import 'package:cullimingo/features/cull/domain/duplicate_groups.dart';
+import 'package:cullimingo/shared/grouping/duplicate_groups.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 GroupablePhoto _p(int id, DateTime? t, {String? cam = 'Sony A'}) =>

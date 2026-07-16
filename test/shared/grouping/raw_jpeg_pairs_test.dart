@@ -1,4 +1,4 @@
-import 'package:cullimingo/features/cull/domain/raw_jpeg_pairs.dart';
+import 'package:cullimingo/shared/grouping/raw_jpeg_pairs.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 PairablePhoto _p(int id, String path, {required bool isRaw}) =>

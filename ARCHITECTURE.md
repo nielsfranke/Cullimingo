@@ -34,6 +34,15 @@ packages/
   Decode-once, reuse.
 
 ## Deviations from BUILD_PLAN.md (keep this list honest)
+- **Deliberate cull ↔ filter/inspector coupling** (July 2026): pure grouping
+  domain (bursts, RAW+JPEG pairs, brackets) lives in `shared/grouping/` and
+  orientation math in `core/raw/`, so features no longer reach into
+  `cull/domain`. What remains is presentation-level and intentional: the
+  session state (`workspaceProvider` → `currentImportProvider` →
+  `photosProvider`) and the selection (`cullControllerProvider`) are owned by
+  cull, and filter/inspector read them (e.g. the "selected only" chip); cull
+  composes filter's widgets. Fully inverting that means extracting a session
+  module — do it only with a concrete need, not for the diagram.
 - **Naming:** package `cullimingo`; native package `packages/cullimingo_raw/`.
 - **riverpod_lint + custom_lint deferred** (June 2026): riverpod_lint (dev) needs
   `analyzer_plugin ^0.14.0`; custom_lint only supports `<=0.13.0`. Not
