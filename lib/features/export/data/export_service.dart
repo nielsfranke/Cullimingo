@@ -94,6 +94,12 @@ typedef Renderer =
 /// place. Up to [concurrency] files render at once so decode/encode overlap
 /// across cores; the UI isolate only receives ticks. Cancelling the
 /// subscription stops launching new renders.
+///
+/// By default each of the [concurrency] slots runs a long-lived worker isolate
+/// that loads libraw **once** and renders its share of files — the earlier
+/// per-file `Isolate.run` + dylib reload was exactly the pattern `PreviewPool`
+/// exists to avoid (500 RAWs meant 500 isolate spawns + libraw inits). Tests
+/// inject [renderer] to skip isolates entirely.
 Stream<ExportProgress> runExport({
   required List<ExportItem> plan,
   required ExportPreset preset,
@@ -102,7 +108,7 @@ Stream<ExportProgress> runExport({
   String subfolder = '',
   String? libraryPath,
   int concurrency = 4,
-  Renderer renderer = _isolateRender,
+  Renderer? renderer,
 }) {
   assert(
     nextToOriginals || destinationRoot != null,
@@ -127,33 +133,50 @@ Stream<ExportProgress> runExport({
   }
 
   Future<void> worker() async {
-    while (!stopped) {
-      final i = next++;
-      if (i >= total) return;
-      final item = plan[i];
-      final destPath = destPathFor(item);
-      ExportOutcome outcome;
+    // One long-lived render isolate per slot (unless a test injected a
+    // renderer); it loads libraw once and serves this worker's whole share.
+    // A failed spawn falls back to the per-file Isolate.run path.
+    _RenderWorker? iso;
+    if (renderer == null) {
       try {
-        outcome = await renderer(
-          item: item,
-          destPath: destPath,
-          preset: preset,
-          libraryPath: libraryPath,
-        );
+        iso = await _RenderWorker.spawn(libraryPath);
       } on Object {
-        outcome = ExportOutcome.error;
+        iso = null;
       }
-      if (stopped) return;
-      done++;
-      if (!controller.isClosed) {
-        controller.add(
-          ExportProgress(
-            done: done,
-            total: total,
-            last: ExportResult(relPath: item.relPath, outcome: outcome),
-          ),
-        );
+    }
+    try {
+      while (!stopped) {
+        final i = next++;
+        if (i >= total) return;
+        final item = plan[i];
+        final destPath = destPathFor(item);
+        ExportOutcome outcome;
+        try {
+          outcome = iso != null
+              ? await iso.render(item, destPath, preset)
+              : await (renderer ?? _isolateRender)(
+                  item: item,
+                  destPath: destPath,
+                  preset: preset,
+                  libraryPath: libraryPath,
+                );
+        } on Object {
+          outcome = ExportOutcome.error;
+        }
+        if (stopped) return;
+        done++;
+        if (!controller.isClosed) {
+          controller.add(
+            ExportProgress(
+              done: done,
+              total: total,
+              last: ExportResult(relPath: item.relPath, outcome: outcome),
+            ),
+          );
+        }
       }
+    } finally {
+      iso?.dispose();
     }
   }
 
@@ -170,8 +193,8 @@ Stream<ExportProgress> runExport({
   return controller.stream;
 }
 
-// Default renderer: do the read + decode + encode + write on a one-off
-// background isolate so it never touches the UI isolate.
+// Fallback renderer (worker spawn failed): read + decode + encode + write on
+// a one-off background isolate so it never touches the UI isolate.
 Future<ExportOutcome> _isolateRender({
   required ExportItem item,
   required String destPath,
@@ -186,6 +209,87 @@ Future<ExportOutcome> _isolateRender({
   ),
 );
 
+/// A long-lived export render isolate: libraw is loaded once at spawn, then
+/// jobs are rendered strictly sequentially — the owner awaits each [render]
+/// before sending the next, so replies pair up without job ids.
+class _RenderWorker {
+  _RenderWorker._(this._isolate, this._commands, this._replies, this._reply);
+
+  final Isolate _isolate;
+  final SendPort _commands;
+  final ReceivePort _replies;
+  final StreamIterator<Object?> _reply;
+
+  /// Spawns the worker and waits for it to hand back its command port.
+  static Future<_RenderWorker> spawn(String? libraryPath) async {
+    final replies = ReceivePort();
+    final Isolate isolate;
+    try {
+      isolate = await Isolate.spawn(
+        _exportWorkerMain,
+        [replies.sendPort, libraryPath],
+        debugName: 'export-worker',
+      );
+    } on Object {
+      replies.close();
+      rethrow;
+    }
+    final reply = StreamIterator<Object?>(replies);
+    await reply.moveNext();
+    final commands = reply.current! as SendPort;
+    return _RenderWorker._(isolate, commands, replies, reply);
+  }
+
+  /// Renders one file on the worker and returns its outcome.
+  Future<ExportOutcome> render(
+    ExportItem item,
+    String destPath,
+    ExportPreset preset,
+  ) async {
+    _commands.send([item, destPath, preset]);
+    if (!await _reply.moveNext()) return ExportOutcome.error; // worker died
+    return ExportOutcome.values[_reply.current! as int];
+  }
+
+  /// Kills the worker isolate.
+  void dispose() {
+    _isolate.kill(priority: Isolate.immediate);
+    _replies.close();
+  }
+}
+
+void _exportWorkerMain(List<Object?> init) {
+  final toMain = init[0]! as SendPort;
+  final libraryPath = init[1] as String?;
+
+  // Load libraw once for this worker's lifetime — the whole point of the
+  // long-lived isolate (a per-file dylib open costs an init per RAW).
+  FlutterLibRawBindings? libraw;
+  final lib = libraryPath ?? LibRawPreviewExtractor.resolveLibraryPath();
+  if (lib != null) {
+    try {
+      libraw = FlutterLibRawBindings(DynamicLibrary.open(lib));
+    } on Object {
+      libraw = null;
+    }
+  }
+
+  final inbox = ReceivePort()
+    ..listen((message) {
+      final job = message! as List<Object?>;
+      final outcome = renderExportToFile(
+        item: job[0]! as ExportItem,
+        destPath: job[1]! as String,
+        preset: job[2]! as ExportPreset,
+        libraryPath: libraryPath,
+        libraw: libraw,
+      );
+      toMain.send(outcome.index);
+    });
+
+  toMain.send(inbox.sendPort);
+}
+
 /// Reads [item]'s source (embedded JPEG preview for RAW, file bytes otherwise),
 /// renders it per [preset] and writes the JPEG to [destPath] (creating parent
 /// folders, overwriting any prior export). Synchronous file I/O — only call it
@@ -195,10 +299,11 @@ ExportOutcome renderExportToFile({
   required String destPath,
   required ExportPreset preset,
   String? libraryPath,
+  FlutterLibRawBindings? libraw,
 }) {
   try {
     final source = item.isRaw
-        ? _embeddedRawJpeg(item.source, libraryPath)
+        ? _embeddedRawJpeg(item.source, libraryPath, libraw)
         : (File(item.source).existsSync()
               ? File(item.source).readAsBytesSync()
               : null);
@@ -225,11 +330,24 @@ ExportOutcome renderExportToFile({
   }
 }
 
-/// Loads libraw (from [libraryPath] or auto-discovery) and returns the embedded
-/// full-res JPEG preview of [rawPath], or null if unavailable.
-Uint8List? _embeddedRawJpeg(String rawPath, String? libraryPath) {
+/// Returns the embedded full-res JPEG preview of [rawPath], or null if
+/// unavailable. With [preloaded] bindings (a pooled export worker) no dylib is
+/// opened; otherwise libraw is loaded from [libraryPath] / auto-discovery.
+Uint8List? _embeddedRawJpeg(
+  String rawPath,
+  String? libraryPath,
+  FlutterLibRawBindings? preloaded,
+) {
+  if (!File(rawPath).existsSync()) return null;
+  if (preloaded != null) {
+    try {
+      return extractRawThumbnail(preloaded, rawPath);
+    } on Object {
+      return null;
+    }
+  }
   final lib = libraryPath ?? LibRawPreviewExtractor.resolveLibraryPath();
-  if (lib == null || !File(rawPath).existsSync()) return null;
+  if (lib == null) return null;
   try {
     final dylib = DynamicLibrary.open(lib);
     return extractRawThumbnail(FlutterLibRawBindings(dylib), rawPath);
