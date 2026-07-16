@@ -73,6 +73,14 @@ class Imports extends Table {
 
 /// A single photo (RAW or JPEG). The drift row is the fast read model; the file
 /// + XMP sidecar are the durable truth (`BUILD_PLAN.md` §3).
+///
+/// The index serves `watchPhotosForImport` (importId filter + capture-time
+/// sort) — the table accumulates every import ever opened, so an unindexed
+/// watch re-scans the whole history on every single mark.
+@TableIndex(
+  name: 'photos_import_captured',
+  columns: {#importId, #capturedAt, #path},
+)
 class Photos extends Table {
   /// Primary key.
   IntColumn get id => integer().autoIncrement()();

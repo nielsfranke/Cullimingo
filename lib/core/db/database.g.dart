@@ -2623,6 +2623,10 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $SavedSelectionsTable savedSelections = $SavedSelectionsTable(
     this,
   );
+  late final Index photosImportCaptured = Index(
+    'photos_import_captured',
+    'CREATE INDEX photos_import_captured ON photos (import_id, captured_at, path)',
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2631,6 +2635,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     imports,
     photos,
     savedSelections,
+    photosImportCaptured,
   ];
 }
 
