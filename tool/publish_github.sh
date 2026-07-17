@@ -26,7 +26,8 @@
 #   * Assumes linear history since the last sync (no merge commits in the range).
 #   * Forgejo-only dev docs in MIRROR_EXCLUDE (below) are kept private — they are
 #     stripped from every commit pushed to GitHub, so they never reach the mirror.
-#   * The wiki is mirrored separately by tool/mirror_wiki.sh.
+#   * The wiki syncs on its own: Forgejo pull-mirrors niels/Cullimingo (wiki
+#     git data included) from GitHub, so no separate wiki push step is needed.
 set -euo pipefail
 
 GITHUB_URL="${GITHUB_URL:-https://github.com/nielsfranke/Cullimingo.git}"
