@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.3.1 — 2026-08-19
 
 ### Fixed
 - **Dragging a multi-selection out of the window keeps every photo:** pressing
