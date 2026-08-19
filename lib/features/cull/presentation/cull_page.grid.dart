@@ -188,6 +188,33 @@ mixin _CullGrid on _CullNotices {
     });
   }
 
+  /// Keeps the keyboard cursor (and with it the loupe) where the user was
+  /// when the focused photo leaves the filtered set — unpicking a photo while
+  /// filtering on picks, say. Focus moves to the photo that took its place
+  /// (the previous one when it was last), instead of snapping back to the
+  /// first photo and losing the culling position. Nothing survives a tab
+  /// switch or a new import, and there focus is left to the tab restore.
+  void _keepFocusInFilter(List<Photo>? previous, List<Photo> next) {
+    if (previous == null) return;
+    final focusedId = ref.read(cullControllerProvider).focusedId;
+    if (focusedId == null) return;
+    final visible = {for (final p in next) p.id};
+    if (visible.contains(focusedId)) return;
+    final id = focusAfterDrop(
+      focusedId: focusedId,
+      previous: [for (final p in previous) p.id],
+      visible: visible,
+    );
+    if (id == null) return;
+    ref.read(cullControllerProvider.notifier).focus(id);
+    final index = next.indexWhere((p) => p.id == id);
+    // Post-frame: the grid still has to lay out the shortened list before its
+    // row math (and maxScrollExtent) mean anything.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && index >= 0) _ensureRowVisible(index);
+    });
+  }
+
   void _ensureRowVisible(int index) {
     if (!_scroll.hasClients || _columns < 1) return;
     final row = index ~/ _columns;

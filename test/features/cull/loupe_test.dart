@@ -6,7 +6,9 @@ import 'package:cullimingo/features/cull/presentation/cull_page.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/loupe_view.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/photo_cell.dart';
+import 'package:cullimingo/features/filter/presentation/filter_providers.dart';
 import 'package:cullimingo/features/metadata/data/metadata_repository.dart';
+import 'package:cullimingo/shared/models/cull_marks.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/gestures.dart';
@@ -46,7 +48,10 @@ void main() {
   late ProviderContainer container;
   late int importId;
 
-  Future<void> pumpPage(WidgetTester tester) async {
+  Future<void> pumpPage(
+    WidgetTester tester, {
+    PickFlag flag = PickFlag.none,
+  }) async {
     tester.view.physicalSize = const Size(1280, 800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
@@ -73,6 +78,7 @@ void main() {
           path: '/shoot/DSC_000$i.jpg',
           mtime: DateTime(2026, 6, 1, 10, i),
           capturedAt: Value(DateTime(2026, 6, 1, 10, i)),
+          flag: Value(flag),
         ),
     ]);
     container
@@ -302,5 +308,41 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(LoupeView), findsOneWidget);
     expect(find.text('2 / 3'), findsOneWidget);
+  });
+
+  testWidgets('unpicking in the loupe holds the position, not photo 1', (
+    tester,
+  ) async {
+    // Three picked photos, filtered down to picks: the state you cull in.
+    await pumpPage(tester, flag: PickFlag.pick);
+    container
+        .read(photoFilterControllerProvider.notifier)
+        .toggleFlag(PickFlag.pick);
+    await tester.pump();
+    final ids = [for (final p in container.read(photosProvider).value!) p.id];
+
+    // Open the loupe on the second photo.
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter); // focus first
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight); // focus second
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter); // open loupe
+    await tester.pump();
+    expect(find.text('2 / 3'), findsOneWidget);
+
+    // Un-pick it: it leaves the filtered set, so the loupe must move on to the
+    // photo that took its slot — not snap back to the first.
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(container.read(cullControllerProvider).focusedId, ids[2]);
+    expect(find.text('2 / 2'), findsOneWidget);
+
+    // Un-picking the last one falls back to the previous photo.
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(container.read(cullControllerProvider).focusedId, ids[0]);
+    expect(find.text('1 / 1'), findsOneWidget);
   });
 }

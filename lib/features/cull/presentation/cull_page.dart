@@ -18,6 +18,7 @@ import 'package:cullimingo/features/cull/domain/compare_focus.dart';
 import 'package:cullimingo/features/cull/domain/cull_key_mappings.dart';
 import 'package:cullimingo/features/cull/domain/cull_shortcuts.dart';
 import 'package:cullimingo/features/cull/domain/dropped_folders.dart';
+import 'package:cullimingo/features/cull/domain/focus_recovery.dart';
 import 'package:cullimingo/features/cull/domain/grid_navigation.dart';
 import 'package:cullimingo/features/cull/domain/grid_zoom_anchor.dart';
 import 'package:cullimingo/features/cull/presentation/background_jobs.dart';
@@ -169,6 +170,10 @@ class _CullPageState extends ConsumerState<CullPage>
       ..watch(contactSheetConfiguredProvider)
       // Keep the saved open-folders list current so reopen-on-startup works.
       ..listen(workspaceProvider, (_, _) => _persistOpenFolders())
+      // Follow the focused photo when it drops out of the filtered set (a mark
+      // that no longer matches the filter), so the grid and the open loupe move
+      // on to the next photo instead of jumping back to the first.
+      ..listen(filteredPhotosProvider, _keepFocusInFilter)
       // Flash an "update available" notice when the startup check (kicked off
       // in main(), no-op in tests) finds a newer GitHub release.
       ..listen(availableUpdateProvider, (_, next) {

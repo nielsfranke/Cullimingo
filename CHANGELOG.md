@@ -3,6 +3,15 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **Culling with a filter on no longer loses your place:** un-picking (or
+  otherwise marking) a photo so it drops out of the active filter used to
+  snap the fullscreen viewer and the grid back to the first photo. Focus now
+  moves to the photo that took its slot — the previous one when it was the
+  last — so a filtered cull run carries on where it was.
+
 ## 1.3.0 — 2026-07-16
 
 ### Changed

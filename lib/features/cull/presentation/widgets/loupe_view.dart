@@ -105,6 +105,12 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
   /// The focused photo we're showing — changing it refreshes the native size.
   int? _photoId;
 
+  /// Where the shown photo sat in the filtered set last build. When the focused
+  /// photo disappears (a mark that no longer passes the filter) this is the
+  /// slot the next photo slides into, so the loupe stays put instead of
+  /// snapping back to the first photo.
+  int _lastIndex = 0;
+
   /// Whether we've restored the persisted zoom for this loupe session yet.
   bool _restored = false;
 
@@ -430,20 +436,26 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
 
     var index = photos.indexWhere((ph) => ph.id == focusedId);
     if (index < 0) {
-      // The focused photo fell out of the filtered set (filter changed while
-      // the loupe was open): show the first visible photo and realign the
-      // focus to it after this frame, so marks/rotate act on what's on screen.
-      index = 0;
+      // The focused photo fell out of the filtered set (unpicked while the
+      // filter shows picks, or the filter changed with the loupe open): hold
+      // the position — the photo that took its slot, or the last one when the
+      // set shrank past it — and realign the focus to it after this frame, so
+      // marks/rotate act on what's on screen. Culling then carries on from
+      // here instead of restarting at the first photo.
+      index = _lastIndex.clamp(0, photos.length - 1);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         final visible = ref.read(filteredPhotosProvider);
         final focused = ref.read(cullControllerProvider).focusedId;
         if (visible.isNotEmpty &&
             visible.indexWhere((ph) => ph.id == focused) < 0) {
-          ref.read(cullControllerProvider.notifier).focus(visible.first.id);
+          ref
+              .read(cullControllerProvider.notifier)
+              .focus(visible[index.clamp(0, visible.length - 1)].id);
         }
       });
     }
+    _lastIndex = index;
     final photo = photos[index];
     final controller = ref.read(cullControllerProvider.notifier);
 
