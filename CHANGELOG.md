@@ -6,6 +6,12 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 ## Unreleased
 
 ### Fixed
+- **Dragging a multi-selection out of the window keeps every photo:** pressing
+  an already-selected thumbnail and dragging it to Finder (or just dragging to
+  scroll) collapsed the selection to the pressed photo, so only that one file
+  was dragged out. The deferred collapse now drops as soon as the press moves,
+  and a press whose release never comes back (the native drag takes the
+  pointer) can no longer be cashed in by a later click or right-click.
 - **Culling with a filter on no longer loses your place:** un-picking (or
   otherwise marking) a photo so it drops out of the active filter used to
   snap the fullscreen viewer and the grid back to the first photo. Focus now

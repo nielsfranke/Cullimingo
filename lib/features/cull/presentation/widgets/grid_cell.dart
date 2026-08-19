@@ -159,11 +159,21 @@ class GridCell extends ConsumerWidget {
         // selects just this photo.
         child: Listener(
           onPointerDown: (event) => _onPointerDown(ref, event),
+          // Movement past the click slop means the press became a drag-out, so
+          // the deferred collapse is dropped while the pointer is still down.
+          // Waiting for the drag session to say so is too late: the native drag
+          // takes the pointer and the pointer-up below would have collapsed the
+          // selection to this one photo first — which is exactly what a
+          // drag-out of a multi-selection must not do.
+          onPointerMove: (event) => ref
+              .read(cullControllerProvider.notifier)
+              .notePendingCollapseMove(event.position),
           // A plain click inside a multi-selection collapses to this photo on
           // release; a cancel (a drag or scroll took over the pointer) leaves
           // the selection intact so a drag-out keeps every selected file.
-          onPointerUp: (_) =>
-              ref.read(cullControllerProvider.notifier).commitPendingCollapse(),
+          onPointerUp: (_) => ref
+              .read(cullControllerProvider.notifier)
+              .commitPendingCollapse(photo.id),
           onPointerCancel: (_) =>
               ref.read(cullControllerProvider.notifier).cancelPendingCollapse(),
           child: GestureDetector(
@@ -257,7 +267,13 @@ class GridCell extends ConsumerWidget {
     // keeps an existing multi-selection intact when the click lands inside
     // it. This handler fires for *every* button before that resolution, so it
     // must not collapse the selection out from under a right-click first.
-    if (event.buttons & kSecondaryButton != 0) return;
+    if (event.buttons & kSecondaryButton != 0) {
+      // Drop any collapse still deferred from an earlier press (a drag-out
+      // whose pointer-up never came back to the cell), so this right-click's
+      // release can't cash it in and shrink the selection.
+      ref.read(cullControllerProvider.notifier).cancelPendingCollapse();
+      return;
+    }
     final controller = ref.read(cullControllerProvider.notifier);
     final keys = HardwareKeyboard.instance;
     if (keys.isShiftPressed) {
@@ -277,7 +293,7 @@ class GridCell extends ConsumerWidget {
         // Keep the whole selection under the press so a drag-out carries every
         // selected file; collapse to just this photo only on release, if the
         // press turns out to be a plain click (see [commitPendingCollapse]).
-        controller.beginPendingCollapse(photo.id);
+        controller.beginPendingCollapse(photo.id, event.position);
       } else {
         controller
           ..cancelPendingCollapse()

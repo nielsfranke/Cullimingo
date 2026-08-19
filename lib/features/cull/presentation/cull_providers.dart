@@ -857,28 +857,58 @@ class CullController extends _$CullController {
   // A plain click that lands inside a multi-selection can't collapse the
   // selection on pointer-down: a drag-out from that press would then carry only
   // the clicked file, not the whole selection. So the click is remembered here
-  // and the collapse waits for pointer-up ([commitPendingCollapse]) — unless a
-  // drag starts first ([cancelPendingCollapse]).
+  // and the collapse waits for pointer-up ([commitPendingCollapse]) — unless
+  // the press turns out to be a drag ([notePendingCollapseMove]) or is
+  // cancelled ([cancelPendingCollapse]).
   int? _pendingCollapseId;
 
-  /// Remembers a plain click on [photoId] inside a multi-selection; the
-  /// collapse to just [photoId] is deferred to [commitPendingCollapse] so a
-  /// drag can pre-empt it and keep every selected file.
-  // ignore: use_setters_to_change_properties
-  void beginPendingCollapse(int photoId) => _pendingCollapseId = photoId;
+  // Where the deferred press went down, to measure how far it has travelled.
+  Offset? _pendingCollapseOrigin;
+
+  /// How far a press inside a multi-selection may travel before it counts as a
+  /// drag-out rather than a click. A click wobbles by a pixel or two; a drag
+  /// passes this on its first move.
+  static const double _collapseSlop = 4;
+
+  /// Remembers a plain click on [photoId] inside a multi-selection, pressed at
+  /// [at]; the collapse to just [photoId] is deferred to
+  /// [commitPendingCollapse] so a drag can pre-empt it and keep every selected
+  /// file.
+  void beginPendingCollapse(int photoId, Offset at) {
+    _pendingCollapseId = photoId;
+    _pendingCollapseOrigin = at;
+  }
+
+  /// Feeds pointer movement at [position] into the deferred collapse: once the
+  /// press has travelled past [_collapseSlop] it is a drag-out, not a click, so
+  /// the collapse is dropped while the pointer is still down. The drag
+  /// session's own cancel can't be relied on for this — the native drag takes
+  /// the pointer, and the pointer-up we see would collapse the selection before
+  /// the drag ever reports itself.
+  void notePendingCollapseMove(Offset position) {
+    final origin = _pendingCollapseOrigin;
+    if (origin == null) return;
+    if ((position - origin).distance > _collapseSlop) cancelPendingCollapse();
+  }
 
   /// Drops any deferred collapse (a drag started, or the press was cancelled),
   /// leaving the multi-selection intact.
-  void cancelPendingCollapse() => _pendingCollapseId = null;
-
-  /// Applies a deferred collapse on pointer-up: the press was a plain click,
-  /// not the start of a drag, so select only the clicked photo. A no-op when
-  /// nothing is pending (a modifier click, a drag, or a click outside).
-  void commitPendingCollapse() {
-    final id = _pendingCollapseId;
-    if (id == null) return;
+  void cancelPendingCollapse() {
     _pendingCollapseId = null;
-    selectOnly(id);
+    _pendingCollapseOrigin = null;
+  }
+
+  /// Applies a deferred collapse when [photoId] is released: the press was a
+  /// plain click, not the start of a drag, so select only that photo. A no-op
+  /// when nothing is pending (a modifier click, a drag, or a click outside), or
+  /// when the release lands on a different photo than the press — a drag-out
+  /// can end without the pressed cell ever seeing its pointer-up (the native
+  /// drag session takes the pointer), and that stale press must not collapse
+  /// the selection on the next release somewhere else.
+  void commitPendingCollapse(int photoId) {
+    if (_pendingCollapseId != photoId) return;
+    cancelPendingCollapse();
+    selectOnly(photoId);
   }
 
   /// Adds/removes [photoId] from the selection (Space / ⌘-click) and focuses it.

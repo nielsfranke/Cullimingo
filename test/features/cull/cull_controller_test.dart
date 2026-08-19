@@ -123,20 +123,38 @@ void main() {
 
     // Pressing an already-selected photo must not collapse yet — a drag-out
     // from this press has to carry the whole selection.
-    controller().beginPendingCollapse(ids[0]);
+    controller().beginPendingCollapse(ids[0], const Offset(10, 10));
     expect(state().selectedIds, {ids[0], ids[1], ids[2]});
 
     // A drag cancels the pending collapse; the selection stays intact even
     // after a (now no-op) commit.
     controller()
       ..cancelPendingCollapse()
-      ..commitPendingCollapse();
+      ..commitPendingCollapse(ids[0]);
+    expect(state().selectedIds, {ids[0], ids[1], ids[2]});
+
+    // Moving the press past the slop is a drag-out, not a click: the pending
+    // collapse is dropped, so the release keeps every selected file.
+    controller()
+      ..beginPendingCollapse(ids[0], const Offset(10, 10))
+      ..notePendingCollapseMove(const Offset(12, 11)) // within the slop
+      ..notePendingCollapseMove(const Offset(40, 30)) // a real drag
+      ..commitPendingCollapse(ids[0]);
+    expect(state().selectedIds, {ids[0], ids[1], ids[2]});
+
+    // A press whose release never came back (the native drag session took the
+    // pointer) can't be cashed in by the next release on another photo — that
+    // stale commit used to shrink the selection on an unrelated right-click.
+    controller()
+      ..beginPendingCollapse(ids[0], const Offset(10, 10))
+      ..commitPendingCollapse(ids[1]);
     expect(state().selectedIds, {ids[0], ids[1], ids[2]});
 
     // A plain click (no drag) commits on release: collapse to the clicked one.
     controller()
-      ..beginPendingCollapse(ids[0])
-      ..commitPendingCollapse();
+      ..beginPendingCollapse(ids[0], const Offset(10, 10))
+      ..notePendingCollapseMove(const Offset(11, 10)) // click-sized wobble
+      ..commitPendingCollapse(ids[0]);
     expect(state().selectedIds, {ids[0]});
     expect(state().focusedId, ids[0]);
   });
