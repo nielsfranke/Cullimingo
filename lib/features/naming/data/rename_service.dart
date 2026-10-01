@@ -1,8 +1,9 @@
 import 'dart:io';
 import 'dart:isolate';
 
+import 'package:cullimingo/core/files/sidecar_path.dart';
 import 'package:cullimingo/core/naming/rename_template.dart';
-import 'package:cullimingo/features/metadata/data/xmp_sidecar.dart';
+import 'package:cullimingo/core/raw/preview_extractor.dart';
 import 'package:path/path.dart' as p;
 
 /// A photo an in-place rename acts on: its DB [id], absolute [path], capture
@@ -30,8 +31,8 @@ class RenameSource {
 }
 
 /// One planned in-place rename: the file at [source] keeps its folder but takes
-/// the new absolute name [target]. [sidecar]/[sidecarTarget] carry the
-/// matching `.xmp` when it exists so the pairing survives. An [unchanged] item
+/// the new absolute name [target]. [sidecars] carry the matching `.xmp`
+/// files that exist so the pairing survives. An [unchanged] item
 /// is a no-op (the new name equals the old).
 class RenameItem {
   /// Creates a rename item.
@@ -39,8 +40,7 @@ class RenameItem {
     required this.photoId,
     required this.source,
     required this.target,
-    this.sidecar,
-    this.sidecarTarget,
+    this.sidecars = const [],
   });
 
   /// The DB row id this rename belongs to.
@@ -52,11 +52,9 @@ class RenameItem {
   /// Absolute new path (same folder as [source]).
   final String target;
 
-  /// The matching sidecar to rename, or null when the photo has none.
-  final String? sidecar;
-
-  /// The sidecar's new path, or null when there is no sidecar.
-  final String? sidecarTarget;
+  /// The sidecars to rename alongside (current → new path): the pair's shared
+  /// `DSC1.xmp` and/or a per-file `DSC1.JPG.xmp`. Empty when there are none.
+  final List<({String source, String target})> sidecars;
 
   /// Whether this is a no-op (new name == old name).
   bool get unchanged => p.equals(source, target);
@@ -200,25 +198,27 @@ List<RenameItem> planRenames(
     );
     usedStems.add('${p.canonicalize(dir)}\u0000${stem.toLowerCase()}');
 
-    // The shared sidecar (oldstem.xmp) is renamed once, with the first member.
-    String? sidecar;
-    String? sidecarTarget;
-    if (includeSidecars) {
-      final sc = sidecarPath(rep.path);
-      if (exists(sc)) {
-        sidecar = sc;
-        sidecarTarget = p.join(dir, '$stem.xmp');
-      }
-    }
+    // The shared sidecar (oldstem.xmp) is renamed once, with the RAW member
+    // it belongs to (else the first); each member's own per-file sidecar
+    // (`DSC1.JPG.xmp`) rides with that member.
+    final sharedOwner = group.indexWhere((s) => isRawPath(s.path));
+    final sharedSidecar = stemSidecarPath(rep.path);
+    final hasShared = includeSidecars && exists(sharedSidecar);
     for (var i = 0; i < group.length; i++) {
       final s = group[i];
+      final target = p.join(dir, '$stem${p.extension(s.path)}');
+      final ownSidecar = fileSidecarPath(s.path);
       items.add(
         RenameItem(
           photoId: s.id,
           source: s.path,
-          target: p.join(dir, '$stem${p.extension(s.path)}'),
-          sidecar: i == 0 ? sidecar : null,
-          sidecarTarget: i == 0 ? sidecarTarget : null,
+          target: target,
+          sidecars: [
+            if (hasShared && i == (sharedOwner < 0 ? 0 : sharedOwner))
+              (source: sharedSidecar, target: p.join(dir, '$stem.xmp')),
+            if (includeSidecars && exists(ownSidecar))
+              (source: ownSidecar, target: fileSidecarPath(target)),
+          ],
         ),
       );
     }
@@ -269,7 +269,14 @@ Future<List<RenameResult>> runRename(List<RenameItem> plan) =>
 /// rides along. Synchronous + isolate-free so a temp-dir test can drive it.
 List<RenameResult> applyRenamePlan(List<RenameItem> plan) {
   final results = <RenameResult>[];
-  final staged = <({RenameItem item, String temp, String? tempSidecar})>[];
+  final staged =
+      <
+        ({
+          RenameItem item,
+          String temp,
+          List<({String source, String target, String temp})> sidecars,
+        })
+      >[];
 
   // Phase 1: source (+ sidecar) → unique temp in the same folder.
   var i = 0;
@@ -288,16 +295,22 @@ List<RenameResult> applyRenamePlan(List<RenameItem> plan) {
     try {
       final temp = _tempPath(item.target, i);
       File(item.source).renameSync(temp);
-      String? tempSidecar;
-      if (item.sidecar != null && File(item.sidecar!).existsSync()) {
-        tempSidecar = _tempPath(item.sidecarTarget!, i);
+      final sidecars = <({String source, String target, String temp})>[];
+      for (final (j, sc) in item.sidecars.indexed) {
+        if (!File(sc.source).existsSync()) continue;
+        final tempSidecar = _tempPath(sc.target, i, j + 1);
         try {
-          File(item.sidecar!).renameSync(tempSidecar);
+          File(sc.source).renameSync(tempSidecar);
+          sidecars.add((
+            source: sc.source,
+            target: sc.target,
+            temp: tempSidecar,
+          ));
         } on Object {
-          tempSidecar = null; // a lost sidecar is non-fatal
+          // A lost sidecar is non-fatal.
         }
       }
-      staged.add((item: item, temp: temp, tempSidecar: tempSidecar));
+      staged.add((item: item, temp: temp, sidecars: sidecars));
       i++;
     } on Object {
       results.add(
@@ -315,9 +328,9 @@ List<RenameResult> applyRenamePlan(List<RenameItem> plan) {
   for (final s in staged) {
     try {
       File(s.temp).renameSync(s.item.target);
-      if (s.tempSidecar != null) {
+      for (final sc in s.sidecars) {
         try {
-          File(s.tempSidecar!).renameSync(s.item.sidecarTarget!);
+          File(sc.temp).renameSync(sc.target);
         } on Object {
           // Best effort — the photo itself is what matters.
         }
@@ -337,7 +350,9 @@ List<RenameResult> applyRenamePlan(List<RenameItem> plan) {
       // hidden temp name. If even the rollback fails there is nothing more we
       // can do; the item is still reported as an error either way.
       _rollBack(s.temp, s.item.source);
-      if (s.tempSidecar != null) _rollBack(s.tempSidecar!, s.item.sidecar!);
+      for (final sc in s.sidecars) {
+        _rollBack(sc.temp, sc.source);
+      }
       results.add(
         RenameResult(
           photoId: s.item.photoId,
@@ -352,9 +367,10 @@ List<RenameResult> applyRenamePlan(List<RenameItem> plan) {
 }
 
 /// A unique hidden temp path in [finalPath]'s folder for the phase-1 stage.
-String _tempPath(String finalPath, int i) => p.join(
+/// [part] tells an item's sidecars (1, 2, …) apart from its photo (0).
+String _tempPath(String finalPath, int i, [int part = 0]) => p.join(
   p.dirname(finalPath),
-  '.cullrename_${i}_${DateTime.now().microsecondsSinceEpoch}.tmp',
+  '.cullrename_${i}_${part}_${DateTime.now().microsecondsSinceEpoch}.tmp',
 );
 
 /// Best-effort restore of a phase-1 temp file back to its original path when

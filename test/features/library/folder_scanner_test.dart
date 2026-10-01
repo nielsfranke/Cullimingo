@@ -91,4 +91,15 @@ void main() {
       isTrue,
     );
   });
+
+  test('attaches a per-file sidecar (p1.jpg.xmp) to its photo', () async {
+    File(p.join(tmp.path, 'p1.jpg.xmp')).writeAsStringSync('x');
+    final files = await scanFolderFast(tmp.path);
+    final p1 = files.firstWhere((f) => p.basename(f.path) == 'p1.jpg');
+    expect(p1.companions.map(p.basename).toSet(), {
+      'p1.xmp',
+      'p1.thm',
+      'p1.jpg.xmp',
+    });
+  });
 }

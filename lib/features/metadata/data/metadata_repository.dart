@@ -88,6 +88,9 @@ class MetadataRepository {
   Future<int> _writeSidecarsForRows(List<Photo> rows) async {
     final mtimes = <int, DateTime?>{};
     final failed = <int>{};
+    // One folder listing for the whole batch (RAW+JPEG pairing, see
+    // [SidecarResolver]).
+    final resolver = SidecarResolver();
     var next = 0;
     Future<void> worker() async {
       while (next < rows.length) {
@@ -109,8 +112,12 @@ class MetadataRepository {
               orientation: orientation,
               stackId: photo.stackId,
             ),
+            resolver: resolver,
           );
-          mtimes[photo.id] = await _sidecarMtime(photo.path);
+          mtimes[photo.id] = await readSidecarMtime(
+            photo.path,
+            resolver: resolver,
+          );
         } on Object catch (e) {
           // Counted (the caller warns with the total); the *reason* would be
           // lost without a trace — read-only volume vs full disk matters.

@@ -63,6 +63,23 @@ void main() {
       );
     });
 
+    test('a per-file sidecar follows the full new filename', () {
+      final plan = buildPlan(
+        sources: [
+          IngestSource(
+            path: '/c/IMG.JPG',
+            capturedAt: DateTime(2026),
+            companions: ['/c/IMG.xmp', '/c/IMG.JPG.xmp'],
+          ),
+        ],
+        template: const RenameTemplate('{YYYY}/{origname}'),
+      );
+      expect(plan.items.single.companions.map((c) => c.relPath).toSet(), {
+        '2026/IMG.xmp',
+        '2026/IMG.JPG.xmp',
+      });
+    });
+
     test('companions inherit the de-duplicated photo basename', () {
       final plan = buildPlan(
         sources: [

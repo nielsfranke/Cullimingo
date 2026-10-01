@@ -44,9 +44,15 @@ Future<RejectDeleteResult> deleteRejectedPhotos({
   if (rejects.isEmpty) {
     return const RejectDeleteResult(deleted: 0, failedPaths: []);
   }
-  // Photo + sidecar per reject; a missing sidecar is skipped by the trasher.
+  // Photo + its own sidecar per reject; a missing sidecar is skipped by the
+  // trasher. Resolved per photo so trashing the JPEG of a RAW+JPEG pair takes
+  // `DSC1.JPG.xmp`, never the RAW's `DSC1.xmp`.
+  final resolver = SidecarResolver();
   final paths = <String>[
-    for (final photo in rejects) ...[photo.path, sidecarPath(photo.path)],
+    for (final photo in rejects) ...[
+      photo.path,
+      await resolver.resolve(photo.path),
+    ],
   ];
   final result = await trash(paths, onProgress: onProgress);
 

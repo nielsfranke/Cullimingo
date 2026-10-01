@@ -318,7 +318,7 @@ void main() {
     final meta = MetadataRepository(db);
     final metaRepo = LibraryRepository(db, metadata: meta);
     writeJpeg('a.jpg');
-    final sidecar = sidecarPath(p.join(tmp.path, 'a.jpg'));
+    final sidecar = stemSidecarPath(p.join(tmp.path, 'a.jpg'));
     // A sidecar already exists (rated 3 elsewhere) — import seeds it.
     await writeSidecar(p.join(tmp.path, 'a.jpg'), const XmpData(rating: 3));
 

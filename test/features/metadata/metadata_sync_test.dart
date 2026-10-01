@@ -41,7 +41,89 @@ void main() {
   }
 
   test('sidecar path replaces the extension', () {
-    expect(sidecarPath('/x/DSC0001.ARW'), '/x/DSC0001.xmp');
+    expect(stemSidecarPath('/x/DSC0001.ARW'), '/x/DSC0001.xmp');
+  });
+
+  group('RAW+JPEG pairs', () {
+    test('chooseSidecarPath gives the paired JPEG its own sidecar', () {
+      String choose(
+        String path, {
+        bool raw = false,
+        bool file = false,
+        bool stem = false,
+      }) => chooseSidecarPath(
+        path,
+        hasRawSibling: raw,
+        hasFileSidecar: file,
+        hasStemSidecar: stem,
+      );
+
+      // RAW keeps the LR/C1 stem sidecar whatever sits next to it.
+      expect(choose('/x/A.ARW', file: true), '/x/A.xmp');
+      // Paired JPEG → per-file sidecar, even while the shared one exists.
+      expect(choose('/x/A.JPG', raw: true, stem: true), '/x/A.JPG.xmp');
+      // Lone JPEG → stem sidecar as before…
+      expect(choose('/x/A.JPG'), '/x/A.xmp');
+      expect(choose('/x/A.JPG', file: true, stem: true), '/x/A.xmp');
+      // …unless only its per-file sidecar is left (its RAW was deleted).
+      expect(choose('/x/A.JPG', file: true), '/x/A.JPG.xmp');
+    });
+
+    test('followSidecarPath keeps the per-file form on rename', () {
+      expect(
+        followSidecarPath('/c/A.JPG.xmp', '/c/A.JPG', '2026/B.JPG'),
+        '2026/B.JPG.xmp',
+      );
+      expect(
+        followSidecarPath('/c/A.xmp', '/c/A.JPG', '2026/B.JPG'),
+        '2026/B.xmp',
+      );
+      expect(
+        followSidecarPath('/c/A.THM', '/c/A.ARW', '2026/B.ARW'),
+        '2026/B.THM',
+      );
+    });
+
+    test('RAW and JPEG keep independent marks through a re-sync', () async {
+      final importId = await db.createImport(sourcePath: tmp.path);
+      for (final name in ['A.ARW', 'A.JPG']) {
+        File(p.join(tmp.path, name)).writeAsStringSync('x');
+      }
+      await db.insertPhotos([
+        for (final name in ['A.ARW', 'A.JPG'])
+          PhotosCompanion.insert(
+            importId: Value(importId),
+            path: p.join(tmp.path, name),
+            mtime: DateTime(2026, 6),
+          ),
+      ]);
+      final rows = await db.photosForImport(importId);
+      final raw = rows.firstWhere((r) => r.path.endsWith('.ARW'));
+      final jpg = rows.firstWhere((r) => r.path.endsWith('.JPG'));
+      await db.setRating(raw.id, 2);
+      await db.setRating(jpg.id, 5);
+      await meta.writeSidecarsForPhotos([raw.id, jpg.id]);
+
+      expect(File(p.join(tmp.path, 'A.xmp')).existsSync(), isTrue);
+      expect(File(p.join(tmp.path, 'A.JPG.xmp')).existsSync(), isTrue);
+      expect((await readSidecar(raw.path))!.rating, 2);
+      expect((await readSidecar(jpg.path))!.rating, 5);
+
+      // A fresh import (reopen / re-sync) reads each back on its own.
+      await meta.applySidecarsForImport(importId);
+      final after = {
+        for (final r in await db.photosForImport(importId)) r.id: r.rating,
+      };
+      expect(after, {raw.id: 2, jpg.id: 5});
+    });
+
+    test('resolver falls back to the stem sidecar for a lone JPEG', () async {
+      final jpg = p.join(tmp.path, 'B.JPG');
+      File(jpg).writeAsStringSync('x');
+      expect(await resolveSidecarPath(jpg), p.join(tmp.path, 'B.xmp'));
+      File(p.join(tmp.path, 'B.NEF')).writeAsStringSync('x');
+      expect(await resolveSidecarPath(jpg), p.join(tmp.path, 'B.JPG.xmp'));
+    });
   });
 
   test('writeSidecarForPhoto mirrors DB marks to a .xmp file', () async {
