@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.3.2 — 2026-10-01
 
 ### Fixed
 - **Linux: opening a folder no longer crashes the app** (GitHub #2). On
