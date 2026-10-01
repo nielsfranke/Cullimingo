@@ -14,6 +14,18 @@
 #   tool/bundle_linux.sh [path/to/bundle]
 # Defaults to the release build. Re-run after every `flutter build linux`.
 #
+# Host-preferred libs: a few of libvips' dependencies are also part of the
+# host's own GTK desktop stack, loaded *later* by host plugins — librsvg is
+# dlopen'd by gdk-pixbuf's SVG loader the first time GTK draws an SVG icon (the
+# file chooser's sidebar). The dynamic loader dedupes by soname, so if our
+# bundled copy is already in the process, the host plugin binds to *it*
+# instead of the host's own (newer) build and dies on the first symbol it
+# lacks (Debian 13's loader vs. Ubuntu 24.04's librsvg 2.58: "undefined
+# symbol: rsvg_handle_get_pixbuf_and_error" → GTK aborts, GitHub #2). Those
+# libs go to <bundle>/lib/fallback/ instead, *outside* RUNPATH, and the app
+# (core/native/bundled_libs.dart) dlopens the host's copy before libvips —
+# falling back to ours only when the host has none.
+#
 # Requires: patchelf, ldd, ldconfig (all standard on Debian/Ubuntu; patchelf via
 # `apt install patchelf`).
 
@@ -21,6 +33,7 @@ set -euo pipefail
 
 BUNDLE="${1:-build/linux/x64/release/bundle}"
 LIBS_DIR="$BUNDLE/lib"
+FALLBACK_DIR="$LIBS_DIR/fallback"
 
 if [[ ! -d "$BUNDLE" ]]; then
   echo "error: bundle not found: $BUNDLE" >&2
@@ -34,10 +47,24 @@ for tool in patchelf ldd ldconfig; do
   fi
 done
 
-mkdir -p "$LIBS_DIR"
-
 # Roots we dlopen directly; their transitive deps are pulled in below.
 ROOTS=(libraw.so libvips.so.42)
+
+# Libs the host's GTK stack also loads through its own plugins (see the header):
+# shipped under lib/fallback/, used only when the host lacks them.
+HOST_PREFERRED=(librsvg-2.so.2)
+is_host_preferred() {
+  local n
+  for n in "${HOST_PREFERRED[@]}"; do [[ "$1" == "$n" ]] && return 0; done
+  return 1
+}
+
+# Start from a clean fallback dir, and drop any host-preferred lib an earlier
+# run left in lib/: there it sits on RUNPATH and defeats the whole scheme (and
+# would skew the ldd pass below).
+rm -rf "$FALLBACK_DIR"
+mkdir -p "$LIBS_DIR" "$FALLBACK_DIR"
+for name in "${HOST_PREFERRED[@]}"; do rm -f "$LIBS_DIR/$name"; done
 
 # System libs to leave to the host loader — bundling glibc/X11/GL/GTK core would
 # break more than it fixes (they must match the running kernel/driver stack).
@@ -69,15 +96,24 @@ resolve_soname() {
 
 echo "==> Bundling native libs into $LIBS_DIR"
 
+# copy_with_deps <src> [<dest dir> <rpath>] — copies a lib and, recursively,
+# its non-system dependencies into <dest dir> (default: lib/, RUNPATH=$ORIGIN).
+# Host-preferred libs only ever go to lib/fallback/ (their own pass below);
+# every other destination skips them, whoever asks.
 declare -A copied=()
 copy_with_deps() {
-  local src="$1"
+  local src="$1" dest="${2:-$LIBS_DIR}" rpath="${3:-\$ORIGIN}"
   local base; base="$(basename "$src")"
+  [[ "$dest" != "$FALLBACK_DIR" ]] && is_host_preferred "$base" && return
   [[ -n "${copied[$base]:-}" ]] && return
   copied[$base]=1
-  cp -Lf "$src" "$LIBS_DIR/$base"
-  chmod u+w "$LIBS_DIR/$base"
-  patchelf --set-rpath '$ORIGIN' "$LIBS_DIR/$base"
+  # Re-running on an already-bundled tree: ldd resolves deps via RUNPATH to
+  # the copies already in place, so src may *be* the destination.
+  if [[ ! "$src" -ef "$dest/$base" ]]; then
+    cp -Lf "$src" "$dest/$base"
+    chmod u+w "$dest/$base"
+  fi
+  patchelf --set-rpath "$rpath" "$dest/$base"
 
   # Recurse into this lib's own dependencies. `ldd` prints "soname => /path
   # (addr)" for resolved deps; the awk keeps only those, dropping the vdso and
@@ -85,8 +121,8 @@ copy_with_deps() {
   while read -r name path; do
     [[ "$path" != /* ]] && continue
     is_system_lib "$name" && continue
-    copy_with_deps "$path"
-  done < <(ldd "$LIBS_DIR/$base" 2>/dev/null | awk '$2=="=>" {print $1, $3}')
+    copy_with_deps "$path" "$dest" "$rpath"
+  done < <(ldd "$dest/$base" 2>/dev/null | awk '$2=="=>" {print $1, $3}')
 }
 
 for root in "${ROOTS[@]}"; do
@@ -148,7 +184,24 @@ for moddir in "$vips_libdir"/vips-modules-*; do
   fi
 done
 
+# Host-preferred libs → lib/fallback/. Nothing in lib/ has RUNPATH pointing
+# there, so libvips' DT_NEEDED resolves to the host's copy (ld.so.cache) unless
+# the app preloaded ours first. Their deps that lib/ doesn't already carry land
+# beside them; RUNPATH covers both dirs. This pass runs LAST: a dep first seen
+# here would be marked copied yet live only in fallback/, unreachable from the
+# lib/-rooted RUNPATHs of anything bundled after it.
+for name in "${HOST_PREFERRED[@]}"; do
+  src="$(resolve_soname "$name")"
+  if [[ -z "$src" || ! -e "$src" ]]; then
+    echo "error: $name not found in ldconfig cache (needed by libvips)" >&2
+    exit 1
+  fi
+  copy_with_deps "$src" "$FALLBACK_DIR" '$ORIGIN:$ORIGIN/..'
+done
+
 count=$(find "$LIBS_DIR" -maxdepth 1 -name '*.so*' | wc -l | tr -d ' ')
+fallback=$(find "$FALLBACK_DIR" -maxdepth 1 -name '*.so*' | wc -l | tr -d ' ')
 size=$(du -sh "$LIBS_DIR" | cut -f1)
 echo "==> Done: $count shared objects ($size) in $LIBS_DIR"
+echo "    + $fallback host-preferred fallback(s) in $FALLBACK_DIR"
 echo "    The bundle now carries libraw/libvips and their non-system deps."

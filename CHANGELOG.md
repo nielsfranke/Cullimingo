@@ -3,6 +3,16 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **Linux: opening a folder no longer crashes the app** (GitHub #2). On
+  Debian 13 and other distros with a librsvg newer than the one bundled in the
+  AppImage, the first GTK file chooser killed the app outright: GTK's SVG icon
+  loader bound to our older bundled librsvg and aborted on a missing symbol.
+  The AppImage now uses the host's librsvg whenever there is one and falls
+  back to its own copy only when there isn't.
+
 ## 1.3.1 — 2026-08-19
 
 ### Fixed
