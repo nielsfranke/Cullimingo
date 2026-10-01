@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.3.3 — 2026-10-01
 
 ### Fixed
 - **"Apply marks to whole bracket" now works in the loupe** (GitHub #4).
