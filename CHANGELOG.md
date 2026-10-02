@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.3.5 — 2026-10-02
 
 ### Fixed
 - **Import no longer hangs on a full or failing destination:** a write error
