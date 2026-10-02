@@ -22,6 +22,11 @@ enum CopyOutcome {
   /// The source file was missing or unreadable.
   sourceMissing,
 
+  /// The source changed (size or modification time) while it was being read
+  /// — still being written by a camera, tether or sync tool. Fresh copies are
+  /// deleted: they hold a version that no longer exists.
+  sourceChanged,
+
   /// Any other I/O error.
   error,
 }
@@ -72,6 +77,11 @@ Future<CopyResult> verifiedCopy({
       message: 'Source not found',
     );
   }
+  // The copy and its hash come from one read of the source, so verification
+  // only proves the copy matches *that read*. If the file changes meanwhile,
+  // the copy is stale while every check passes — and a handoff *move* then
+  // deletes the newer original. Compare the source before and after instead.
+  final before = src.statSync();
 
   // Split into destinations that need writing vs. ones already present.
   final fresh = <String>[];
@@ -116,6 +126,16 @@ Future<CopyResult> verifiedCopy({
           );
         }
       }
+    }
+
+    final after = src.statSync();
+    if (after.size != before.size || after.modified != before.modified) {
+      fresh.forEach(_deleteQuietly);
+      return CopyResult(
+        source: source,
+        outcome: CopyOutcome.sourceChanged,
+        message: 'Source changed while copying (still being written?)',
+      );
     }
 
     // Keep the capture-time mtime on the copy, like the original card file:

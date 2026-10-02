@@ -23,6 +23,10 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 - **Refreshing (⌘R) an unplugged folder no longer removes its photos:** when
   the folder is gone or lists empty, nothing is removed and a warning says to
   check the card or drive.
+- **A file that changes while it's being copied is no longer reported as
+  copied:** the copy is discarded and the file listed as failed ("still being
+  written?"). A handoff *move* used to delete such an original after keeping a
+  stale copy; a move now also always verifies before deleting anything.
 - **Copies keep the original's file date**, so re-importing or re-scanning a
   copied folder files photos under their capture day instead of today.
 - Impossible EXIF dates (e.g. 31 February from a corrupt camera clock) are

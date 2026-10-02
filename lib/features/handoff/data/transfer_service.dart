@@ -124,6 +124,7 @@ class TransferSummary {
   int get failed =>
       _count(CopyOutcome.verifyFailed) +
       _count(CopyOutcome.sourceMissing) +
+      _count(CopyOutcome.sourceChanged) +
       _count(CopyOutcome.error);
 
   /// Whether every photo landed safely.
@@ -177,13 +178,15 @@ Stream<TransferProgress> runTransfer({
         result = await copier(
           source: item.source,
           destinations: [dest],
-          verify: verify,
+          // A move deletes the original next: only a copy that was read back
+          // and matched may stand in for it, whatever the caller asked.
+          verify: verify || mode == TransferMode.move,
         );
         if (result.ok && item.sidecar != null && !stopped) {
           final sidecarResult = await copier(
             source: item.sidecar!.source,
             destinations: [p.join(destinationRoot, item.sidecar!.relPath)],
-            verify: verify,
+            verify: verify || mode == TransferMode.move,
           );
           // Only a verified sidecar copy may delete the source — a failed
           // copy would otherwise erase the marks' one remaining home.

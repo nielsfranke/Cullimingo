@@ -61,6 +61,32 @@ void main() {
     testOn: '!windows',
   );
 
+  test(
+    'a source that changes during the copy is not reported copied',
+    () async {
+      // Big enough that the copy yields many times; the source keeps growing
+      // meanwhile, like a file a tether or sync tool is still writing.
+      final s = File(p.join(tmp.path, 'growing.raw'))
+        ..writeAsBytesSync(List.filled(32 * 1024 * 1024, 1));
+      final dest = p.join(tmp.path, 'out', 'growing.raw');
+
+      var copying = true;
+      final copy = verifiedCopy(
+        source: s.path,
+        destinations: [dest],
+      ).whenComplete(() => copying = false);
+      while (copying) {
+        s.writeAsBytesSync(const [2], mode: FileMode.append);
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
+      final r = await copy;
+
+      expect(r.outcome, CopyOutcome.sourceChanged);
+      expect(r.ok, isFalse);
+      expect(File(dest).existsSync(), isFalse, reason: 'stale copy kept');
+    },
+  );
+
   test('copies to two destinations (dual-dest backup)', () async {
     final s = src('b.txt', 'data');
     final d1 = p.join(tmp.path, 'main', 'b.txt');

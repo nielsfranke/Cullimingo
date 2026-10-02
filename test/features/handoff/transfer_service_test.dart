@@ -110,6 +110,56 @@ void main() {
       expect(sidecar.existsSync(), isFalse);
     });
 
+    test('keeps the original when its copy reports a changed source', () async {
+      final photo = src('DSC2.arw', 'raw-bytes');
+      final plan = await buildTransferPlan([photo.path]);
+      Future<CopyResult> changed({
+        required String source,
+        required List<String> destinations,
+        bool verify = true,
+      }) async =>
+          CopyResult(source: source, outcome: CopyOutcome.sourceChanged);
+
+      final ticks = await runTransfer(
+        plan: plan,
+        destinationRoot: dest('out'),
+        mode: TransferMode.move,
+        copier: changed,
+      ).toList();
+
+      expect(photo.existsSync(), isTrue);
+      expect(TransferSummary([for (final t in ticks) t.last]).failed, 1);
+    });
+
+    test('always verifies before deleting, even if asked not to', () async {
+      final photo = src('DSC3.arw', 'raw-bytes');
+      final plan = await buildTransferPlan([photo.path]);
+      final verifyFlags = <bool>[];
+      Future<CopyResult> spy({
+        required String source,
+        required List<String> destinations,
+        bool verify = true,
+      }) {
+        verifyFlags.add(verify);
+        return verifiedCopy(
+          source: source,
+          destinations: destinations,
+          verify: verify,
+        );
+      }
+
+      await runTransfer(
+        plan: plan,
+        destinationRoot: dest('out'),
+        mode: TransferMode.move,
+        verify: false,
+        copier: spy,
+      ).toList();
+
+      expect(verifyFlags, everyElement(isTrue));
+      expect(photo.existsSync(), isFalse);
+    });
+
     test('a name clash is left untouched and the source is kept', () async {
       final photo = src('DSC1.arw', 'new-bytes');
       final out = Directory(dest('out'))..createSync();

@@ -272,6 +272,7 @@ class IngestSummary {
   int get failed =>
       _count(CopyOutcome.verifyFailed) +
       _count(CopyOutcome.sourceMissing) +
+      _count(CopyOutcome.sourceChanged) +
       _count(CopyOutcome.error);
 
   /// Whether every planned file landed safely — never true for a cancelled
