@@ -47,7 +47,19 @@ packages/
   no JPEG preview or only an unusably small one (long edge below 512 px), the
   preview workers perform a neutral LibRaw demosaic and cache an sRGB JPEG.
   This is a culling fallback for files such as Nikon HLG NEFs, not a
-  colour-managed RAW developer.
+  colour-managed RAW developer. `core/raw/raw_display_jpeg.dart` is the one
+  entry point (preview pool, export, legacy extractor); the inspector and the
+  folder scanner read the embedded JPEG directly because they only want its
+  EXIF. Grid/loupe decodes use LibRaw's half-size mode whenever half the
+  sensor still covers the tier (LibRaw has no C setter for it and the struct
+  bindings are 0.21-only, so `setLibRawHalfSize` locates the field on the
+  running library via two C setters; if it can't, a downscaled request fails
+  over to the embedded JPEG rather than a full-sensor demosaic). LibRaw reports
+  undecodable data (Nikon HE/HE\*) only through its data-error callback, which
+  some decoders call from OpenMP threads, so it is a `NativeCallable.listener`
+  and a reported error discards the render. RAW cache keys carry a render
+  version (`_rawRenderVersion` in `preview_cache.dart`) so pipeline changes
+  re-extract stale previews.
 - **Deliberate cull ↔ filter/inspector coupling** (July 2026): pure grouping
   domain (bursts, RAW+JPEG pairs, brackets) lives in `shared/grouping/` and
   orientation math in `core/raw/`, so features no longer reach into

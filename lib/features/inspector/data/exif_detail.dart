@@ -119,7 +119,10 @@ Future<Map<String, IfdTag>> _embeddedPreviewTags(
 ) async {
   try {
     final bindings = FlutterLibRawBindings(DynamicLibrary.open(libPath));
-    final preview = extractRawThumbnail(bindings, path);
+    // The embedded JPEG specifically, even when it's a tiny thumbnail: only
+    // it carries the camera's EXIF — a demosaic fallback (rawDisplayJpeg)
+    // would have none, and isn't worth a full decode just to read tags.
+    final preview = extractRawPreview(bindings, path)?.bytes;
     if (preview == null) return const {};
     return await readExifFromBytes(preview);
   } on Object {

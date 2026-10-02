@@ -97,6 +97,27 @@ void main() {
     expect(decoded.height, 50);
   });
 
+  test('encodes RGB pixels at the requested JPEG quality', () {
+    if (!hasVips) {
+      markTestSkipped('libvips not installed');
+      return;
+    }
+    // Noise-like content, so quality visibly changes the size.
+    final rgb = Uint8List.fromList(
+      List<int>.generate(256 * 256 * 3, (i) => (i * 7919) % 251),
+    );
+    Uint8List encode(int q) => vips.thumbnailRgb(
+      rgb,
+      width: 256,
+      height: 256,
+      channels: 3,
+      longEdge: 256,
+      quality: q,
+    )!;
+
+    expect(encode(95).length, greaterThan(encode(30).length));
+  });
+
   test('warmUpProcess completes without throwing', () {
     // Registers the JPEG + HEIF loader types on the main isolate; must be a
     // no-throw best effort whether or not libvips/libheif are present.

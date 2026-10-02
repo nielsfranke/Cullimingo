@@ -4,7 +4,9 @@ import 'dart:io';
 import 'dart:isolate';
 import 'dart:typed_data';
 
+import 'package:cullimingo/core/cache/vips.dart';
 import 'package:cullimingo/core/raw/libraw_preview_extractor.dart';
+import 'package:cullimingo/core/raw/raw_display_jpeg.dart';
 import 'package:cullimingo/features/export/data/export_encoder.dart';
 import 'package:cullimingo/features/export/domain/export_plan.dart';
 import 'package:cullimingo/features/export/domain/export_preset.dart';
@@ -274,10 +276,12 @@ void _exportWorkerMain(List<Object?> init) {
     }
   }
 
+  // Jobs arrive strictly one at a time (the owner awaits each reply), so the
+  // async render can't interleave with the next.
   final inbox = ReceivePort()
-    ..listen((message) {
+    ..listen((message) async {
       final job = message! as List<Object?>;
-      final outcome = renderExportToFile(
+      final outcome = await renderExportToFile(
         item: job[0]! as ExportItem,
         destPath: job[1]! as String,
         preset: job[2]! as ExportPreset,
@@ -290,20 +294,26 @@ void _exportWorkerMain(List<Object?> init) {
   toMain.send(inbox.sendPort);
 }
 
-/// Reads [item]'s source (embedded JPEG preview for RAW, file bytes otherwise),
+/// Reads [item]'s source (for a RAW the embedded JPEG preview, or a demosaic
+/// when that is missing or tiny — see `rawDisplayJpeg`; file bytes otherwise),
 /// renders it per [preset] and writes the JPEG to [destPath] (creating parent
 /// folders, overwriting any prior export). Synchronous file I/O — only call it
 /// inside a background isolate. Returns the [ExportOutcome].
-ExportOutcome renderExportToFile({
+Future<ExportOutcome> renderExportToFile({
   required ExportItem item,
   required String destPath,
   required ExportPreset preset,
   String? libraryPath,
   FlutterLibRawBindings? libraw,
-}) {
+}) async {
   try {
     final source = item.isRaw
-        ? _embeddedRawJpeg(item.source, libraryPath, libraw)
+        ? await _rawSourceJpeg(
+            item.source,
+            libraryPath,
+            libraw,
+            longEdge: preset.longEdge,
+          )
         : (File(item.source).existsSync()
               ? File(item.source).readAsBytesSync()
               : null);
@@ -330,28 +340,52 @@ ExportOutcome renderExportToFile({
   }
 }
 
-/// Returns the embedded full-res JPEG preview of [rawPath], or null if
-/// unavailable. With [preloaded] bindings (a pooled export worker) no dylib is
-/// opened; otherwise libraw is loaded from [libraryPath] / auto-discovery.
-Uint8List? _embeddedRawJpeg(
+/// Returns the JPEG to export for [rawPath] — its embedded preview, or a
+/// demosaic sized for [longEdge] when the embedded one is missing or a tiny
+/// thumbnail — or null if unavailable. With [preloaded] bindings (a pooled
+/// export worker) no dylib is opened; otherwise libraw is loaded from
+/// [libraryPath] / auto-discovery.
+Future<Uint8List?> _rawSourceJpeg(
   String rawPath,
   String? libraryPath,
-  FlutterLibRawBindings? preloaded,
-) {
+  FlutterLibRawBindings? preloaded, {
+  required int longEdge,
+}) async {
   if (!File(rawPath).existsSync()) return null;
-  if (preloaded != null) {
+  var bindings = preloaded;
+  if (bindings == null) {
+    final lib = libraryPath ?? LibRawPreviewExtractor.resolveLibraryPath();
+    if (lib == null) return null;
     try {
-      return extractRawThumbnail(preloaded, rawPath);
+      bindings = FlutterLibRawBindings(DynamicLibrary.open(lib));
     } on Object {
       return null;
     }
   }
-  final lib = libraryPath ?? LibRawPreviewExtractor.resolveLibraryPath();
-  if (lib == null) return null;
   try {
-    final dylib = DynamicLibrary.open(lib);
-    return extractRawThumbnail(FlutterLibRawBindings(dylib), rawPath);
+    final raw = await rawDisplayJpeg(
+      bindings,
+      rawPath,
+      longEdge: longEdge,
+      // Loaded only if a fallback is needed; high Q because the export
+      // re-encodes this once more.
+      vips: _exportVips,
+      quality: 95,
+    );
+    return raw?.bytes;
   } on Object {
     return null;
   }
+}
+
+// libvips for this export isolate, loaded on the first RAW that needs the
+// demosaic fallback (most exports never do).
+Vips? _exportVipsInstance;
+bool _exportVipsTried = false;
+Vips? _exportVips() {
+  if (!_exportVipsTried) {
+    _exportVipsTried = true;
+    _exportVipsInstance = Vips.tryLoad();
+  }
+  return _exportVipsInstance;
 }

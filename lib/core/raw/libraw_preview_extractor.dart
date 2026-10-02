@@ -1,10 +1,13 @@
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:cullimingo/core/cache/vips.dart';
 import 'package:cullimingo/core/native/bundled_libs.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
+import 'package:cullimingo/core/raw/raw_display_jpeg.dart';
 import 'package:ffi/ffi.dart';
 import 'package:flutter_libraw/flutter_libraw.dart';
 
@@ -66,24 +69,21 @@ class LibRawPreviewExtractor implements PreviewExtractor {
     return Isolate.run(() => _extract(lib, path));
   }
 
-  static Uint8List? _extract(String libPath, String path) {
+  static Future<Uint8List?> _extract(String libPath, String path) async {
     final DynamicLibrary dylib;
     try {
       dylib = DynamicLibrary.open(libPath);
     } on Object {
       return null;
     }
-    return extractRawThumbnail(FlutterLibRawBindings(dylib), path);
+    final raw = await rawDisplayJpeg(
+      FlutterLibRawBindings(dylib),
+      path,
+      longEdge: 0,
+      vips: Vips.tryLoad,
+    );
+    return raw?.bytes;
   }
-}
-
-/// Runs the LibRaw FFI sequence using already-loaded [lr] bindings and returns
-/// the **raw embedded JPEG preview bytes** — no Dart decode/resize/re-encode
-/// (the pure-Dart `image` codecs are slow). The native engine codec downsamples
-/// it to display size via `cacheWidth` at paint time. Exposed so the preview
-/// pool can load libraw **once per worker** and reuse it across thumbnails.
-Uint8List? extractRawThumbnail(FlutterLibRawBindings lr, String path) {
-  return extractRawPreview(lr, path)?.bytes;
 }
 
 /// An embedded JPEG plus the dimensions needed to judge whether it is useful.
@@ -160,7 +160,15 @@ bool _isStartOfFrame(int marker) =>
     marker != 0xc8 &&
     marker != 0xcc;
 
-/// Extracts an embedded JPEG and its dimensions from [path].
+/// Runs the LibRaw FFI sequence using already-loaded [lr] bindings and returns
+/// the **raw embedded JPEG preview** with its dimensions — no Dart
+/// decode/resize/re-encode (the pure-Dart `image` codecs are slow). Exposed so
+/// workers can load libraw **once** and reuse it across files.
+///
+/// This is the embedded JPEG only, which may be a 160×120 thumbnail (or
+/// absent). Anything that *displays* or *exports* the RAW must go through
+/// [rawDisplayJpeg] instead so it gets the demosaic fallback; read this
+/// directly only for the embedded JPEG's EXIF.
 EmbeddedRawPreview? extractRawPreview(FlutterLibRawBindings lr, String path) {
   final handle = lr.libraw_init(0);
   if (handle == nullptr) return null;
@@ -210,11 +218,22 @@ typedef RawBitmapConsumer<T> =
 
 /// Fully decodes [path] and lends its 8-bit RGB buffer to [consume].
 ///
-/// [halfSize] uses LibRaw's half-resolution mode: still large enough for the
-/// grid and screen-resolution loupe, but around one quarter of the pixels and
-/// memory. The full tier disables it for genuine 100% zoom. Camera white
-/// balance is applied and output is converted to sRGB; this is a practical SDR
-/// culling preview, not a colour-managed rendering of an HLG master.
+/// [minLongEdge] is the smallest long edge the caller needs (0 = full
+/// resolution). When half of the sensor still covers it, LibRaw's
+/// half-resolution mode is used: about one quarter of the pixels and memory,
+/// which keeps several concurrent preview workers from exhausting RAM. If
+/// half-size mode can't be set safely on the loaded runtime and a downscaled
+/// result was requested, this returns `null` rather than risk a full-sensor
+/// demosaic (several GB transient across workers). Camera white balance is
+/// applied and output is converted to sRGB; this is a practical SDR culling
+/// preview, not a colour-managed rendering of an HLG master.
+///
+/// [dataErrorHandler] is registered with `libraw_set_dataerror_handler`, with
+/// [dataErrorData] as its context. LibRaw reports corrupt or undecodable data
+/// (e.g. Nikon HE/HE* TicoRAW) only through that callback — unpack and
+/// process still return success and produce noise — so callers must treat a
+/// reported error as a failed decode. It can be invoked from LibRaw's OpenMP
+/// worker threads, so it must be thread-safe (see `rawDisplayJpeg`).
 ///
 /// The pointer is valid only during the synchronous [consume] call. Lending
 /// it directly to libvips avoids two full-size bitmap copies per worker.
@@ -222,7 +241,9 @@ T? processRawBitmap<T>(
   FlutterLibRawBindings lr,
   String path, {
   required RawBitmapConsumer<T> consume,
-  bool halfSize = true,
+  int minLongEdge = 0,
+  data_callback? dataErrorHandler,
+  Pointer<Void>? dataErrorData,
 }) {
   final handle = lr.libraw_init(0);
   if (handle == nullptr) return null;
@@ -231,6 +252,13 @@ T? processRawBitmap<T>(
   final errc = calloc<Int>();
   Pointer<libraw_processed_image_t> processed = nullptr;
   try {
+    if (dataErrorHandler != null) {
+      lr.libraw_set_dataerror_handler(
+        handle,
+        dataErrorHandler,
+        dataErrorData ?? nullptr,
+      );
+    }
     if (lr.libraw_open_file(handle, pathC.cast<Uint8>()) != 0) return null;
 
     // Use the stable C accessors instead of writing `use_camera_wb` through
@@ -250,14 +278,14 @@ T? processRawBitmap<T>(
       }
     }
 
-    // LibRaw has no C setter for half_size. It is safe to use the generated
-    // struct only with the 0.21 ABI it was generated from. Newer runtimes take
-    // the full-resolution path instead of risking a write at the wrong offset.
-    final version = lr.libraw_versionNumber();
-    final major = (version >> 16) & 0xff;
-    final minor = (version >> 8) & 0xff;
-    if (major == 0 && minor == 21) {
-      handle.ref.params.half_size = halfSize ? 1 : 0;
+    // Before half_size is set, iwidth/iheight are the full output size.
+    final sensorEdge = math.max(
+      lr.libraw_get_iwidth(handle),
+      lr.libraw_get_iheight(handle),
+    );
+    final wantHalf = minLongEdge > 0 && sensorEdge ~/ 2 >= minLongEdge;
+    if (wantHalf && !setLibRawHalfSize(lr, handle, enabled: true)) {
+      return null;
     }
     lr
       ..libraw_set_demosaic(handle, 0) // fast linear interpolation
@@ -299,5 +327,85 @@ T? processRawBitmap<T>(
     calloc.free(errc);
     malloc.free(pathC);
     lr.libraw_close(handle);
+  }
+}
+
+/// Byte offset of `params.half_size` inside `libraw_data_t` for each loaded
+/// libraw (keyed by its bindings), found by [_probeHalfSizeOffset]. `-1`
+/// caches a failed probe.
+final Expando<int> _halfSizeOffsets = Expando('libraw half_size offset');
+
+/// Sets LibRaw's `half_size` output parameter on [handle].
+///
+/// LibRaw has no C setter for it, and the generated struct bindings match the
+/// 0.21 ABI only: 0.22 grew the structs before `params`, so writing through
+/// `handle.ref.params` there hits the wrong field (and the macOS release ships
+/// Homebrew's 0.22). The head of `libraw_output_params_t` itself — `bright`,
+/// `threshold`, `half_size`, … `output_color` — is unchanged across 0.21/0.22,
+/// so this locates it on the running library through two C setters that *do*
+/// exist (`libraw_set_bright`, `libraw_set_output_color`) and writes
+/// `half_size` relative to them. Returns `false` when the layout can't be
+/// confirmed; nothing is written then.
+bool setLibRawHalfSize(
+  FlutterLibRawBindings lr,
+  Pointer<libraw_data_t> handle, {
+  required bool enabled,
+}) {
+  var offset = _halfSizeOffsets[lr];
+  if (offset == null) {
+    offset = _probeHalfSizeOffset(lr, handle) ?? -1;
+    _halfSizeOffsets[lr] = offset;
+  }
+  if (offset < 0) return false;
+  (handle.cast<Uint8>() + offset).cast<Int32>().value = enabled ? 1 : 0;
+  return true;
+}
+
+// Offsets within libraw_output_params_t, stable since LibRaw 0.18:
+// float bright; float threshold; int half_size; int four_color_rgb;
+// int highlight; int use_auto_wb; int use_camera_wb; int use_camera_matrix;
+// int output_color.
+const int _halfSizeFromBright = 8;
+const int _outputColorFromBright = 32;
+
+int? _probeHalfSizeOffset(
+  FlutterLibRawBindings lr,
+  Pointer<libraw_data_t> handle,
+) {
+  // libraw_data_t is embedded in the larger LibRaw object, and a newer ABI
+  // only grows it, so the 0.21 size is always safe to read — and `params` sits
+  // well inside it (the big colour/rawdata blocks follow).
+  final size = sizeOf<libraw_data_t>();
+  final view = ByteData.sublistView(handle.cast<Uint8>().asTypedList(size));
+
+  Set<int> floatsEqual(double v, Iterable<int> where) => {
+    for (final o in where)
+      if (view.getFloat32(o, Endian.host) == v) o,
+  };
+  Set<int> intsEqual(int v, Iterable<int> where) => {
+    for (final o in where)
+      if (o + 4 <= size && view.getInt32(o, Endian.host) == v) o,
+  };
+
+  try {
+    final aligned = [for (var o = 0; o + 4 <= size; o += 4) o];
+    lr.libraw_set_bright(handle, 1.5);
+    var bright = floatsEqual(1.5, aligned);
+    lr.libraw_set_bright(handle, 2.75);
+    bright = floatsEqual(2.75, bright);
+
+    final colourAt = bright.map((o) => o + _outputColorFromBright);
+    lr.libraw_set_output_color(handle, 4);
+    var colour = intsEqual(4, colourAt);
+    lr.libraw_set_output_color(handle, 5);
+    colour = intsEqual(5, colour);
+
+    if (colour.length != 1) return null;
+    return colour.single - _outputColorFromBright + _halfSizeFromBright;
+  } finally {
+    // Restore LibRaw's defaults (the caller sets output_color itself anyway).
+    lr
+      ..libraw_set_bright(handle, 1)
+      ..libraw_set_output_color(handle, 1);
   }
 }

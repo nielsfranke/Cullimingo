@@ -91,6 +91,24 @@ typedef _SaveDart =
       Pointer<Void>,
     );
 
+// vips_jpegsave_buffer(in, buf, len, "Q", quality, NULL)
+typedef _SaveQNative =
+    Int Function(
+      Pointer<Void>,
+      Pointer<Pointer<Void>>,
+      Pointer<Size>,
+      VarArgs<(Pointer<Utf8>, Int, Pointer<Void>)>,
+    );
+typedef _SaveQDart =
+    int Function(
+      Pointer<Void>,
+      Pointer<Pointer<Void>>,
+      Pointer<Size>,
+      Pointer<Utf8>,
+      int,
+      Pointer<Void>,
+    );
+
 typedef _PtrVoidNative = Void Function(Pointer<Void>);
 typedef _PtrVoidDart = void Function(Pointer<Void>);
 
@@ -147,19 +165,23 @@ class Vips {
     this._imageFromMemory,
     this._thumbImage,
     this._save,
+    this._saveQ,
     this._gFree,
     this._gUnref,
     this._errorClear,
-  ) : _heightKey = 'height'.toNativeUtf8();
+  ) : _heightKey = 'height'.toNativeUtf8(),
+      _qualityKey = 'Q'.toNativeUtf8();
 
   final _ThumbDart _thumb;
   final _ImageFromMemoryDart _imageFromMemory;
   final _ThumbImageDart _thumbImage;
   final _SaveDart _save;
+  final _SaveQDart _saveQ;
   final _PtrVoidDart _gFree;
   final _PtrVoidDart _gUnref;
   final _ErrorClearDart _errorClear;
   final Pointer<Utf8> _heightKey;
+  final Pointer<Utf8> _qualityKey;
 
   static bool _warmedUp = false;
 
@@ -188,6 +210,23 @@ class Vips {
       vips.thumbnail(img.encodeJpg(img.Image(width: 2, height: 2)), 1);
     } on Object {
       // Best effort: registration still happened for whatever ran.
+    }
+    try {
+      // The RAW demosaic fallback goes through a different operation class:
+      // vips_image_new_from_memory → vips_thumbnail_image (not
+      // thumbnail_buffer/jpegload), saved with an explicit quality. Register
+      // those here too, or the first fallback decodes in several workers at
+      // once race the same type registration.
+      vips.thumbnailRgb(
+        Uint8List(2 * 2 * 3),
+        width: 2,
+        height: 2,
+        channels: 3,
+        longEdge: 1,
+        quality: 90,
+      );
+    } on Object {
+      // Best effort.
     }
     try {
       // Same reason, for the HEIF/AVIF *loader* (HEIC from iPhones, AVIF wire
@@ -255,6 +294,7 @@ class Vips {
           'vips_thumbnail_image',
         ),
         vips.lookupFunction<_SaveNative, _SaveDart>('vips_jpegsave_buffer'),
+        vips.lookupFunction<_SaveQNative, _SaveQDart>('vips_jpegsave_buffer'),
         glib.lookupFunction<_PtrVoidNative, _PtrVoidDart>('g_free'),
         gobject.lookupFunction<_PtrVoidNative, _PtrVoidDart>('g_object_unref'),
         vips.lookupFunction<_ErrorClearNative, _ErrorClearDart>(
@@ -326,6 +366,7 @@ class Vips {
     required int height,
     required int channels,
     required int longEdge,
+    int? quality,
   }) {
     final input = malloc<Uint8>(rgb.length)
       ..asTypedList(rgb.length).setAll(0, rgb);
@@ -337,6 +378,7 @@ class Vips {
         height: height,
         channels: channels,
         longEdge: longEdge,
+        quality: quality,
       );
     } finally {
       malloc.free(input);
@@ -347,7 +389,7 @@ class Vips {
   ///
   /// [rgb] must remain valid until this synchronous call returns. libvips is
   /// lazy, but [_save] evaluates the complete pipeline before the source image
-  /// is released.
+  /// is released. [quality] is the JPEG Q (libvips' default 75 when null).
   Uint8List? thumbnailRgbPointer(
     Pointer<Uint8> rgb, {
     required int byteLength,
@@ -355,6 +397,7 @@ class Vips {
     required int height,
     required int channels,
     required int longEdge,
+    int? quality,
   }) {
     if (rgb == nullptr ||
         width <= 0 ||
@@ -396,7 +439,17 @@ class Vips {
         return null;
       }
       haveThumbnail = true;
-      if (_save(outImage.value, outBuf, outLen, nullptr) != 0) {
+      final saved = quality == null
+          ? _save(outImage.value, outBuf, outLen, nullptr)
+          : _saveQ(
+              outImage.value,
+              outBuf,
+              outLen,
+              _qualityKey,
+              quality.clamp(1, 100),
+              nullptr,
+            );
+      if (saved != 0) {
         _errorClear();
         return null;
       }

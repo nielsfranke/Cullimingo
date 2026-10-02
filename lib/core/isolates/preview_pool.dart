@@ -11,6 +11,7 @@ import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/raw/jpeg_resize.dart';
 import 'package:cullimingo/core/raw/libraw_preview_extractor.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
+import 'package:cullimingo/core/raw/raw_display_jpeg.dart';
 import 'package:flutter_libraw/flutter_libraw.dart';
 
 class _Job {
@@ -252,14 +253,14 @@ void _previewWorkerMain(List<Object?> init) {
   final vips = enableVips ? Vips.tryLoad() : null;
   final workerId = init[3]! as int;
 
-  inbox.listen((message) {
+  inbox.listen((message) async {
     final job = message! as List<Object?>;
     final id = job[0]! as int;
     final path = job[1]! as String;
     final longEdge = job[2]! as int;
     Uint8List? bytes;
     try {
-      bytes = _extractInWorker(path, longEdge, libraw, vips);
+      bytes = await _extractInWorker(path, longEdge, libraw, vips);
     } on Object {
       bytes = null;
     }
@@ -277,47 +278,43 @@ void _previewWorkerMain(List<Object?> init) {
   toMain.send([workerId, inbox.sendPort]); // register as free
 }
 
-Uint8List? _extractInWorker(
+// Async only so a RAW demosaic can collect LibRaw's data-error reports (see
+// rawDisplayJpeg); the pool never sends a worker its next job before it has
+// answered, so jobs still run strictly one at a time per worker.
+Future<Uint8List?> _extractInWorker(
   String path,
   int longEdge,
   FlutterLibRawBindings? libraw,
   Vips? vips,
-) {
+) async {
   // Videos: grab a poster frame via the OS (QuickLook), never load the whole
   // file. Returns null (→ placeholder) when no frame can be produced.
   if (isVideoPath(path)) {
     return _videoPoster(path, longEdge <= 0 ? 1024 : longEdge, vips);
   }
 
-  // Full-resolution request (longEdge <= 0): the original bitmap or a RAW's
-  // full embedded JPEG, undownscaled, for true 100% pixel-peeping in the loupe.
-  if (longEdge <= 0) {
-    return _extractFull(path, libraw, vips);
-  }
-
   Uint8List? source;
   if (isRawPath(path)) {
     if (libraw == null) return null;
-    final embedded = extractRawPreview(libraw, path);
-    if (embedded?.isUsable ?? false) {
-      source = embedded!.bytes;
-    } else if (vips != null) {
-      return _decodeRawFallback(
-        libraw,
-        path,
-        longEdge: longEdge,
-        halfSize: true,
-        vips: vips,
-      );
-    } else {
-      source = embedded?.bytes;
-    }
+    // The embedded JPEG, or a demosaic when that's missing or tiny. Full tier
+    // (longEdge <= 0): the full embedded JPEG or a full-resolution demosaic,
+    // undownscaled, for true 100% pixel-peeping in the loupe.
+    final raw = await rawDisplayJpeg(
+      libraw,
+      path,
+      longEdge: longEdge,
+      vips: () => vips,
+    );
+    if (raw == null) return null;
+    if (raw.demosaiced || longEdge <= 0) return raw.bytes;
+    source = raw.bytes;
   } else {
+    // Full-resolution request: the original bitmap, undownscaled.
+    if (longEdge <= 0) return _extractFull(path, vips);
     final file = File(path);
     if (!file.existsSync()) return null;
     source = file.readAsBytesSync(); // original (JPEG/PNG/HEIF/…)
   }
-  if (source == null) return null;
 
   // Downscale to a small, correctly-oriented JPEG with libvips (fast, also
   // decodes HEIF); fall back to the pure-Dart path. Only hand back the original
@@ -328,61 +325,17 @@ Uint8List? _extractInWorker(
   return isBitmapPath(path) ? source : null;
 }
 
-// The full-resolution source for the loupe's 100% zoom: no downscale, no
-// re-encode where avoidable. RAW → its full embedded JPEG (LibRaw); a
-// Flutter-renderable bitmap (JPEG/PNG) → the untouched original file; anything
-// else (HEIF …) → a full-size vips transcode so Flutter can display it.
-Uint8List? _extractFull(
-  String path,
-  FlutterLibRawBindings? libraw,
-  Vips? vips,
-) {
-  if (isRawPath(path)) {
-    if (libraw == null) return null;
-    final embedded = extractRawPreview(libraw, path);
-    if (embedded?.isUsable ?? false) return embedded!.bytes;
-    if (vips == null) return embedded?.bytes;
-    return _decodeRawFallback(
-      libraw,
-      path,
-      longEdge: 0,
-      halfSize: false,
-      vips: vips,
-    );
-  }
+// The full-resolution source for the loupe's 100% zoom of a non-RAW: no
+// downscale, no re-encode where avoidable. A Flutter-renderable bitmap
+// (JPEG/PNG) → the untouched original file; anything else (HEIF …) → a
+// full-size vips transcode so Flutter can display it.
+Uint8List? _extractFull(String path, Vips? vips) {
   final file = File(path);
   if (!file.existsSync()) return null;
   final bytes = file.readAsBytesSync();
   if (isBitmapPath(path)) return bytes;
   // Large edge = "don't upscale"; vips caps at the source's native size.
   return vips?.thumbnail(bytes, 20000) ?? bytes;
-}
-
-Uint8List? _decodeRawFallback(
-  FlutterLibRawBindings libraw,
-  String path, {
-  required int longEdge,
-  required bool halfSize,
-  required Vips vips,
-}) {
-  return processRawBitmap<Uint8List>(
-    libraw,
-    path,
-    halfSize: halfSize,
-    consume: (pixels, byteLength, width, height, channels) {
-      final targetEdge = longEdge > 0
-          ? longEdge
-          : (width >= height ? width : height);
-      return vips.thumbnailRgbPointer(
-        pixels,
-        byteLength: byteLength,
-        width: width,
-        height: height,
-        channels: channels,
-        longEdge: targetEdge,
-      );
-    },
-  );
 }
 
 /// Extracts a video poster frame: QuickLook (`qlmanage -t`) on macOS,
