@@ -110,6 +110,15 @@ class PreviewCache {
   /// folder open the doubled requests used to extract every visible RAW twice.
   final Map<String, Future<Uint8List?>> _inflight = {};
 
+  /// Previews that couldn't be produced this session, keyed like the RAM cache
+  /// (`tier:path`) → the file's size + mtime at the time. A RAW LibRaw can't
+  /// decode (Nikon HE/HE*) otherwise re-runs a full unpack + demosaic every
+  /// time its cell is requested again (scroll-back, eviction) — ~0.5 s of
+  /// worker time each, for the same placeholder. RAM only, so a transient
+  /// failure (a worker timeout) is retried next session; a changed file
+  /// (size/mtime) is retried at once.
+  final Map<String, (int, DateTime)> _failed = {};
+
   /// Returns cached preview bytes for [path] at [tier], rendering and storing
   /// them on a miss. Returns `null` if no preview can be produced (e.g. the
   /// RAW path before LibRaw is wired).
@@ -169,6 +178,12 @@ class PreviewCache {
     // ignore: avoid_slow_async_io
     final stat = await file.stat();
     if (stat.type == FileSystemEntityType.notFound) return null;
+    final failedAs = _failed[memKey];
+    if (failedAs != null &&
+        failedAs.$1 == stat.size &&
+        failedAs.$2 == stat.modified) {
+      return null;
+    }
 
     final longEdge = _longEdgeFor(tier);
 
@@ -181,7 +196,11 @@ class PreviewCache {
         cancel: cancel,
         priority: priority,
       );
-      if (bytes != null) _memory.put(memKey, bytes);
+      if (bytes != null) {
+        _memory.put(memKey, bytes);
+      } else {
+        _noteFailure(memKey, stat, cancel);
+      }
       return bytes;
     }
 
@@ -216,11 +235,22 @@ class PreviewCache {
         cancel: cancel,
         priority: priority,
       );
-      if (bytes != null) await _persist(cacheFile, bytes);
+      if (bytes != null) {
+        await _persist(cacheFile, bytes);
+      } else {
+        _noteFailure(memKey, stat, cancel);
+      }
     }
 
     if (bytes != null) _memory.put(memKey, bytes);
     return bytes;
+  }
+
+  // A null from a cancelled request only means "no longer wanted" (the pool
+  // skips cancelled jobs), not that the file is unreadable — don't remember it.
+  void _noteFailure(String memKey, FileStat stat, CancelToken? cancel) {
+    if (cancel?.isCancelled ?? false) return;
+    _failed[memKey] = (stat.size, stat.modified);
   }
 
   // Persists freshly extracted bytes via write-to-tmp + rename. The write must
@@ -271,12 +301,14 @@ class PreviewCache {
   void evict(String path) {
     for (final tier in PreviewTier.values) {
       _memory.remove('${tier.name}:$path');
+      _failed.remove('${tier.name}:$path');
     }
   }
 
   /// Empties the cache — RAM and disk. Backs the toolbar's clear-cache action.
   Future<void> clear() async {
     _memory.clear();
+    _failed.clear();
     _tierDirs.clear();
     final dir = await _cacheDirProvider();
     // Async on purpose — this runs on the UI isolate (§0.6).

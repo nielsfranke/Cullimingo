@@ -13,7 +13,9 @@ All notable user-facing changes to Cullimingo. The format loosely follows
   photo blank. Normal embedded previews remain on the original fast path.
   Previews of such RAWs cached by earlier versions are re-rendered once
   automatically. Files LibRaw can't decode (e.g. Nikon HE/HE\* "TicoRAW")
-  keep showing their embedded thumbnail instead of a noise frame.
+  keep showing their embedded thumbnail (or the placeholder) instead of a
+  noise frame, and a failed decode isn't retried every time the photo scrolls
+  back into view.
 
 ## 1.3.3 — 2026-10-01
 

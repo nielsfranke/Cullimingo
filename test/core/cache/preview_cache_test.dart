@@ -12,6 +12,9 @@ class _CountingExtractor implements PreviewExtractor {
   int calls = 0;
   int? lastLongEdge;
 
+  /// Runs inside each extraction, e.g. to cancel the request mid-flight.
+  void Function(CancelToken? cancel)? during;
+
   @override
   Future<Uint8List?> thumbnail(
     String path, {
@@ -21,6 +24,7 @@ class _CountingExtractor implements PreviewExtractor {
   }) async {
     calls++;
     lastLongEdge = longEdge;
+    during?.call(cancel);
     if (path.endsWith('.arw')) return null; // RAW stub: no preview
     return Uint8List.fromList(List<int>.generate(32, (i) => i));
   }
@@ -107,6 +111,51 @@ void main() {
         expect(files, isEmpty);
       },
     );
+
+    group('a failed extraction', () {
+      late File raw;
+      late _CountingExtractor extractor;
+      late PreviewCache cache;
+
+      setUp(() {
+        raw = File(p.join(tmp.path, 'b.arw'))..writeAsBytesSync(const [1, 2]);
+        extractor = _CountingExtractor();
+        cache = cacheWith(extractor);
+      });
+
+      test('is not retried for the same file and tier', () async {
+        expect(await cache.thumbnail(raw.path), isNull);
+        expect(await cache.thumbnail(raw.path), isNull);
+        expect(await cache.get(raw.path, PreviewTier.full), isNull);
+        expect(await cache.get(raw.path, PreviewTier.full), isNull);
+        expect(extractor.calls, 2, reason: 'once per tier');
+      });
+
+      test('is retried once the file changes', () async {
+        expect(await cache.thumbnail(raw.path), isNull);
+        raw.writeAsBytesSync(const [1, 2, 3]);
+        expect(await cache.thumbnail(raw.path), isNull);
+        expect(extractor.calls, 2);
+      });
+
+      test('is retried after evict and clear', () async {
+        expect(await cache.thumbnail(raw.path), isNull);
+        cache.evict(raw.path);
+        expect(await cache.thumbnail(raw.path), isNull);
+        await cache.clear();
+        expect(await cache.thumbnail(raw.path), isNull);
+        expect(extractor.calls, 3);
+      });
+
+      test('is not remembered when the request was cancelled', () async {
+        final cancel = CancelToken();
+        extractor.during = (token) => token?.cancel();
+        expect(await cache.thumbnail(raw.path, cancel: cancel), isNull);
+        extractor.during = null;
+        expect(await cache.thumbnail(raw.path), isNull);
+        expect(extractor.calls, 2);
+      });
+    });
 
     test('RAW previews cached by an older render pipeline are re-extracted, '
         'other formats keep their cache', () async {
