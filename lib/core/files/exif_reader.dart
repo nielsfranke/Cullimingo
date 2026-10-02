@@ -199,14 +199,16 @@ DateTime? _parseExifDate(String? raw) {
   // a year ~-1 date — sorting the photo to the top of the grid and feeding
   // nonsense into rename tokens. Treat any impossible date as "unknown".
   if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-  return DateTime(
-    int.parse(m[1]!),
-    month,
-    day,
-    int.parse(m[4]!),
-    int.parse(m[5]!),
-    int.parse(m[6]!),
-  );
+  final year = int.parse(m[1]!);
+  final hour = int.parse(m[4]!);
+  final minute = int.parse(m[5]!);
+  final second = int.parse(m[6]!);
+  if (hour > 23 || minute > 59 || second > 59) return null;
+  final dt = DateTime(year, month, day, hour, minute, second);
+  // DateTime() also rolls over a day the month doesn't have (Feb 31 → Mar 3),
+  // filing the photo under the wrong day. Reject it instead.
+  if (dt.month != month || dt.day != day) return null;
+  return dt;
 }
 
 String? _camera(Map<String, IfdTag> tags) {

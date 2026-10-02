@@ -20,11 +20,11 @@ void main() {
     await tmp.delete(recursive: true);
   });
 
-  File writeJpegWithExif() {
+  File writeJpegWithExif({String dateTimeOriginal = '2026:06:01 10:30:45'}) {
     final image = img.Image(width: 24, height: 16);
     image.exif.imageIfd['Make'] = 'Sony';
     image.exif.imageIfd['Model'] = 'ILCE-7M4';
-    image.exif.exifIfd['DateTimeOriginal'] = '2026:06:01 10:30:45';
+    image.exif.exifIfd['DateTimeOriginal'] = dateTimeOriginal;
     final file = File(p.join(tmp.path, 'shot.jpg'))
       ..writeAsBytesSync(img.encodeJpg(image));
     return file;
@@ -58,6 +58,17 @@ void main() {
 
     expect(exif.capturedAt, DateTime(2026, 6, 1, 10, 30, 45));
     expect(exif.camera, 'Sony ILCE-7M4');
+  });
+
+  test('an impossible capture date is unknown, not rolled over', () async {
+    // DateTime(2026, 2, 31) is March 3 — the photo would land in the wrong
+    // day folder. A corrupt clock must read as "no date" instead.
+    for (final raw in ['2026:02:31 10:00:00', '2026:06:01 24:10:00']) {
+      final exif = await readPhotoExif(
+        writeJpegWithExif(dateTimeOriginal: raw),
+      );
+      expect(exif.capturedAt, isNull, reason: raw);
+    }
   });
 
   test('reads the EXIF orientation value', () async {
