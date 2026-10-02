@@ -257,7 +257,9 @@ Future<List<ScannedExif>> _readExif(
     if (isRawPath(path) && exif.capturedAt == null) {
       final bindings = libraw();
       if (bindings != null) {
-        final previewBytes = extractRawThumbnail(bindings, path);
+        // The embedded JPEG specifically (however small): it's read only for
+        // its EXIF, which a demosaic fallback wouldn't have.
+        final previewBytes = extractRawPreview(bindings, path)?.bytes;
         final preview = previewBytes == null
             ? const PhotoExif()
             : await readPhotoExifBytes(

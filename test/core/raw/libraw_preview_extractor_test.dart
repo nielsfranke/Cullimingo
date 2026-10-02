@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cullimingo/core/raw/libraw_preview_extractor.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,6 +25,38 @@ void main() {
     expect(
       await const LibRawPreviewExtractor().thumbnail('/no/such.arw'),
       null,
+    );
+  });
+
+  group('EmbeddedRawPreview.isUsable', () {
+    EmbeddedRawPreview preview(int width, int height) => EmbeddedRawPreview(
+      bytes: Uint8List(0),
+      width: width,
+      height: height,
+    );
+
+    test('rejects a tiny embedded thumbnail', () {
+      expect(preview(160, 120).isUsable, isFalse);
+    });
+
+    test('accepts a normal embedded preview regardless of cache tier', () {
+      expect(preview(512, 341).isUsable, isTrue);
+      expect(preview(1600, 1067).isUsable, isTrue);
+    });
+
+    test('keeps the old fast path when dimensions are unknown', () {
+      expect(preview(0, 0).isUsable, isTrue);
+    });
+  });
+
+  test('reads JPEG dimensions without decoding pixels', () {
+    final encoded = Uint8List.fromList(
+      img.encodeJpg(img.Image(width: 37, height: 23)),
+    );
+    expect(jpegDimensions(encoded), (width: 37, height: 23));
+    expect(
+      jpegDimensions(Uint8List.fromList([0xff, 0xd8, 0xff, 0xd9])),
+      isNull,
     );
   });
 

@@ -3,6 +3,18 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **RAW files without a usable embedded JPEG now render usable previews:** when
+  cameras such as the Nikon Z6 III in HLG mode provide only a 160×120 JPEG — or
+  no JPEG thumbnail at all — Cullimingo falls back to a LibRaw demosaic for the
+  grid, loupe and exports instead of stretching the thumbnail or leaving the
+  photo blank. Normal embedded previews remain on the original fast path.
+  Previews of such RAWs cached by earlier versions are re-rendered once
+  automatically. Files LibRaw can't decode (e.g. Nikon HE/HE\* "TicoRAW")
+  keep showing their embedded thumbnail instead of a noise frame.
+
 ## 1.3.3 — 2026-10-01
 
 ### Fixed

@@ -138,14 +138,14 @@ void main() {
     setUp(() => tmp = Directory.systemTemp.createTempSync('cm_export_'));
     tearDown(() => tmp.deleteSync(recursive: true));
 
-    test('writes a downscaled JPEG for a bitmap source', () {
+    test('writes a downscaled JPEG for a bitmap source', () async {
       final srcPath = p.join(tmp.path, 'in.jpg');
       File(srcPath).writeAsBytesSync(
         img.encodeJpg(img.Image(width: 4000, height: 3000)),
       );
       final destPath = p.join(tmp.path, 'out', 'in.jpg');
 
-      final outcome = renderExportToFile(
+      final outcome = await renderExportToFile(
         item: ExportItem(source: srcPath, relPath: 'in.jpg', isRaw: false),
         destPath: destPath,
         preset: const ExportPreset(longEdge: 1024),
@@ -157,8 +157,8 @@ void main() {
       expect(decoded.height, 768);
     });
 
-    test('reports an unreadable source when the file is missing', () {
-      final outcome = renderExportToFile(
+    test('reports an unreadable source when the file is missing', () async {
+      final outcome = await renderExportToFile(
         item: const ExportItem(
           source: '/nope/missing.jpg',
           relPath: 'missing.jpg',

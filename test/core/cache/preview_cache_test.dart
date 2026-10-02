@@ -108,6 +108,27 @@ void main() {
       },
     );
 
+    test('RAW previews cached by an older render pipeline are re-extracted, '
+        'other formats keep their cache', () async {
+      final raw = File(p.join(tmp.path, 'c.nef'))
+        ..writeAsBytesSync(List<int>.filled(1024, 3));
+      final thumbDir = Directory(p.join(tmp.path, 'cache', 'thumb'))
+        ..createSync(recursive: true);
+      final stale = Uint8List.fromList(const [0xde, 0xad]);
+      // Cache files as written before the render version was in the key.
+      for (final f in [raw, photo]) {
+        final oldKey = await fileSignature(f, salt: 'thumb1024');
+        File(p.join(thumbDir.path, '$oldKey.jpg')).writeAsBytesSync(stale);
+      }
+      final extractor = _CountingExtractor();
+      final cache = cacheWith(extractor);
+
+      expect(await cache.thumbnail(raw.path), isNot(stale));
+      expect(extractor.calls, 1);
+      expect(await cache.thumbnail(photo.path), stale);
+      expect(extractor.calls, 1, reason: 'a JPEG key must not change');
+    });
+
     test('returns null for a missing file', () async {
       final cache = cacheWith(_CountingExtractor());
       expect(await cache.thumbnail('/no/such.jpg'), isNull);

@@ -37,6 +37,44 @@ typedef _ThumbDart =
       Pointer<Void>,
     );
 
+// vips_image_new_from_memory(data, len, width, height, bands, format)
+typedef _ImageFromMemoryNative =
+    Pointer<Void> Function(
+      Pointer<Void>,
+      Size,
+      Int,
+      Int,
+      Int,
+      Int,
+    );
+typedef _ImageFromMemoryDart =
+    Pointer<Void> Function(
+      Pointer<Void>,
+      int,
+      int,
+      int,
+      int,
+      int,
+    );
+
+// vips_thumbnail_image(VipsImage* in, VipsImage** out, int width, ...)
+typedef _ThumbImageNative =
+    Int Function(
+      Pointer<Void>,
+      Pointer<Pointer<Void>>,
+      Int,
+      VarArgs<(Pointer<Utf8>, Int, Pointer<Void>)>,
+    );
+typedef _ThumbImageDart =
+    int Function(
+      Pointer<Void>,
+      Pointer<Pointer<Void>>,
+      int,
+      Pointer<Utf8>,
+      int,
+      Pointer<Void>,
+    );
+
 // vips_jpegsave_buffer(VipsImage* in, void** buf, size_t* len, ...)
 typedef _SaveNative =
     Int Function(
@@ -50,6 +88,24 @@ typedef _SaveDart =
       Pointer<Void>,
       Pointer<Pointer<Void>>,
       Pointer<Size>,
+      Pointer<Void>,
+    );
+
+// vips_jpegsave_buffer(in, buf, len, "Q", quality, NULL)
+typedef _SaveQNative =
+    Int Function(
+      Pointer<Void>,
+      Pointer<Pointer<Void>>,
+      Pointer<Size>,
+      VarArgs<(Pointer<Utf8>, Int, Pointer<Void>)>,
+    );
+typedef _SaveQDart =
+    int Function(
+      Pointer<Void>,
+      Pointer<Pointer<Void>>,
+      Pointer<Size>,
+      Pointer<Utf8>,
+      int,
       Pointer<Void>,
     );
 
@@ -104,15 +160,28 @@ const Map<String, List<String>> _candidates = {
 /// auto-rotate). Replaces the slow pure-Dart resize for the preview pipeline
 /// (`BUILD_PLAN.md` §2/§6.1). Load once per isolate via [tryLoad].
 class Vips {
-  Vips._(this._thumb, this._save, this._gFree, this._gUnref, this._errorClear)
-    : _heightKey = 'height'.toNativeUtf8();
+  Vips._(
+    this._thumb,
+    this._imageFromMemory,
+    this._thumbImage,
+    this._save,
+    this._saveQ,
+    this._gFree,
+    this._gUnref,
+    this._errorClear,
+  ) : _heightKey = 'height'.toNativeUtf8(),
+      _qualityKey = 'Q'.toNativeUtf8();
 
   final _ThumbDart _thumb;
+  final _ImageFromMemoryDart _imageFromMemory;
+  final _ThumbImageDart _thumbImage;
   final _SaveDart _save;
+  final _SaveQDart _saveQ;
   final _PtrVoidDart _gFree;
   final _PtrVoidDart _gUnref;
   final _ErrorClearDart _errorClear;
   final Pointer<Utf8> _heightKey;
+  final Pointer<Utf8> _qualityKey;
 
   static bool _warmedUp = false;
 
@@ -141,6 +210,23 @@ class Vips {
       vips.thumbnail(img.encodeJpg(img.Image(width: 2, height: 2)), 1);
     } on Object {
       // Best effort: registration still happened for whatever ran.
+    }
+    try {
+      // The RAW demosaic fallback goes through a different operation class:
+      // vips_image_new_from_memory → vips_thumbnail_image (not
+      // thumbnail_buffer/jpegload), saved with an explicit quality. Register
+      // those here too, or the first fallback decodes in several workers at
+      // once race the same type registration.
+      vips.thumbnailRgb(
+        Uint8List(2 * 2 * 3),
+        width: 2,
+        height: 2,
+        channels: 3,
+        longEdge: 1,
+        quality: 90,
+      );
+    } on Object {
+      // Best effort.
     }
     try {
       // Same reason, for the HEIF/AVIF *loader* (HEIC from iPhones, AVIF wire
@@ -201,7 +287,14 @@ class Vips {
 
       return Vips._(
         vips.lookupFunction<_ThumbNative, _ThumbDart>('vips_thumbnail_buffer'),
+        vips.lookupFunction<_ImageFromMemoryNative, _ImageFromMemoryDart>(
+          'vips_image_new_from_memory',
+        ),
+        vips.lookupFunction<_ThumbImageNative, _ThumbImageDart>(
+          'vips_thumbnail_image',
+        ),
         vips.lookupFunction<_SaveNative, _SaveDart>('vips_jpegsave_buffer'),
+        vips.lookupFunction<_SaveQNative, _SaveQDart>('vips_jpegsave_buffer'),
         glib.lookupFunction<_PtrVoidNative, _PtrVoidDart>('g_free'),
         gobject.lookupFunction<_PtrVoidNative, _PtrVoidDart>('g_object_unref'),
         vips.lookupFunction<_ErrorClearNative, _ErrorClearDart>(
@@ -256,6 +349,121 @@ class Vips {
       if (haveImage) _gUnref(outImage.value);
       malloc
         ..free(input)
+        ..free(outImage)
+        ..free(outBuf)
+        ..free(outLen);
+    }
+  }
+
+  /// Downscales interleaved 8-bit [rgb] pixels and encodes a JPEG.
+  ///
+  /// LibRaw's full-decode fallback produces an RGB bitmap rather than an
+  /// encoded image. Feeding it to vips as memory avoids a huge intermediate
+  /// PPM/TIFF file while retaining the same fast native resize/cache pipeline.
+  Uint8List? thumbnailRgb(
+    Uint8List rgb, {
+    required int width,
+    required int height,
+    required int channels,
+    required int longEdge,
+    int? quality,
+  }) {
+    final input = malloc<Uint8>(rgb.length)
+      ..asTypedList(rgb.length).setAll(0, rgb);
+    try {
+      return thumbnailRgbPointer(
+        input,
+        byteLength: rgb.length,
+        width: width,
+        height: height,
+        channels: channels,
+        longEdge: longEdge,
+        quality: quality,
+      );
+    } finally {
+      malloc.free(input);
+    }
+  }
+
+  /// Downscales RGB pixels at [rgb] and encodes a JPEG without copying input.
+  ///
+  /// [rgb] must remain valid until this synchronous call returns. libvips is
+  /// lazy, but [_save] evaluates the complete pipeline before the source image
+  /// is released. [quality] is the JPEG Q (libvips' default 75 when null).
+  Uint8List? thumbnailRgbPointer(
+    Pointer<Uint8> rgb, {
+    required int byteLength,
+    required int width,
+    required int height,
+    required int channels,
+    required int longEdge,
+    int? quality,
+  }) {
+    if (rgb == nullptr ||
+        width <= 0 ||
+        height <= 0 ||
+        channels != 3 ||
+        longEdge <= 0 ||
+        byteLength < width * height * channels) {
+      return null;
+    }
+
+    final source = _imageFromMemory(
+      rgb.cast(),
+      byteLength,
+      width,
+      height,
+      channels,
+      0, // VIPS_FORMAT_UCHAR
+    );
+    if (source == nullptr) {
+      _errorClear();
+      return null;
+    }
+
+    final outImage = calloc<Pointer<Void>>();
+    final outBuf = calloc<Pointer<Void>>();
+    final outLen = calloc<Size>();
+    var haveThumbnail = false;
+    try {
+      final rc = _thumbImage(
+        source,
+        outImage,
+        longEdge,
+        _heightKey,
+        longEdge,
+        nullptr,
+      );
+      if (rc != 0) {
+        _errorClear();
+        return null;
+      }
+      haveThumbnail = true;
+      final saved = quality == null
+          ? _save(outImage.value, outBuf, outLen, nullptr)
+          : _saveQ(
+              outImage.value,
+              outBuf,
+              outLen,
+              _qualityKey,
+              quality.clamp(1, 100),
+              nullptr,
+            );
+      if (saved != 0) {
+        _errorClear();
+        return null;
+      }
+      final bytes = Uint8List.fromList(
+        outBuf.value.cast<Uint8>().asTypedList(outLen.value),
+      );
+      return bytes;
+    } on Object {
+      return null;
+    } finally {
+      if (haveThumbnail) _gUnref(outImage.value);
+      _gUnref(source);
+      if (outBuf.value != nullptr) _gFree(outBuf.value);
+      calloc
         ..free(outImage)
         ..free(outBuf)
         ..free(outLen);

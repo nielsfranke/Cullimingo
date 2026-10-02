@@ -15,6 +15,14 @@ import 'package:path_provider/path_provider.dart';
 /// the disk over time.
 const int _defaultDiskBudget = 2 * 1024 * 1024 * 1024;
 
+/// Bump when the RAW render pipeline changes what a cached preview looks like,
+/// so caches written by an older version are re-extracted instead of served
+/// forever (the key is otherwise path + size + mtime, which a pipeline change
+/// doesn't touch). Only salted into RAW keys: other formats' caches stay
+/// valid. 2 = demosaic fallback for missing/tiny embedded JPEGs (previously
+/// the 160×120 thumbnail was upscaled and cached).
+const int _rawRenderVersion = 2;
+
 /// Preview size tiers (`BUILD_PLAN.md` §2/§3): a tiny grid thumbnail and a
 /// screen-res loupe preview, each cached on disk.
 enum PreviewTier {
@@ -181,7 +189,9 @@ class PreviewCache {
     // tier's resolution naturally invalidates its old (wrong-size) cache files.
     final key = await fileSignature(
       file,
-      salt: '${tier.name}$longEdge',
+      salt:
+          '${tier.name}$longEdge'
+          '${isRawPath(path) ? ':raw$_rawRenderVersion' : ''}',
       stat: stat,
     );
     final dir = await _tierDir(tier);
