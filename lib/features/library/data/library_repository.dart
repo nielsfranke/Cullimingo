@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cullimingo/core/db/database.dart';
 import 'package:cullimingo/core/files/supported_files.dart';
 import 'package:cullimingo/features/library/data/folder_scanner.dart';
@@ -83,11 +85,29 @@ class LibraryRepository {
   /// for the UI plus the changed paths, so the caller can drop their stale
   /// RAM previews (the disk cache self-invalidates via the mtime in its key;
   /// the RAM tier is keyed by path alone).
-  Future<({int added, int removed, List<String> changedPaths})> refreshImport(
+  ///
+  /// When the folder looks unavailable — [root] is gone, or it lists empty
+  /// while the import still has photos — nothing is touched and `unavailable`
+  /// is set: an unplugged card or drive (or a Linux mount point left empty)
+  /// must not read as "every photo was deleted", which used to drop every row
+  /// and the database-only state with it (rotation, stacks, selections).
+  Future<
+    ({int added, int removed, List<String> changedPaths, bool unavailable})
+  >
+  refreshImport(
     int importId,
     String root, {
     bool recursive = true,
   }) async {
+    const unavailable = (
+      added: 0,
+      removed: 0,
+      changedPaths: <String>[],
+      unavailable: true,
+    );
+    // Async on purpose: the root may sit on slow removable media.
+    // ignore: avoid_slow_async_io
+    if (!await Directory(root).exists()) return unavailable;
     final files = await scanFolderFast(
       root,
       recursive: recursive,
@@ -95,6 +115,7 @@ class LibraryRepository {
     );
     final diskPaths = files.map((f) => f.path).toSet();
     final existing = await _db.photosForImport(importId);
+    if (files.isEmpty && existing.isNotEmpty) return unavailable;
     final existingPaths = existing.map((row) => row.path).toSet();
     final rowByPath = {for (final row in existing) row.path: row};
 
@@ -159,6 +180,7 @@ class LibraryRepository {
       added: newFiles.length,
       removed: removedPaths.length,
       changedPaths: [for (final f in changedFiles) f.path],
+      unavailable: false,
     );
   }
 

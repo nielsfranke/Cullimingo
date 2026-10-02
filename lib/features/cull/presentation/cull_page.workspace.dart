@@ -433,6 +433,14 @@ mixin _CullWorkspace on _CullGrid {
         .refreshImport(importId, root, recursive: _includeSubfolders);
     _evictChangedPreviews(result.changedPaths);
     if (!mounted) return;
+    if (result.unavailable) {
+      _notify(
+        "Can't refresh: the folder is missing or empty — is the card or "
+        'drive connected? Nothing was removed.',
+        kind: NoticeKind.warning,
+      );
+      return;
+    }
     final upToDate =
         result.added == 0 && result.removed == 0 && result.changedPaths.isEmpty;
     _notify(
@@ -460,6 +468,8 @@ mixin _CullWorkspace on _CullGrid {
     final scan = await ref
         .read(libraryRepositoryProvider)
         .refreshImport(importId, root, recursive: _includeSubfolders);
+    // Folder gone or listing empty (drive unplugged): keep everything as is.
+    if (scan.unavailable) return;
     if (mounted) _evictChangedPreviews(scan.changedPaths);
     final marks = await ref
         .read(metadataRepositoryProvider)

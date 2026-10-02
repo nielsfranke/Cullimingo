@@ -235,10 +235,11 @@ void main() {
       final (parentId, _) = await repo.findOrCreateImport(tmp.path);
       expect(await repo.watchImport(parentId).first, isEmpty);
 
-      final (:added, :removed, changedPaths: _) = await repo.refreshImport(
-        parentId,
-        tmp.path,
-      );
+      final (:added, :removed, changedPaths: _, unavailable: _) = await repo
+          .refreshImport(
+            parentId,
+            tmp.path,
+          );
       expect(added, 1);
       expect(removed, 0);
       expect(await repo.watchImport(parentId).first, hasLength(1));
@@ -256,10 +257,11 @@ void main() {
       writeJpeg('c.jpg');
       File(p.join(tmp.path, 'a.jpg')).deleteSync();
 
-      final (:added, :removed, changedPaths: _) = await repo.refreshImport(
-        importId,
-        tmp.path,
-      );
+      final (:added, :removed, changedPaths: _, unavailable: _) = await repo
+          .refreshImport(
+            importId,
+            tmp.path,
+          );
 
       expect(added, 1);
       expect(removed, 1);
@@ -267,6 +269,31 @@ void main() {
           .map((ph) => p.basename(ph.path))
           .toSet();
       expect(names, {'b.jpg', 'c.jpg'});
+    });
+
+    test('a vanished folder is reported, never emptied', () async {
+      writeJpeg('a.jpg');
+      writeJpeg('b.jpg');
+      final importId = await repo.importFolder(tmp.path);
+      final missing = p.join(tmp.path, 'unplugged');
+
+      final result = await repo.refreshImport(importId, missing);
+
+      expect(result.unavailable, isTrue);
+      expect(result.removed, 0);
+      expect(await repo.watchImport(importId).first, hasLength(2));
+    });
+
+    test('an empty listing (bare mount point) removes nothing', () async {
+      final card = Directory(p.join(tmp.path, 'card'))..createSync();
+      writeJpeg(p.join('card', 'a.jpg'));
+      final importId = await repo.importFolder(card.path);
+      File(p.join(card.path, 'a.jpg')).deleteSync(); // card "unmounted"
+
+      final result = await repo.refreshImport(importId, card.path);
+
+      expect(result.unavailable, isTrue);
+      expect(await repo.watchImport(importId).first, hasLength(1));
     });
 
     test('preserves local edits on existing photos', () async {
@@ -279,10 +306,11 @@ void main() {
       await db.setRating(photo.id, 4);
 
       writeJpeg('new.jpg');
-      final (:added, :removed, changedPaths: _) = await metaRepo.refreshImport(
-        importId,
-        tmp.path,
-      );
+      final (:added, :removed, changedPaths: _, unavailable: _) = await metaRepo
+          .refreshImport(
+            importId,
+            tmp.path,
+          );
 
       expect(added, 1);
       expect(removed, 0);
