@@ -238,11 +238,24 @@ class IngestProgress {
 
 /// Aggregate outcome of a run.
 class IngestSummary {
-  /// Creates a summary over [results].
-  const IngestSummary(this.results);
+  /// Creates a summary over [results]. [planned] is the plan's size (defaults
+  /// to the results); [cancelled] marks a run the user stopped early.
+  const IngestSummary(this.results, {int? planned, this.cancelled = false})
+    : planned = planned ?? -1;
 
   /// Per-file results, in run order.
   final List<CopyResult> results;
+
+  /// Files in the plan (`-1` = not given, i.e. every planned file has a
+  /// result).
+  final int planned;
+
+  /// Whether the user cancelled the run.
+  final bool cancelled;
+
+  /// Planned files never copied because the run was cancelled.
+  int get notStarted =>
+      planned < 0 ? 0 : (planned - results.length).clamp(0, planned);
 
   int _count(CopyOutcome o) => results.where((r) => r.outcome == o).length;
 
@@ -261,8 +274,9 @@ class IngestSummary {
       _count(CopyOutcome.sourceMissing) +
       _count(CopyOutcome.error);
 
-  /// Whether every file landed safely.
-  bool get allOk => results.every((r) => r.ok);
+  /// Whether every planned file landed safely — never true for a cancelled
+  /// run, which used to read "Import complete" over a partial import.
+  bool get allOk => !cancelled && notStarted == 0 && results.every((r) => r.ok);
 }
 
 /// Signature of the verified-copy step, injectable so tests skip the isolate.
@@ -277,13 +291,18 @@ typedef Copier =
 /// an [IngestProgress] as each file finishes. Up to [concurrency] copies run at
 /// once so disk reads/writes/verification overlap across files (a big win on
 /// SSDs; harmless on slower media where the device serialises anyway).
-/// Cancelling the subscription stops launching new copies.
+/// When [shouldStop] returns true no new file is started, but copies already
+/// running finish and are still reported, and then the stream closes — so a
+/// cancelled run's summary covers every file that actually landed. Cancelling
+/// the subscription also stops launching new copies, but drops the results of
+/// the ones in flight; prefer [shouldStop].
 Stream<IngestProgress> runIngest({
   required IngestPlan plan,
   required List<String> destinationRoots,
   bool verify = true,
   int concurrency = 4,
   Copier copier = _isolateCopy,
+  bool Function()? shouldStop,
 }) {
   final total = plan.items.length;
   final controller = StreamController<IngestProgress>();
@@ -295,19 +314,34 @@ Stream<IngestProgress> runIngest({
   // Each worker pulls the next index until the plan is exhausted. The shared
   // counters are safe: only the copy itself runs in an isolate, the
   // coordination here stays on this single isolate's event loop.
+  // A copier that throws (rather than returning an error result) must not
+  // kill its worker: the stream would never close and the dialog would sit on
+  // "Importing…" forever.
+  Future<CopyResult> copy(String source, List<String> destinations) async {
+    try {
+      return await copier(
+        source: source,
+        destinations: destinations,
+        verify: verify,
+      );
+    } on Object catch (e) {
+      return CopyResult(
+        source: source,
+        outcome: CopyOutcome.error,
+        message: '$e',
+      );
+    }
+  }
+
   Future<void> worker() async {
-    while (!stopped) {
+    while (!stopped && !(shouldStop?.call() ?? false)) {
       final i = next++;
       if (i >= total) return;
       final item = plan.items[i];
       final dests = [
         for (final root in destinationRoots) p.join(root, item.relPath),
       ];
-      var result = await copier(
-        source: item.source,
-        destinations: dests,
-        verify: verify,
-      );
+      var result = await copy(item.source, dests);
       // Carry the companions (sidecars) along once the media itself is safe.
       // The item reports its *worst* outcome: a photo that landed but lost
       // its `.xmp`/`.thm` used to count as fully ok — the summary said
@@ -315,21 +349,23 @@ Stream<IngestProgress> runIngest({
       if (result.ok) {
         for (final c in item.companions) {
           if (stopped) break;
-          final companion = await copier(
-            source: c.source,
-            destinations: [
-              for (final root in destinationRoots) p.join(root, c.relPath),
-            ],
-            verify: verify,
-          );
+          final companion = await copy(c.source, [
+            for (final root in destinationRoots) p.join(root, c.relPath),
+          ]);
           if (result.ok && !companion.ok) {
-            result = CopyResult(source: c.source, outcome: companion.outcome);
+            result = CopyResult(
+              source: c.source,
+              outcome: companion.outcome,
+              message: companion.message,
+            );
           }
         }
       }
       if (stopped) return;
       done++;
-      bytesDone += item.sizeBytes;
+      // Only bytes actually written count toward the throughput readout — a
+      // skipped or failed file used to spike it.
+      if (result.outcome == CopyOutcome.copied) bytesDone += item.sizeBytes;
       if (!controller.isClosed) {
         controller.add(
           IngestProgress(

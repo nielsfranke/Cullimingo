@@ -3,6 +3,33 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **Import no longer hangs on a full or failing destination:** a write error
+  (disk full, dropped mount) used to escape the copy, leave truncated files
+  behind and keep the dialog on "Importing…" forever. The file now fails with
+  its reason, partial copies are removed, and the run finishes.
+- **Switching the source while it scans can't import the previous card:**
+  Import stays disabled until the new source's scan has finished, and a
+  failed scan no longer leaves the old plan importable.
+- **Cancelling an import reports what actually happened:** copies already
+  running finish and are counted, the summary reads "Import cancelled" with the
+  files not copied — not "Import complete". The dialog can no longer be closed
+  mid-import by Escape or a click outside it.
+- **"Verified" only when it's true:** with checksum verification off, the
+  summary says "Copied (not verified)", and the backup option no longer claims
+  to be verified.
+- **Refreshing (⌘R) an unplugged folder no longer removes its photos:** when
+  the folder is gone or lists empty, nothing is removed and a warning says to
+  check the card or drive.
+- **Copies keep the original's file date**, so re-importing or re-scanning a
+  copied folder files photos under their capture day instead of today.
+- Impossible EXIF dates (e.g. 31 February from a corrupt camera clock) are
+  treated as unknown instead of rolling into the next month; a failed sidecar
+  copy shows its reason in the import summary; skipped and failed files no
+  longer inflate the import speed readout.
+
 ## 1.3.4 — 2026-10-02
 
 ### Fixed

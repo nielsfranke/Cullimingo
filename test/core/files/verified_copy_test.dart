@@ -24,6 +24,43 @@ void main() {
     expect(File(dest).readAsStringSync(), 'hello raw');
   });
 
+  test("keeps the source's mtime on the copy", () async {
+    final s = src('m.txt', 'shot');
+    final shotAt = DateTime(2024, 5, 4, 12);
+    s.setLastModifiedSync(shotAt);
+    final dest = p.join(tmp.path, 'out', 'm.txt');
+
+    await verifiedCopy(source: s.path, destinations: [dest]);
+
+    expect(File(dest).lastModifiedSync(), shotAt);
+  });
+
+  test(
+    'an unwritable destination fails the copy instead of escaping',
+    () async {
+      final s = src('w.txt', 'data');
+      final locked = Directory(p.join(tmp.path, 'locked'))..createSync();
+      Process.runSync('chmod', ['555', locked.path]);
+      addTearDown(() => Process.runSync('chmod', ['755', locked.path]));
+      // Root ignores the mode bits (some CI containers) — nothing to test then.
+      try {
+        File(p.join(locked.path, 'probe')).writeAsStringSync('x');
+        markTestSkipped('running with permission overrides (root)');
+        return;
+      } on FileSystemException {
+        // Expected: the folder really is read-only.
+      }
+
+      final r = await verifiedCopy(
+        source: s.path,
+        destinations: [p.join(locked.path, 'w.txt')],
+      );
+
+      expect(r.outcome, CopyOutcome.error);
+    },
+    testOn: '!windows',
+  );
+
   test('copies to two destinations (dual-dest backup)', () async {
     final s = src('b.txt', 'data');
     final d1 = p.join(tmp.path, 'main', 'b.txt');

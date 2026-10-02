@@ -75,6 +75,9 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
 
   bool _running = false;
   bool _cancelled = false;
+  // Whether the finished run verified its copies — the summary says so only
+  // when it's true (the checkbox is remembered between imports).
+  bool _ranVerified = true;
   IngestProgress? _progress;
   IngestSummary? _summary;
   final Stopwatch _stopwatch = Stopwatch();
@@ -207,6 +210,12 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       setState(() {
         _scanning = true;
         _scanError = null;
+        // Drop the previous scan's plan: while this one runs (or if it fails)
+        // Import used to stay enabled and copy the *previous* source — pick
+        // card A, switch to card B, and "Import N photos" imported A.
+        _sources = null;
+        _scannedKey = null;
+        _plan = null;
       });
       final List<IngestSource> sources;
       try {
@@ -306,6 +315,8 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
 
   bool get _canRun =>
       !_running &&
+      !_scanning &&
+      _scanError == null &&
       _source != null &&
       _dest != null &&
       (!_backup || _dest2 != null) &&
@@ -329,6 +340,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     setState(() {
       _running = true;
       _cancelled = false;
+      _ranVerified = _verify;
       _summary = null;
       _progress = null;
     });
@@ -337,21 +349,26 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       ..start();
     final roots = [dest, if (_backup && _dest2 != null) _dest2!];
     final results = <CopyResult>[];
+    // Cancel stops new files from starting; copies already in flight finish
+    // and are still reported, so the summary matches what's on disk (breaking
+    // out of the stream used to drop them and call a partial run complete).
     await for (final tick in runIngest(
       plan: plan,
       destinationRoots: roots,
       verify: _verify,
+      shouldStop: () => _cancelled,
     )) {
       results.add(tick.last);
-      if (!mounted) return;
-      setState(() => _progress = tick);
-      // Stop between files (each copy is atomic + verified, so this is safe).
-      if (_cancelled) break;
+      if (mounted) setState(() => _progress = tick);
     }
     _stopwatch.stop();
     if (!mounted) return;
     setState(() {
-      _summary = IngestSummary(results);
+      _summary = IngestSummary(
+        results,
+        planned: plan.items.length,
+        cancelled: _cancelled,
+      );
       _running = false;
     });
     // Remember the destination so it's pre-filled next time.
@@ -364,6 +381,16 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
   Widget build(BuildContext context) {
     // Cap to the window so the dialog never gets clipped; content scrolls.
     final maxHeight = MediaQuery.of(context).size.height * 0.9;
+    // No dismissing mid-run (Escape, a click on the barrier): closing the
+    // dialog used to abandon the rest of the import silently. Cancel is the
+    // way out, and it reports what landed.
+    return PopScope(
+      canPop: !_running,
+      child: _dialog(maxHeight),
+    );
+  }
+
+  Widget _dialog(double maxHeight) {
     return Dialog(
       backgroundColor: AppColors.surface,
       child: ConstrainedBox(
@@ -499,7 +526,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       DialogCheckbox(
         value: _backup,
         onChanged: (v) => setState(() => _backup = v ?? false),
-        label: 'Also copy to a backup destination (verified, one pass)',
+        label: 'Also copy to a backup destination (same pass)',
       ),
       if (_backup)
         DialogPathRow(
@@ -822,7 +849,11 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
             ),
             const SizedBox(width: AppSpacing.sm),
             Text(
-              s.allOk ? 'Import complete' : 'Import finished with issues',
+              s.cancelled
+                  ? 'Import cancelled'
+                  : s.allOk
+                  ? 'Import complete'
+                  : 'Import finished with issues',
               style: const TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 15,
@@ -832,8 +863,12 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        _statRow('Copied & verified', s.copied),
+        _statRow(
+          _ranVerified ? 'Copied & verified' : 'Copied (not verified)',
+          s.copied,
+        ),
         _statRow('Already present (skipped)', s.skipped),
+        if (s.notStarted > 0) _statRow('Not copied (cancelled)', s.notStarted),
         if (s.conflicts > 0) _statRow('Conflicts (kept existing)', s.conflicts),
         if (s.failed > 0) _statRow('Failed', s.failed),
         if (s.conflicts > 0 || s.failed > 0) ...[

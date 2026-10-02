@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cullimingo/core/files/verified_copy.dart';
@@ -276,7 +277,11 @@ void main() {
         bool verify = true,
       }) async {
         if (source == xmp.path) {
-          return CopyResult(source: source, outcome: CopyOutcome.error);
+          return CopyResult(
+            source: source,
+            outcome: CopyOutcome.error,
+            message: 'xmp write failed',
+          );
         }
         return verifiedCopy(
           source: source,
@@ -294,8 +299,83 @@ void main() {
       final summary = IngestSummary([for (final t in ticks) t.last]);
       expect(summary.failed, 1);
       expect(summary.allOk, isFalse);
+      // The sidecar's reason survives into the summary row.
+      expect(summary.results.single.message, 'xmp write failed');
       // The media itself still landed.
       expect(File(p.join(dest, '2026', 'IMG.arw')).readAsStringSync(), 'raw');
+    });
+
+    test('a throwing copier fails that file and the run still ends', () async {
+      final plan = IngestPlan([
+        for (final n in ['a', 'b'])
+          IngestItem(source: '/src/$n', relPath: n, sizeBytes: 10),
+      ]);
+      Future<CopyResult> boom({
+        required String source,
+        required List<String> destinations,
+        bool verify = true,
+      }) async {
+        if (source.endsWith('a')) throw const FileSystemException('ENOSPC');
+        return CopyResult(source: source, outcome: CopyOutcome.copied);
+      }
+
+      final ticks = await runIngest(
+        plan: plan,
+        destinationRoots: [tmp.path],
+        copier: boom,
+      ).toList().timeout(const Duration(seconds: 5));
+
+      final summary = IngestSummary([for (final t in ticks) t.last]);
+      expect(summary.failed, 1);
+      expect(summary.copied, 1);
+      expect(
+        ticks.firstWhere((t) => t.last.source == '/src/a').last.message,
+        contains('ENOSPC'),
+      );
+      // Only the file that was actually written counts toward the speed.
+      expect(ticks.last.bytesDone, 10);
+    });
+
+    test('shouldStop lets running copies finish and reports them', () async {
+      final plan = IngestPlan([
+        for (var i = 0; i < 10; i++)
+          IngestItem(source: '/src/$i', relPath: '$i', sizeBytes: 1),
+      ]);
+      var stop = false;
+      final release = Completer<void>();
+      var started = 0;
+      Future<CopyResult> slow({
+        required String source,
+        required List<String> destinations,
+        bool verify = true,
+      }) async {
+        started++;
+        await release.future;
+        return CopyResult(source: source, outcome: CopyOutcome.copied);
+      }
+
+      final done = runIngest(
+        plan: plan,
+        destinationRoots: [tmp.path],
+        copier: slow,
+        shouldStop: () => stop,
+      ).toList();
+      await Future<void>.delayed(Duration.zero);
+      expect(started, 4); // four workers in flight
+      stop = true;
+      release.complete();
+      final ticks = await done.timeout(const Duration(seconds: 5));
+
+      // Every copy that ran is reported; nothing new started after the stop.
+      expect(ticks, hasLength(4));
+      final summary = IngestSummary(
+        [for (final t in ticks) t.last],
+        planned: 10,
+        cancelled: true,
+      );
+      expect(summary.copied, 4);
+      expect(summary.notStarted, 6);
+      expect(summary.allOk, isFalse);
     });
 
     test('summary counts a missing source as failed', () async {

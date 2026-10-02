@@ -118,6 +118,20 @@ Future<CopyResult> verifiedCopy({
       }
     }
 
+    // Keep the capture-time mtime on the copy, like the original card file:
+    // re-importing or re-scanning copies (no EXIF read) dates them by mtime,
+    // and a fresh "now" put a whole backup into today's date folder.
+    if (fresh.isNotEmpty) {
+      final mtime = src.lastModifiedSync();
+      for (final dest in fresh) {
+        try {
+          File(dest).setLastModifiedSync(mtime);
+        } on Object {
+          // Best effort: some filesystems (SMB, FAT edge cases) refuse it.
+        }
+      }
+    }
+
     return CopyResult(
       source: source,
       outcome: fresh.isEmpty ? CopyOutcome.skipped : CopyOutcome.copied,
@@ -135,17 +149,17 @@ Future<CopyResult> verifiedCopy({
 /// Streams [src] once, writing every chunk to each of [dests]. When [hash] is
 /// set it also feeds the stream through SHA-256 (so the source is read a single
 /// time for copy + hash) and returns the digest; otherwise returns `null`.
+///
+/// Writes go through [RandomAccessFile] rather than an `IOSink`: a sink only
+/// reports a write error (ENOSPC on a full card/SSD, EIO on a dropped mount)
+/// on its `done` future, which escaped as an *uncaught* error, killed the copy
+/// isolate and left the import's progress stream open forever. Awaited
+/// `writeFrom` calls throw where they fail, so the caller's catch cleans up.
 Future<Digest?> _streamCopy(
   File src,
   List<String> dests, {
   required bool hash,
 }) async {
-  final sinks = <IOSink>[];
-  for (final dest in dests) {
-    File(dest).parent.createSync(recursive: true);
-    sinks.add(File(dest).openWrite());
-  }
-
   Digest? digest;
   Sink<List<int>>? hashInput;
   if (hash) {
@@ -155,20 +169,31 @@ Future<Digest?> _streamCopy(
     hashInput = sha256.startChunkedConversion(hashSink);
   }
 
+  final outs = <RandomAccessFile>[];
+  (Object, StackTrace)? closeError;
   try {
+    for (final dest in dests) {
+      File(dest).parent.createSync(recursive: true);
+      outs.add(await File(dest).open(mode: FileMode.writeOnly));
+    }
     await for (final chunk in src.openRead()) {
       hashInput?.add(chunk);
-      for (final sink in sinks) {
-        sink.add(chunk);
+      for (final out in outs) {
+        await out.writeFrom(chunk);
       }
     }
   } finally {
     hashInput?.close();
-    for (final sink in sinks) {
-      await sink.flush();
-      await sink.close();
+    // Close every file even if one fails, then surface the first failure.
+    for (final out in outs) {
+      try {
+        await out.close();
+      } on Object catch (e, st) {
+        closeError ??= (e, st);
+      }
     }
   }
+  if (closeError case (final e, final st)) Error.throwWithStackTrace(e, st);
   return digest;
 }
 
