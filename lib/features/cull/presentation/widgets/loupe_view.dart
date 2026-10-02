@@ -682,15 +682,15 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
               onFit: () => _applyScale(1),
               onRating: (r) {
                 ref.read(loupeMarkFlashProvider.notifier).rating(r);
-                unawaited(controller.setRating(photo.id, r));
+                unawaited(controller.markRating(photo.id, r));
               },
               onFlag: (f) {
                 ref.read(loupeMarkFlashProvider.notifier).flag(f);
-                unawaited(controller.setFlag(photo.id, f));
+                unawaited(controller.markFlag(photo.id, f));
               },
               onColor: (c) {
                 ref.read(loupeMarkFlashProvider.notifier).color(c);
-                unawaited(controller.setColor(photo.id, c));
+                unawaited(controller.markColor(photo.id, c));
               },
               onKeywords: () => showKeywordEditor(context, ref),
               onRotateLeft: () => unawaited(controller.rotate(photo.id, -1)),

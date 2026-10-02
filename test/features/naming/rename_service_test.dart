@@ -37,10 +37,10 @@ void main() {
         // Only the first photo has a sidecar on disk.
         exists: (path) => path == '/s/DSC0001.xmp',
       );
-      expect(plan[0].sidecar, '/s/DSC0001.xmp');
-      expect(plan[0].sidecarTarget, '/s/01.xmp');
-      expect(plan[1].sidecar, isNull);
-      expect(plan[1].sidecarTarget, isNull);
+      expect(plan[0].sidecars, [
+        (source: '/s/DSC0001.xmp', target: '/s/01.xmp'),
+      ]);
+      expect(plan[1].sidecars, isEmpty);
     });
 
     test('de-dupes in-batch name clashes with a _2 suffix', () {
@@ -101,10 +101,28 @@ void main() {
         template: const RenameTemplate('new'),
         exists: (path) => path == '/s/DSC1.xmp',
       );
-      final withSidecar = plan.where((i) => i.sidecar != null).toList();
+      final withSidecar = plan.where((i) => i.sidecars.isNotEmpty).toList();
       expect(withSidecar, hasLength(1));
-      expect(withSidecar.single.sidecar, '/s/DSC1.xmp');
-      expect(withSidecar.single.sidecarTarget, '/s/new.xmp');
+      expect(withSidecar.single.sidecars, [
+        (source: '/s/DSC1.xmp', target: '/s/new.xmp'),
+      ]);
+    });
+
+    test("carries the JPEG's own sidecar with it, the shared one with the "
+        'RAW', () {
+      final plan = planRenames(
+        // JPEG first: the shared DSC1.xmp still belongs to the RAW.
+        [src('/s/DSC1.JPG', id: 1), src('/s/DSC1.ARW', id: 2)],
+        template: const RenameTemplate('new'),
+        exists: (path) => path == '/s/DSC1.xmp' || path == '/s/DSC1.JPG.xmp',
+      );
+      final byId = {for (final i in plan) i.photoId: i};
+      expect(byId[1]!.sidecars, [
+        (source: '/s/DSC1.JPG.xmp', target: '/s/new.JPG.xmp'),
+      ]);
+      expect(byId[2]!.sidecars, [
+        (source: '/s/DSC1.xmp', target: '/s/new.xmp'),
+      ]);
     });
 
     test('marks a no-op when the new name equals the old', () {
@@ -135,8 +153,7 @@ void main() {
           photoId: 1,
           source: path('a.jpg'),
           target: path('z.jpg'),
-          sidecar: path('a.xmp'),
-          sidecarTarget: path('z.xmp'),
+          sidecars: [(source: path('a.xmp'), target: path('z.xmp'))],
         ),
       ]);
       expect(results.single.ok, isTrue);
@@ -199,8 +216,7 @@ void main() {
           photoId: 1,
           source: path('a.jpg'),
           target: path('z.jpg'),
-          sidecar: path('a.xmp'),
-          sidecarTarget: path('z.xmp'),
+          sidecars: [(source: path('a.xmp'), target: path('z.xmp'))],
         ),
       ]);
 

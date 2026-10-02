@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:cullimingo/core/cache/preview_cache.dart';
 import 'package:cullimingo/core/db/database.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
@@ -9,6 +7,7 @@ import 'package:cullimingo/features/metadata/data/metadata_repository.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -144,4 +143,31 @@ void main() {
     final rated = rows!.where((r) => r.rating == 5).map((r) => r.id).toList();
     expect(rated, [ids.first]);
   });
+
+  // GitHub #4: the loupe marks one photo, but must still honour the setting.
+  for (final propagate in [true, false]) {
+    testWidgets('rating in the loupe with propagation '
+        '${propagate ? 'on marks the bracket' : 'off marks one frame'}', (
+      tester,
+    ) async {
+      final ids = await pumpPage(tester, propagate: propagate);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter); // focus first
+      await tester.pump();
+      final focused = container.read(cullControllerProvider).focusedId;
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter); // open loupe
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.digit4);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final rows = await tester.runAsync(
+        () => db.watchPhotosForImport(importId).first,
+      );
+      final rated = {
+        for (final r in rows!)
+          if (r.rating == 4) r.id,
+      };
+      expect(rated, propagate ? ids.toSet() : {focused});
+    });
+  }
 }

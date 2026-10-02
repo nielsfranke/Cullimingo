@@ -124,7 +124,10 @@ class VipsEncoder {
     // Only effective when this is the process's first vips_init (standalone
     // probes, tests); in the app, Vips.warmUpProcess already did both the
     // env setup and the module-discovering init. See pointVipsHomeAtBundle.
-    if (bundled != null) pointVipsHomeAtBundle(bundled);
+    if (bundled != null) {
+      pointVipsHomeAtBundle(bundled);
+      preloadHostPreferredLibs(); // same reason as in Vips.tryLoad
+    }
     try {
       final lib = DynamicLibrary.open(path);
       final init = lib.lookupFunction<_InitN, _InitD>('vips_init');

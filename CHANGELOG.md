@@ -12,6 +12,32 @@ All notable user-facing changes to Cullimingo. The format loosely follows
   grid and loupe instead of stretching the thumbnail or leaving the photo
   blank. Normal embedded previews remain on the original fast path.
 
+## 1.3.3 — 2026-10-01
+
+### Fixed
+- **"Apply marks to whole bracket" now works in the loupe** (GitHub #4).
+  Rating, flagging or colouring a photo in the loupe only marked that frame,
+  even with the setting on; it now carries to the whole bracket just like
+  marking in the grid. (Compare view stays per-frame on purpose.)
+- **RAW+JPEG pairs keep separate ratings, flags and colours** (GitHub #3).
+  Both halves of a pair used to share one `DSC1.xmp`, so a re-sync or reopen
+  copied the RAW's marks onto the JPEG (and trashing a rejected JPEG took the
+  RAW's sidecar with it). The JPEG of a pair now gets its own `DSC1.JPG.xmp`
+  (the darktable convention); the RAW keeps `DSC1.xmp` for Lightroom and
+  Capture One. Rename, transfer, ingest and reject-delete carry the right
+  sidecar along. JPEG marks that were previously written to the shared file
+  aren't migrated — re-mark the JPEG once if it should differ from its RAW.
+
+## 1.3.2 — 2026-10-01
+
+### Fixed
+- **Linux: opening a folder no longer crashes the app** (GitHub #2). On
+  Debian 13 and other distros with a librsvg newer than the one bundled in the
+  AppImage, the first GTK file chooser killed the app outright: GTK's SVG icon
+  loader bound to our older bundled librsvg and aborted on a missing symbol.
+  The AppImage now uses the host's librsvg whenever there is one and falls
+  back to its own copy only when there isn't.
+
 ## 1.3.1 — 2026-08-19
 
 ### Fixed

@@ -28,6 +28,11 @@ packages/
   to; the filesystem + XMP sidecars are the durable source of truth. Sync on
   import and on manual refresh (⌘R re-scans the folder; sidecars resync on
   focus/refresh) — there is **no** filesystem watcher.
+- **Sidecar naming** (`core/files/sidecar_path.dart`): RAW uses the LR/C1
+  shared-stem `DSC1.xmp`. The non-RAW half of a RAW+JPEG pair uses a per-file
+  `DSC1.JPG.xmp` (darktable style) so both keep independent marks; a lone
+  JPEG keeps `DSC1.xmp` (or an orphaned `DSC1.JPG.xmp` once its RAW is gone).
+  Resolved against the folder listing by `SidecarResolver` (GitHub #3).
 - **UI isolate is sacred:** decode/encode/hash/large I/O/XMP go through the
   isolate pool (built in Phase 2). The UI only ever receives results.
 - **Two-tier disk cache:** grid thumbnails + screen-res loupe previews, keyed by

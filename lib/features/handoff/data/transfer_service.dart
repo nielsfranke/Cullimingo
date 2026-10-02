@@ -50,16 +50,20 @@ Future<List<TransferItem>> buildTransferPlan(
 }) async {
   final used = <String>{};
   final items = <TransferItem>[];
+  final resolver = SidecarResolver();
   for (final source in sources) {
     final rel = _unique(p.basename(source), used);
     ({String source, String relPath})? sidecar;
     if (includeSidecars) {
-      final sidecarSrc = sidecarPath(source);
+      final sidecarSrc = await resolver.resolve(source);
       // Async exists() (not existsSync) so a plan over an iCloud-synced folder
       // never stalls the UI isolate (matches the metadata sidecar readers).
       // ignore: avoid_slow_async_io
       if (await File(sidecarSrc).exists()) {
-        sidecar = (source: sidecarSrc, relPath: p.setExtension(rel, '.xmp'));
+        sidecar = (
+          source: sidecarSrc,
+          relPath: followSidecarPath(sidecarSrc, source, rel),
+        );
       }
     }
     items.add(TransferItem(source: source, relPath: rel, sidecar: sidecar));

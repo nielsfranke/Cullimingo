@@ -94,6 +94,14 @@ chmod +x Cullimingo-x86_64.AppImage
 - `libsecret-1` (delivery-server passwords) is a **host runtime dependency**,
   not bundled — install it via your distro's package manager
   (`libsecret-1-0` on Debian/Ubuntu) if it isn't already present.
+- **Host-preferred libs** (`<bundle>/lib/fallback/`, currently `librsvg`):
+  libvips depends on them, but so does the host's GTK stack — gdk-pixbuf's SVG
+  loader dlopens librsvg the first time GTK draws an SVG icon (the file
+  chooser). The loader dedupes by soname, so a bundled copy already in the
+  process would be what the host's plugin binds to; if ours is older, the
+  plugin dies on a missing symbol and GTK aborts the app (GitHub #2). So they
+  sit outside `RUNPATH`, and the app dlopens the host's copy before libvips,
+  taking ours only when the host has none (`core/native/bundled_libs.dart`).
 
 ## Releases (automated)
 

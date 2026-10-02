@@ -981,6 +981,27 @@ class CullController extends _$CullController {
     };
   }
 
+  /// [photoId] grown to its whole exposure bracket when the propagate-to-stack
+  /// setting is on — the single-photo (loupe) counterpart of
+  /// [_effectiveMarkTargets].
+  Set<int> _withBracket(int photoId) => ref.read(propagateMarksToStackProvider)
+      ? {...ref.read(bracketGroupsProvider).groupOf(photoId)}
+      : {photoId};
+
+  /// Sets [rating] on [photoId] — and its bracket when propagate-to-stack is
+  /// on. The loupe's mark path: it ignores the grid selection but honours the
+  /// bracket setting like batch marking does.
+  Future<void> markRating(int photoId, int rating) =>
+      _setRatingAll(_withBracket(photoId), rating);
+
+  /// Sets [flag] on [photoId] (and its bracket; see [markRating]).
+  Future<void> markFlag(int photoId, PickFlag flag) =>
+      _setFlagAll(_withBracket(photoId), flag);
+
+  /// Sets [label] on [photoId] (and its bracket; see [markRating]).
+  Future<void> markColor(int photoId, ColorLabel label) =>
+      _setColorAll(_withBracket(photoId), label);
+
   /// Sets [rating] on every effective mark target (batch marking).
   Future<void> applyRating(int rating) =>
       _setRatingAll(_effectiveMarkTargets, rating);

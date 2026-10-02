@@ -16,8 +16,11 @@ import 'package:cullimingo/features/metadata/domain/xmp_data.dart';
 /// Mechanic exports, which write both), the IIM block is ignored entirely.
 /// Returns `null` when none is present. Call off the UI isolate — the embedded
 /// paths read file bytes.
-Future<XmpData?> readMarks(String photoPath) async {
-  final sidecar = await readSidecar(photoPath);
+Future<XmpData?> readMarks(
+  String photoPath, {
+  SidecarResolver? resolver,
+}) async {
+  final sidecar = await readSidecar(photoPath, resolver: resolver);
   if (sidecar != null) return sidecar;
   if (!carriesEmbeddedXmp(photoPath)) return null;
   final embeddedXmp = await readEmbeddedXmp(photoPath);
@@ -35,15 +38,19 @@ typedef MarksRead = (XmpData? xmp, DateTime? sidecarMtime);
 /// concurrency so a big import's I/O overlaps instead of going file-by-file.
 Future<List<MarksRead>> readMarksForPaths(List<String> paths) async {
   final results = List<MarksRead>.filled(paths.length, (null, null));
+  final resolver = SidecarResolver();
   const concurrency = 16;
   for (var start = 0; start < paths.length; start += concurrency) {
     final end = (start + concurrency).clamp(0, paths.length);
     await Future.wait([
       for (var i = start; i < end; i++)
         Future(() async {
-          final xmp = await readMarks(paths[i]);
+          final xmp = await readMarks(paths[i], resolver: resolver);
           if (xmp == null) return;
-          results[i] = (xmp, await readSidecarMtime(paths[i]));
+          results[i] = (
+            xmp,
+            await readSidecarMtime(paths[i], resolver: resolver),
+          );
         }),
     ]);
   }
@@ -69,6 +76,7 @@ Future<List<SidecarSyncState>> readSidecarSyncStates(
   List<SidecarSyncQuery> queries,
 ) async {
   final results = List<SidecarSyncState>.filled(queries.length, (null, null));
+  final resolver = SidecarResolver();
   const concurrency = 16;
   for (var start = 0; start < queries.length; start += concurrency) {
     final end = (start + concurrency).clamp(0, queries.length);
@@ -76,14 +84,14 @@ Future<List<SidecarSyncState>> readSidecarSyncStates(
       for (var i = start; i < end; i++)
         Future(() async {
           final (path, knownMtime) = queries[i];
-          final fileMtime = await readSidecarMtime(path);
+          final fileMtime = await readSidecarMtime(path, resolver: resolver);
           if (fileMtime == null) return; // no sidecar on disk
           // Unchanged since our own last write → nothing to parse or adopt.
           if (knownMtime != null && fileMtime == knownMtime) {
             results[i] = (fileMtime, null);
             return;
           }
-          results[i] = (fileMtime, await readSidecar(path));
+          results[i] = (fileMtime, await readSidecar(path, resolver: resolver));
         }),
     ]);
   }

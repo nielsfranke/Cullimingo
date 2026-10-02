@@ -224,7 +224,12 @@ class Vips {
       // bundled module is never found (the export encoder's own attempt
       // comes too late — its init is a no-op by then).
       final bundledVips = bundledNativeLib(_bundledPrefix['vips']!);
-      if (bundledVips != null) pointVipsHomeAtBundle(bundledVips);
+      if (bundledVips != null) {
+        pointVipsHomeAtBundle(bundledVips);
+        // Host-preferred deps (librsvg) must be in the process before vips'
+        // own load pulls in our bundled copies — see preloadHostPreferredLibs.
+        preloadHostPreferredLibs();
+      }
       final vips = DynamicLibrary.open(bundledVips ?? _resolve('vips')!);
       final glib = DynamicLibrary.open(_resolve('glib')!);
       final gobject = DynamicLibrary.open(_resolve('gobject')!);

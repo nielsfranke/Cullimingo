@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:isolate';
 
+import 'package:cullimingo/core/files/sidecar_path.dart';
 import 'package:cullimingo/core/files/verified_copy.dart';
 import 'package:cullimingo/core/naming/rename_template.dart';
 import 'package:cullimingo/features/library/data/folder_scanner.dart';
@@ -158,10 +159,11 @@ IngestPlan buildPlan({
         relPath: uniqueRel,
         sizeBytes: s.sizeBytes,
         // Each companion follows the photo's (possibly de-duplicated) path,
-        // swapping in its own extension so the pairing survives the rename.
+        // swapping in its own extension so the pairing survives the rename
+        // (a per-file `IMG.JPG.xmp` keeps the full new filename instead).
         companions: [
           for (final c in s.companions)
-            (source: c, relPath: p.setExtension(uniqueRel, p.extension(c))),
+            (source: c, relPath: followSidecarPath(c, s.path, uniqueRel)),
         ],
       ),
     );

@@ -191,26 +191,27 @@ mixin _CullKeyboard on _CullJobs {
     }
 
     // Rate/flag/colour: in the grid these apply to the whole selection (batch
-    // marking); in the loupe you're viewing one photo, so they affect just it.
+    // marking); in the loupe you're viewing one photo, so they affect just it
+    // (plus its bracket when "apply marks to whole bracket" is on).
     // The toggle value is always computed from the focused photo.
     // In the loupe, a mark also flashes an ephemeral confirmation (event-driven
     // so it fires even when auto-advance blits to the next photo).
     Future<void> rate(int r) {
       if (!_loupeOpen) return controller.applyRating(r);
       ref.read(loupeMarkFlashProvider.notifier).rating(r);
-      return controller.setRating(id, r);
+      return controller.markRating(id, r);
     }
 
     Future<void> flagAs(PickFlag f) {
       if (!_loupeOpen) return controller.applyFlag(f);
       ref.read(loupeMarkFlashProvider.notifier).flag(f);
-      return controller.setFlag(id, f);
+      return controller.markFlag(id, f);
     }
 
     Future<void> colorAs(ColorLabel c) {
       if (!_loupeOpen) return controller.applyColor(c);
       ref.read(loupeMarkFlashProvider.notifier).color(c);
-      return controller.setColor(id, c);
+      return controller.markColor(id, c);
     }
 
     Future<void> rotateBy(int turns) => _loupeOpen

@@ -39,14 +39,25 @@ void main() {
       expect(plan.single.sidecar!.relPath, 'DSC1.xmp');
     });
 
+    test("carries a paired JPEG's own sidecar, not the RAW's", () async {
+      src('DSC1.arw', 'raw');
+      final jpg = src('DSC1.jpg', 'jpg');
+      src('DSC1.xmp', '<raw/>');
+      src('DSC1.jpg.xmp', '<jpg/>');
+
+      final plan = await buildTransferPlan([jpg.path]);
+
+      expect(p.basename(plan.single.sidecar!.source), 'DSC1.jpg.xmp');
+      expect(plan.single.sidecar!.relPath, 'DSC1.jpg.xmp');
+    });
+
     test('omits sidecars when includeSidecars is false', () async {
       final photo = src('DSC1.arw', 'raw');
       src('DSC1.xmp', '<xmp/>');
 
-      final plan = await buildTransferPlan(
-        [photo.path],
-        includeSidecars: false,
-      );
+      final plan = await buildTransferPlan([
+        photo.path,
+      ], includeSidecars: false);
 
       expect(plan.single.sidecar, isNull);
     });

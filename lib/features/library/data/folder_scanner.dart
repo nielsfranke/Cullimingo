@@ -186,7 +186,12 @@ Future<List<ScannedFile>> _walk(
         mtime: stat.modified,
         sizeBytes: stat.size,
         isRaw: isRawPath(e.path),
-        companions: sidecarsByStem[_stem(e.path)] ?? const [],
+        // Same-stem companions (`DSC1.xmp`, `DSC1.thm`) plus a per-file
+        // sidecar (`DSC1.JPG.xmp`, whose own stem is the full filename).
+        companions: [
+          ...?sidecarsByStem[_stem(e.path)],
+          ...?sidecarsByStem[e.path.toLowerCase()],
+        ],
       ),
     );
   }
