@@ -8,8 +8,10 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 ### Changed
 - **Import date folders always follow the capture date in the photo's
   EXIF**, not only when `{camera}` is in the naming template. The file date
-  is used only when a file has no valid capture date. Scanning a card reads
-  a little more, in the background.
+  is used only when a file has no valid capture date.
+- **Reading capture dates is much faster**, for the import scan and for
+  opening a folder: only the start of each file is read, in one go, where
+  RAWs used to be read a few bytes at a time (a 24 MP NEF took ~0.2 s).
 - **The import's backup copy is always verified.** The checksum checkbox now
   only governs the main destination; the backup is read back regardless,
   since a bad backup is otherwise found out on the day it's needed.
