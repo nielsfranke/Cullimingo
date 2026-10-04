@@ -171,19 +171,20 @@ Stream<TransferProgress> runTransfer({
   // (their isolates killed) instead of running on unseen — a move never
   // deletes an original whose copy didn't report back.
   final abandon = Completer<void>();
-  final copyOne =
-      copier ??
-      ({
-        required String source,
-        required List<String> destinations,
-        bool verify = true,
-      }) => watchedCopy(
+  Copier watched({required Duration quietPeriod}) =>
+      ({required source, required destinations, verify = true}) => watchedCopy(
         source: source,
         destinations: destinations,
         verify: verify,
+        quietPeriod: quietPeriod,
         volumeGuards: volumeGuards,
         abandon: abandon.future,
       );
+  final copyOne = copier ?? watched(quietPeriod: kSourceQuietPeriod);
+  // No hold-back for the sidecar: Cullimingo writes it itself on every mark,
+  // so a fresh one means a rating saved a moment ago, not a file still being
+  // written — and holding it back would split a photo from its marks.
+  final copySidecar = copier ?? watched(quietPeriod: Duration.zero);
 
   Future<void> worker() async {
     while (!stopped) {
@@ -194,7 +195,7 @@ Stream<TransferProgress> runTransfer({
 
       // Guard: transferring a file onto itself would, on a move, delete the one
       // and only copy. Treat it as a clean skip.
-      final CopyResult result;
+      CopyResult result;
       if (p.equals(dest, item.source)) {
         result = CopyResult(source: item.source, outcome: CopyOutcome.skipped);
       } else {
@@ -206,15 +207,28 @@ Stream<TransferProgress> runTransfer({
           verify: verify || mode == TransferMode.move,
         );
         if (result.ok && item.sidecar != null && !stopped) {
-          final sidecarResult = await copyOne(
+          final sidecarResult = await copySidecar(
             source: item.sidecar!.source,
             destinations: [p.join(destinationRoot, item.sidecar!.relPath)],
             verify: verify || mode == TransferMode.move,
           );
-          // Only a verified sidecar copy may delete the source — a failed
-          // copy would otherwise erase the marks' one remaining home.
-          if (mode == TransferMode.move && sidecarResult.ok) {
-            _deleteQuietly(item.sidecar!.source);
+          if (sidecarResult.ok) {
+            // Only a verified sidecar copy may delete the source — a failed
+            // copy would otherwise erase the marks' one remaining home.
+            if (mode == TransferMode.move) {
+              _deleteQuietly(item.sidecar!.source);
+            }
+          } else {
+            // The photo arrived without its marks. Report it, and on a move
+            // keep the original beside its sidecar: moving the photo alone
+            // used to leave the marks behind while reporting success.
+            result = CopyResult(
+              source: item.source,
+              outcome: sidecarResult.outcome,
+              message:
+                  "Photo copied, but its sidecar wasn't: "
+                  '${sidecarResult.message ?? sidecarResult.outcome.name}',
+            );
           }
         }
         // Delete the source only once its copy is safely at the destination.

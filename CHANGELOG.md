@@ -62,6 +62,10 @@ All notable user-facing changes to Cullimingo. The format loosely follows
   — including the empty mount-point folder an unplugged drive leaves
   behind on Linux. A destination folder that has vanished is never
   recreated. If a folder really moved, choose it again.
+- **Moving a photo no longer leaves its marks behind:** if its `.xmp`
+  sidecar couldn't be copied, the photo used to be moved anyway and reported
+  as done, with its rating and labels left in the old folder. The original
+  now stays put next to its sidecar, and the result says why.
 - **Not enough room? The import doesn't start:** free space is checked per
   drive before anything is copied (main and backup on one drive add up;
   files already there don't count), instead of failing part-way through.

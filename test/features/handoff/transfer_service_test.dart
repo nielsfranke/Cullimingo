@@ -110,6 +110,61 @@ void main() {
       expect(sidecar.existsSync(), isFalse);
     });
 
+    test('keeps the original when only its sidecar fails to copy', () async {
+      final photo = src('DSC4.arw', 'raw-bytes');
+      final sidecar = src('DSC4.xmp', 'sidecar');
+      final out = dest('out');
+      final plan = await buildTransferPlan([photo.path]);
+      Future<CopyResult> sidecarFails({
+        required String source,
+        required List<String> destinations,
+        bool verify = true,
+      }) async => source.endsWith('.xmp')
+          ? CopyResult(source: source, outcome: CopyOutcome.error)
+          : verifiedCopy(
+              source: source,
+              destinations: destinations,
+              verify: verify,
+            );
+
+      final ticks = await runTransfer(
+        plan: plan,
+        destinationRoot: out,
+        mode: TransferMode.move,
+        copier: sidecarFails,
+      ).toList();
+
+      // Reported, and the photo stays with its marks.
+      final summary = TransferSummary([for (final t in ticks) t.last]);
+      expect(summary.failed, 1);
+      expect(ticks.single.last.message, contains('sidecar'));
+      expect(photo.existsSync(), isTrue);
+      expect(sidecar.existsSync(), isTrue);
+    });
+
+    test('a just-saved sidecar travels; only the photo is held back', () async {
+      // The default (isolate) copier: the photo has settled, the sidecar was
+      // written a moment ago — as when a rating is saved right before a move.
+      final photo = src(
+        'DSC5.arw',
+        'raw-bytes',
+      )..setLastModifiedSync(DateTime.now().subtract(const Duration(hours: 1)));
+      final sidecar = src('DSC5.xmp', 'sidecar');
+      final out = dest('out');
+      final plan = await buildTransferPlan([photo.path]);
+
+      final ticks = await runTransfer(
+        plan: plan,
+        destinationRoot: out,
+        mode: TransferMode.move,
+      ).toList();
+
+      expect(ticks.single.last.ok, isTrue, reason: '${ticks.single.last}');
+      expect(File(p.join(out, 'DSC5.xmp')).readAsStringSync(), 'sidecar');
+      expect(photo.existsSync(), isFalse);
+      expect(sidecar.existsSync(), isFalse);
+    });
+
     test('keeps the original when its copy reports a changed source', () async {
       final photo = src('DSC2.arw', 'raw-bytes');
       final plan = await buildTransferPlan([photo.path]);
