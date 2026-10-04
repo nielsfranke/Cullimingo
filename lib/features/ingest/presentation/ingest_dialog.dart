@@ -78,6 +78,8 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
   // Whether the finished run verified its copies — the summary says so only
   // when it's true (the checkbox is remembered between imports).
   bool _ranVerified = true;
+  // Whether it also wrote a backup, which is always verified.
+  bool _ranBackup = false;
   IngestProgress? _progress;
   IngestSummary? _summary;
   final Stopwatch _stopwatch = Stopwatch();
@@ -341,6 +343,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       _running = true;
       _cancelled = false;
       _ranVerified = _verify;
+      _ranBackup = _backup && _dest2 != null;
       _summary = null;
       _progress = null;
     });
@@ -526,7 +529,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       DialogCheckbox(
         value: _backup,
         onChanged: (v) => setState(() => _backup = v ?? false),
-        label: 'Also copy to a backup destination (same pass)',
+        label: 'Also copy to a backup destination (always verified)',
       ),
       if (_backup)
         DialogPathRow(
@@ -864,7 +867,11 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
         ),
         const SizedBox(height: AppSpacing.md),
         _statRow(
-          _ranVerified ? 'Copied & verified' : 'Copied (not verified)',
+          _ranVerified
+              ? 'Copied & verified'
+              : _ranBackup
+              ? 'Copied (only the backup verified)'
+              : 'Copied (not verified)',
           s.copied,
         ),
         _statRow('Already present (skipped)', s.skipped),

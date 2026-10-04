@@ -144,6 +144,23 @@ void main() {
     expect(File(dest).readAsStringSync(), 'no-verify content');
   });
 
+  test('alwaysVerify still copies every destination correctly', () async {
+    final s = src('v.txt', 'backup me');
+    final main = p.join(tmp.path, 'main', 'v.txt');
+    final backup = p.join(tmp.path, 'backup', 'v.txt');
+
+    final r = await verifiedCopy(
+      source: s.path,
+      destinations: [main, backup],
+      verify: false,
+      alwaysVerify: {backup},
+    );
+
+    expect(r.outcome, CopyOutcome.copied);
+    expect(File(main).readAsStringSync(), 'backup me');
+    expect(File(backup).readAsStringSync(), 'backup me');
+  });
+
   test('reports a missing source', () async {
     final r = await verifiedCopy(
       source: p.join(tmp.path, 'nope.txt'),

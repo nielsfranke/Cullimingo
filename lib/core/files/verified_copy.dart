@@ -91,10 +91,14 @@ class CopyResult {
 /// that happens to sit idle for a moment only shows up here. The app's
 /// copiers pass [kSourceQuietPeriod]; the default of none is for callers
 /// whose sources are known to be complete.
+///
+/// [alwaysVerify] names destinations read back even when [verify] is off —
+/// the import's backup copy, which nobody looks at until the day it's needed.
 Future<CopyResult> verifiedCopy({
   required String source,
   required List<String> destinations,
   bool verify = true,
+  Set<String> alwaysVerify = const {},
   Duration quietPeriod = Duration.zero,
 }) async {
   final src = File(source);
@@ -145,7 +149,8 @@ Future<CopyResult> verifiedCopy({
   try {
     // The source hash is only needed to compare existing dests or to verify a
     // fresh copy — skip it entirely otherwise (pure copy is ~2× faster).
-    final needHash = verify || existing.isNotEmpty;
+    bool verifies(String dest) => verify || alwaysVerify.contains(dest);
+    final needHash = existing.isNotEmpty || fresh.any(verifies);
     Digest? sourceHash;
     if (fresh.isNotEmpty) {
       // One source read copies to every fresh destination (and hashes it if
@@ -168,16 +173,15 @@ Future<CopyResult> verifiedCopy({
     }
 
     // Verify each freshly written copy by re-reading it.
-    if (verify) {
-      for (final MapEntry(key: dest, value: part) in parts.entries) {
-        if (await _hashFile(File(part)) != sourceHash) {
-          parts.values.forEach(_deleteQuietly);
-          return CopyResult(
-            source: source,
-            outcome: CopyOutcome.verifyFailed,
-            message: 'Hash mismatch after copy: $dest',
-          );
-        }
+    for (final MapEntry(key: dest, value: part) in parts.entries) {
+      if (!verifies(dest)) continue;
+      if (await _hashFile(File(part)) != sourceHash) {
+        parts.values.forEach(_deleteQuietly);
+        return CopyResult(
+          source: source,
+          outcome: CopyOutcome.verifyFailed,
+          message: 'Hash mismatch after copy: $dest',
+        );
       }
     }
 

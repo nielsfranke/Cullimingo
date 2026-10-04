@@ -5,6 +5,11 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 
 ## Unreleased
 
+### Changed
+- **The import's backup copy is always verified.** The checksum checkbox now
+  only governs the main destination; the backup is read back regardless,
+  since a bad backup is otherwise found out on the day it's needed.
+
 ### Fixed
 - **An interrupted copy no longer leaves half a photo under its real name:**
   import and handoff write each copy to a hidden `.part` file, verify it

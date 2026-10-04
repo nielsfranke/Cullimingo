@@ -285,11 +285,13 @@ class IngestSummary {
 }
 
 /// Signature of the verified-copy step, injectable so tests skip the isolate.
+/// [alwaysVerify] names the destinations read back whatever `verify` says.
 typedef Copier =
     Future<CopyResult> Function({
       required String source,
       required List<String> destinations,
       bool verify,
+      Set<String> alwaysVerify,
     });
 
 /// Runs [plan] into one or two [destinationRoots] off the UI isolate, emitting
@@ -301,6 +303,10 @@ typedef Copier =
 /// cancelled run's summary covers every file that actually landed. Cancelling
 /// the subscription also stops launching new copies, but drops the results of
 /// the ones in flight; prefer [shouldStop].
+///
+/// [verify] governs the primary destination (the first root). Every further
+/// root is a backup and is always verified: an unverified backup is only
+/// found to be bad on the day it's needed.
 Stream<IngestProgress> runIngest({
   required IngestPlan plan,
   required List<String> destinationRoots,
@@ -328,6 +334,7 @@ Stream<IngestProgress> runIngest({
         source: source,
         destinations: destinations,
         verify: verify,
+        alwaysVerify: destinations.skip(1).toSet(),
       );
     } on Object catch (e) {
       return CopyResult(
@@ -403,11 +410,13 @@ Future<CopyResult> _isolateCopy({
   required String source,
   required List<String> destinations,
   bool verify = true,
+  Set<String> alwaysVerify = const {},
 }) => Isolate.run(
   () => verifiedCopy(
     source: source,
     destinations: destinations,
     verify: verify,
+    alwaysVerify: alwaysVerify,
     quietPeriod: kSourceQuietPeriod,
   ),
 );

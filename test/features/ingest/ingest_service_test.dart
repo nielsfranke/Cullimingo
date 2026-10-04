@@ -275,6 +275,7 @@ void main() {
         required String source,
         required List<String> destinations,
         bool verify = true,
+        Set<String> alwaysVerify = const {},
       }) async {
         if (source == xmp.path) {
           return CopyResult(
@@ -314,6 +315,7 @@ void main() {
         required String source,
         required List<String> destinations,
         bool verify = true,
+        Set<String> alwaysVerify = const {},
       }) async {
         if (source.endsWith('a')) throw const FileSystemException('ENOSPC');
         return CopyResult(source: source, outcome: CopyOutcome.copied);
@@ -348,6 +350,7 @@ void main() {
         required String source,
         required List<String> destinations,
         bool verify = true,
+        Set<String> alwaysVerify = const {},
       }) async {
         started++;
         await release.future;
@@ -392,6 +395,39 @@ void main() {
       final summary = IngestSummary([for (final t in ticks) t.last]);
       expect(summary.failed, 1);
       expect(summary.allOk, isFalse);
+    });
+
+    test('the backup is always verified, even with verify off', () async {
+      final calls = <({bool verify, Set<String> always})>[];
+      Future<CopyResult> spy({
+        required String source,
+        required List<String> destinations,
+        bool verify = true,
+        Set<String> alwaysVerify = const {},
+      }) async {
+        calls.add((verify: verify, always: alwaysVerify));
+        return CopyResult(source: source, outcome: CopyOutcome.copied);
+      }
+
+      await runIngest(
+        plan: const IngestPlan([
+          IngestItem(
+            source: '/card/a.arw',
+            relPath: 'a.arw',
+            companions: [(source: '/card/a.xmp', relPath: 'a.xmp')],
+          ),
+        ]),
+        destinationRoots: ['/main', '/backup'],
+        verify: false,
+        copier: spy,
+      ).toList();
+
+      expect(calls, hasLength(2)); // the photo and its sidecar
+      for (final c in calls) {
+        expect(c.verify, isFalse);
+        expect(c.always, hasLength(1));
+        expect(c.always.single, startsWith('/backup'));
+      }
     });
 
     test('summary keeps files still being written apart from failures', () {
