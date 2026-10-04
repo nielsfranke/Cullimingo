@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cullimingo/core/db/database.dart';
+import 'package:cullimingo/features/library/data/folder_scanner.dart';
 import 'package:cullimingo/features/library/data/library_repository.dart';
 import 'package:cullimingo/features/metadata/data/metadata_repository.dart';
 import 'package:cullimingo/features/metadata/data/xmp_sidecar.dart';
@@ -235,11 +236,16 @@ void main() {
       final (parentId, _) = await repo.findOrCreateImport(tmp.path);
       expect(await repo.watchImport(parentId).first, isEmpty);
 
-      final (:added, :removed, changedPaths: _, unavailable: _) = await repo
-          .refreshImport(
-            parentId,
-            tmp.path,
-          );
+      final (
+        :added,
+        :removed,
+        changedPaths: _,
+        unavailable: _,
+        unreadable: _,
+      ) = await repo.refreshImport(
+        parentId,
+        tmp.path,
+      );
       expect(added, 1);
       expect(removed, 0);
       expect(await repo.watchImport(parentId).first, hasLength(1));
@@ -257,11 +263,16 @@ void main() {
       writeJpeg('c.jpg');
       File(p.join(tmp.path, 'a.jpg')).deleteSync();
 
-      final (:added, :removed, changedPaths: _, unavailable: _) = await repo
-          .refreshImport(
-            importId,
-            tmp.path,
-          );
+      final (
+        :added,
+        :removed,
+        changedPaths: _,
+        unavailable: _,
+        unreadable: _,
+      ) = await repo.refreshImport(
+        importId,
+        tmp.path,
+      );
 
       expect(added, 1);
       expect(removed, 1);
@@ -296,6 +307,50 @@ void main() {
       expect(await repo.watchImport(importId).first, hasLength(1));
     });
 
+    test('a partial scan adds new files but removes nothing', () async {
+      writeJpeg('a.jpg');
+      final sub = Directory(p.join(tmp.path, 'sub'))..createSync();
+      writeJpeg(p.join('sub', 'b.jpg'));
+      final importId = await repo.importFolder(tmp.path);
+      expect(await repo.watchImport(importId).first, hasLength(2));
+
+      // `sub` turns unreadable (permissions, a flaky reader) and a new file
+      // lands at the top: the scan sees a.jpg + c.jpg and an error for `sub`.
+      writeJpeg('c.jpg');
+      Future<FolderScan> partial(
+        String root, {
+        bool recursive = true,
+        bool includeVideos = false,
+      }) async {
+        final full = await scanFolder(
+          root,
+          recursive: recursive,
+          includeVideos: includeVideos,
+        );
+        return FolderScan(
+          [
+            for (final f in full.files)
+              if (!p.isWithin(sub.path, f.path)) f,
+          ],
+          unreadable: [ScanProblem(sub.path, 'Permission denied')],
+        );
+      }
+
+      final result = await LibraryRepository(
+        db,
+        scanner: partial,
+      ).refreshImport(importId, tmp.path);
+
+      expect(result.unavailable, isFalse);
+      expect(result.added, 1);
+      expect(result.removed, 0);
+      expect(result.unreadable, 1);
+      final names = (await repo.watchImport(importId).first)
+          .map((ph) => p.basename(ph.path))
+          .toSet();
+      expect(names, {'a.jpg', 'b.jpg', 'c.jpg'});
+    });
+
     test('preserves local edits on existing photos', () async {
       final meta = MetadataRepository(db);
       final metaRepo = LibraryRepository(db, metadata: meta);
@@ -306,11 +361,16 @@ void main() {
       await db.setRating(photo.id, 4);
 
       writeJpeg('new.jpg');
-      final (:added, :removed, changedPaths: _, unavailable: _) = await metaRepo
-          .refreshImport(
-            importId,
-            tmp.path,
-          );
+      final (
+        :added,
+        :removed,
+        changedPaths: _,
+        unavailable: _,
+        unreadable: _,
+      ) = await metaRepo.refreshImport(
+        importId,
+        tmp.path,
+      );
 
       expect(added, 1);
       expect(removed, 0);

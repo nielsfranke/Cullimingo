@@ -441,6 +441,15 @@ mixin _CullWorkspace on _CullGrid {
       );
       return;
     }
+    if (result.unreadable > 0) {
+      _notify(
+        'Refreshed: +${result.added} photo(s), but ${result.unreadable} '
+        "item(s) in the folder couldn't be read — nothing was removed. "
+        'Check the card or drive and its permissions.',
+        kind: NoticeKind.warning,
+      );
+      return;
+    }
     final upToDate =
         result.added == 0 && result.removed == 0 && result.changedPaths.isEmpty;
     _notify(
@@ -478,7 +487,9 @@ mixin _CullWorkspace on _CullGrid {
 
     final scanChanged =
         scan.added > 0 || scan.removed > 0 || scan.changedPaths.isNotEmpty;
-    if (!scanChanged && marks.isEmpty) return; // nothing changed → stay quiet
+    // A partial listing is worth a word even when nothing else changed: the
+    // folder holds files this session can't see.
+    if (!scanChanged && marks.isEmpty && scan.unreadable == 0) return;
 
     final parts = <String>[
       if (scanChanged) '+${scan.added} / −${scan.removed} file(s)',
@@ -487,9 +498,15 @@ mixin _CullWorkspace on _CullGrid {
     final conflicts = marks.conflicts > 0
         ? ' · ${marks.conflicts} conflict(s)'
         : '';
+    final unreadable = scan.unreadable > 0
+        ? "${parts.isEmpty ? '' : ' · '}${scan.unreadable} item(s) couldn't "
+              'be read'
+        : '';
     _notify(
-      'Synced ${parts.join(' · ')}$conflicts',
-      kind: marks.conflicts > 0 ? NoticeKind.warning : NoticeKind.success,
+      'Synced ${parts.join(' · ')}$conflicts$unreadable',
+      kind: marks.conflicts > 0 || scan.unreadable > 0
+          ? NoticeKind.warning
+          : NoticeKind.success,
     );
   }
 }

@@ -3,6 +3,14 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **Refreshing (⌘R) a folder that's only partly readable no longer removes
+  photos:** when part of the folder can't be read (a locked sub-folder, a
+  stalling card reader), new files are still picked up but nothing is
+  removed, and a warning says how many items couldn't be read.
+
 ## 1.3.5 — 2026-10-02
 
 ### Fixed

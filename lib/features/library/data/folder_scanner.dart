@@ -9,6 +9,7 @@ import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/raw/libraw_metadata.dart';
 import 'package:cullimingo/core/raw/libraw_preview_extractor.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_libraw/flutter_libraw.dart';
 import 'package:path/path.dart' as p;
 
@@ -100,29 +101,92 @@ class ScannedExif {
   final double? exposureTime;
 }
 
+/// Something a scan could not read: an unreadable folder or file, or a
+/// listing that stalled — with the OS [reason].
+class ScanProblem {
+  /// Creates a scan problem for [path].
+  const ScanProblem(this.path, this.reason);
+
+  /// The folder or file that couldn't be read (the root, for a stalled
+  /// listing).
+  final String path;
+
+  /// Why, as the OS reported it (e.g. "Permission denied").
+  final String reason;
+
+  @override
+  String toString() => '$path: $reason';
+}
+
+/// A folder scan: the matching [files] plus whatever [unreadable] kept out of
+/// them. A scan with problems is an *incomplete listing* — files may exist
+/// that it never saw — so it must never read as "the folder holds only these"
+/// (an import summary saying all OK, a refresh removing rows).
+class FolderScan {
+  /// Creates a scan result.
+  const FolderScan(this.files, {this.unreadable = const []});
+
+  /// Matching files found, sorted by path.
+  final List<ScannedFile> files;
+
+  /// Folders/files the scan couldn't read, in the order met.
+  final List<ScanProblem> unreadable;
+
+  /// Whether every entry under the root was read.
+  bool get complete => unreadable.isEmpty;
+}
+
 /// Fast pass: list [root] and `stat` each matching file — no EXIF decode, so it
 /// returns quickly and the grid can populate near-instantly. Runs on a one-off
 /// background isolate (§0.6, Phase 2 incremental scan).
 ///
 /// [recursive] walks sub-folders (default on). [includeVideos] also matches
 /// video files (for ingest; the cull grid keeps it off so it stays photo-only).
+/// Returns only the files; use [scanFolder] where an incomplete listing
+/// matters.
 Future<List<ScannedFile>> scanFolderFast(
+  String root, {
+  bool recursive = true,
+  bool includeVideos = false,
+}) async => (await scanFolder(
+  root,
+  recursive: recursive,
+  includeVideos: includeVideos,
+)).files;
+
+/// Signature of [scanFolder], injectable so tests can fake a partial scan.
+typedef FolderScanner =
+    Future<FolderScan> Function(
+      String root, {
+      bool recursive,
+      bool includeVideos,
+    });
+
+/// [scanFolderFast], also reporting what it couldn't read
+/// ([FolderScan.unreadable]).
+Future<FolderScan> scanFolder(
   String root, {
   bool recursive = true,
   bool includeVideos = false,
 }) {
   return Isolate.run(
-    () => _walk(root, recursive: recursive, includeVideos: includeVideos),
+    () => walkFolder(root, recursive: recursive, includeVideos: includeVideos),
   );
 }
 
-Future<List<ScannedFile>> _walk(
+/// The walk behind [scanFolder], on the calling isolate. [lister] stands in
+/// for `Directory.list` so tests can inject unreadable entries (tests run as
+/// root in Docker, where a `chmod 000` folder is still readable).
+@visibleForTesting
+Future<FolderScan> walkFolder(
   String root, {
   required bool recursive,
   required bool includeVideos,
+  Stream<FileSystemEntity> Function(Directory dir)? lister,
 }) async {
   final dir = Directory(root);
-  if (!dir.existsSync()) return const [];
+  if (!dir.existsSync()) return const FolderScan([]);
+  final unreadable = <ScanProblem>[];
 
   // Listed asynchronously (not `listSync`) so a stalled step (a failing SD
   // card/reader can block the underlying syscall for a long time) only stalls
@@ -133,15 +197,26 @@ Future<List<ScannedFile>> _walk(
   // whole walk: a recursive `list` THROWS a FileSystemException (e.g. a
   // macOS-protected `.Trashes` on a camera card → "Operation not permitted")
   // and, unguarded, that error escapes the isolate and the caller — hanging the
-  // "Scanning…" spinner forever. Swallowing it lets the walk finish over the
-  // real media files.
+  // "Scanning…" spinner forever. Skipping it lets the walk finish over the
+  // real media files — but each skip is *recorded*, not just logged: an import
+  // summary used to say all OK over a card folder it never read, and the card
+  // then got formatted.
   final entities = <FileSystemEntity>[];
+  final listing =
+      lister?.call(dir) ?? dir.list(recursive: recursive, followLinks: false);
   try {
-    await dir
-        .list(recursive: recursive, followLinks: false)
+    await listing
         .handleError(
-          (Object e) =>
-              appTalker.warning('Scan: skipping unreadable entry: $e'),
+          (Object e) {
+            appTalker.warning('Scan: skipping unreadable entry: $e');
+            final fse = e as FileSystemException;
+            unreadable.add(
+              ScanProblem(
+                fse.path ?? root,
+                fse.osError?.message ?? fse.message,
+              ),
+            );
+          },
           test: (e) => e is FileSystemException,
         )
         .timeout(_scanStallTimeout)
@@ -150,6 +225,9 @@ Future<List<ScannedFile>> _walk(
     appTalker.warning(
       'Folder scan of $root stalled (device unresponsive); continuing with '
       '${entities.length} entries found so far',
+    );
+    unreadable.add(
+      ScanProblem(root, 'listing stalled (device unresponsive)'),
     );
   }
 
@@ -178,6 +256,7 @@ Future<List<ScannedFile>> _walk(
       appTalker.warning(
         'Skipping ${e.path}: stat() stalled (device unresponsive)',
       );
+      unreadable.add(ScanProblem(e.path, 'stat stalled (device unresponsive)'));
       continue;
     }
     out.add(
@@ -196,7 +275,7 @@ Future<List<ScannedFile>> _walk(
     );
   }
   out.sort((a, b) => a.path.compareTo(b.path));
-  return out;
+  return FolderScan(out, unreadable: unreadable);
 }
 
 /// Lower-cased "stem" — directory + basename without extension — used to pair a
