@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.4.0 — 2026-10-04
 
 ### Changed
 - **Import date folders always follow the capture date in the photo's
