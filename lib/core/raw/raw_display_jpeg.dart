@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:ffi';
+import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:cullimingo/core/cache/vips.dart';
 import 'package:cullimingo/core/raw/libraw_preview_extractor.dart';
+import 'package:ffi/ffi.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_libraw/flutter_libraw.dart';
 
 /// A displayable JPEG for a RAW, and how it was produced.
@@ -35,12 +38,20 @@ class RawDisplayJpeg {
 ///
 /// Returns `null` only when there is nothing at all to show. [quality] is the
 /// demosaic's JPEG Q (libvips' default when null).
+///
+/// [cache], when given, keeps the last demosaiced bitmap so another tier of
+/// the same file is re-encoded from it instead of demosaiced again (GitHub
+/// #7). [onDemosaic] is called just before a real LibRaw demosaic starts (not
+/// on a cache hit) — the preview pool uses it to give that job the long
+/// watchdog budget (GitHub #5).
 Future<RawDisplayJpeg?> rawDisplayJpeg(
   FlutterLibRawBindings lr,
   String path, {
   required int longEdge,
   required Vips? Function() vips,
   int? quality,
+  DemosaicCache? cache,
+  void Function()? onDemosaic,
 }) async {
   final embedded = extractRawPreview(lr, path);
   if (embedded != null && embedded.isUsable) {
@@ -54,6 +65,8 @@ Future<RawDisplayJpeg?> rawDisplayJpeg(
       vips: v,
       longEdge: longEdge,
       quality: quality,
+      cache: cache,
+      onDemosaic: onDemosaic,
     );
     if (rendered != null) return RawDisplayJpeg(rendered, demosaiced: true);
   }
@@ -68,8 +81,41 @@ Future<Uint8List?> _demosaicJpeg(
   required Vips vips,
   required int longEdge,
   int? quality,
+  DemosaicCache? cache,
+  void Function()? onDemosaic,
 }) async {
+  Uint8List? encode(Pointer<Uint8> pixels, int byteLength, int w, int h) {
+    final nativeEdge = math.max(w, h);
+    return vips.thumbnailRgbPointer(
+      pixels,
+      byteLength: byteLength,
+      width: w,
+      height: h,
+      channels: 3,
+      // Never upscale: a half-size decode smaller than the tier stays native.
+      longEdge: longEdge > 0 ? math.min(longEdge, nativeEdge) : nativeEdge,
+      quality: quality,
+    );
+  }
+
+  final key = cache == null ? null : DemosaicKey.of(path);
+  final hit = key == null ? null : cache!.lookup(key, longEdge: longEdge);
+  if (hit != null) {
+    // libvips needs native memory; the cached copy lives on the Dart heap so a
+    // killed worker can't leak it. One memcpy is far cheaper than a demosaic.
+    final length = hit.pixels.length;
+    final input = malloc<Uint8>(length);
+    try {
+      input.asTypedList(length).setAll(0, hit.pixels);
+      return encode(input, length, hit.width, hit.height);
+    } finally {
+      malloc.free(input);
+    }
+  }
+
+  onDemosaic?.call();
   final token = _DataErrors.instance.newToken();
+  CachedDemosaic? decoded;
   final jpeg = processRawBitmap<Uint8List>(
     lr,
     path,
@@ -77,25 +123,155 @@ Future<Uint8List?> _demosaicJpeg(
     dataErrorHandler: _DataErrors.instance.callback,
     dataErrorData: Pointer<Void>.fromAddress(token),
     consume: (pixels, byteLength, width, height, channels) {
-      final nativeEdge = math.max(width, height);
-      // Never upscale: a half-size decode smaller than the tier stays native.
-      final targetEdge = longEdge > 0
-          ? math.min(longEdge, nativeEdge)
-          : nativeEdge;
-      return vips.thumbnailRgbPointer(
-        pixels,
-        byteLength: byteLength,
-        width: width,
-        height: height,
-        channels: channels,
-        longEdge: targetEdge,
-        quality: quality,
-      );
+      // The pointer dies with this call, so copy now if it's worth keeping;
+      // it's only stored once the decode is known not to be corrupt.
+      if (key != null && channels == 3 && byteLength <= cache!.maxBytes) {
+        decoded = CachedDemosaic(
+          key,
+          Uint8List.fromList(pixels.asTypedList(byteLength)),
+          width: width,
+          height: height,
+          fullResolution: longEdge <= 0,
+        );
+      }
+      return encode(pixels, byteLength, width, height);
     },
   );
   // Always collect the token, even on failure, so the set can't grow.
   final corrupt = await _DataErrors.instance.reported(token);
-  return corrupt ? null : jpeg;
+  if (corrupt || jpeg == null) return null;
+  final keep = decoded;
+  if (keep != null) cache!.store(keep);
+  return jpeg;
+}
+
+/// Identifies one version of a RAW on disk: path + size + mtime, like the
+/// preview cache's key (no file content is read).
+@immutable
+class DemosaicKey {
+  /// Creates a key from its parts.
+  const DemosaicKey(this.path, this.size, this.modifiedMs);
+
+  /// The key for the file at [path] as it is now; `null` if it can't be read.
+  static DemosaicKey? of(String path) {
+    try {
+      final stat = File(path).statSync();
+      if (stat.type == FileSystemEntityType.notFound) return null;
+      return DemosaicKey(path, stat.size, stat.modified.millisecondsSinceEpoch);
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Absolute path of the RAW.
+  final String path;
+
+  /// File size in bytes.
+  final int size;
+
+  /// Modification time, ms since the epoch.
+  final int modifiedMs;
+
+  @override
+  bool operator ==(Object other) =>
+      other is DemosaicKey &&
+      other.path == path &&
+      other.size == size &&
+      other.modifiedMs == modifiedMs;
+
+  @override
+  int get hashCode => Object.hash(path, size, modifiedMs);
+}
+
+/// One demosaiced 8-bit RGB bitmap, as LibRaw produced it (already upright).
+class CachedDemosaic {
+  /// Wraps [pixels] (width × height × 3 bytes) decoded from [key].
+  CachedDemosaic(
+    this.key,
+    this.pixels, {
+    required this.width,
+    required this.height,
+    required this.fullResolution,
+  });
+
+  /// The file version this was decoded from.
+  final DemosaicKey key;
+
+  /// Interleaved RGB, 3 bytes per pixel.
+  final Uint8List pixels;
+
+  /// Bitmap width in pixels.
+  final int width;
+
+  /// Bitmap height in pixels.
+  final int height;
+
+  /// Whether this is a full-tier decode (never LibRaw's half-size mode), so
+  /// it can serve the full tier too.
+  final bool fullResolution;
+
+  /// Whether this bitmap renders a [longEdge] request (0 = full tier) as well
+  /// as a fresh decode would.
+  bool covers(int longEdge) =>
+      longEdge <= 0 ? fullResolution : math.max(width, height) >= longEdge;
+}
+
+/// A single-entry, short-lived cache of the last demosaic, one per preview
+/// worker (GitHub #7).
+///
+/// The grid, loupe and full tiers each ask for the same RAW separately, and
+/// for a RAW without a usable embedded JPEG each ask used to repeat
+/// `open + unpack + dcraw_process` (up to a second or more on 24–45 MP). The
+/// grid and loupe tiers usually share one half-size decode, so keeping that
+/// bitmap a few seconds turns the second ask into a downscale.
+///
+/// Memory is bounded explicitly: one entry, at most [maxBytes] (bigger decodes
+/// — a full-sensor 45 MP bitmap is ~135 MB — are never kept), dropped after
+/// [ttl] so an idle worker holds nothing.
+class DemosaicCache {
+  /// Creates an empty cache.
+  DemosaicCache({
+    this.maxBytes = defaultMaxBytes,
+    this.ttl = const Duration(seconds: 20),
+  });
+
+  /// Default size cap: a half-size decode of a ~60 MP sensor still fits.
+  static const int defaultMaxBytes = 64 * 1024 * 1024;
+
+  /// Largest bitmap kept, in bytes.
+  final int maxBytes;
+
+  /// How long an entry lives after it was stored.
+  final Duration ttl;
+
+  CachedDemosaic? _entry;
+  Timer? _expiry;
+
+  /// The path of the cached decode, if any — the pool routes later tiers of
+  /// that file to this worker.
+  String? get path => _entry?.key.path;
+
+  /// The cached bitmap for [key] if it can serve [longEdge], else `null`.
+  CachedDemosaic? lookup(DemosaicKey key, {required int longEdge}) {
+    final entry = _entry;
+    if (entry == null || entry.key != key) return null;
+    return entry.covers(longEdge) ? entry : null;
+  }
+
+  /// Keeps [entry] (replacing any previous one) unless it exceeds [maxBytes].
+  void store(CachedDemosaic entry) {
+    if (entry.pixels.length > maxBytes) return;
+    _expiry?.cancel();
+    _entry = entry;
+    _expiry = Timer(ttl, clear);
+  }
+
+  /// Drops the cached bitmap.
+  void clear() {
+    _expiry?.cancel();
+    _expiry = null;
+    _entry = null;
+  }
 }
 
 /// Collects LibRaw data-error reports for this isolate.
