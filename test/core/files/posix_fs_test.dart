@@ -10,6 +10,52 @@ void main() {
   setUp(() async => tmp = await Directory.systemTemp.createTemp('posix_fs'));
   tearDown(() async => tmp.delete(recursive: true));
 
+  group('publishWithLock (no atomic no-replace call, e.g. macOS exFAT)', () {
+    File lockFor(String to) =>
+        File(p.join(p.dirname(to), '.${p.basename(to)}.publish'));
+
+    test('publishes a free name and releases the lock', () {
+      final from = File(p.join(tmp.path, 'from'))..writeAsStringSync('a');
+      final to = p.join(tmp.path, 'to');
+
+      expect(publishWithLock(from.path, to), PublishOutcome.published);
+      expect(File(to).readAsStringSync(), 'a');
+      expect(lockFor(to).existsSync(), isFalse);
+    });
+
+    test('never replaces an existing file', () {
+      final from = File(p.join(tmp.path, 'from'))..writeAsStringSync('new');
+      final to = File(p.join(tmp.path, 'to'))..writeAsStringSync('old');
+
+      expect(publishWithLock(from.path, to.path), PublishOutcome.taken);
+      expect(to.readAsStringSync(), 'old');
+      expect(from.existsSync(), isTrue);
+    });
+
+    test('a publish in progress elsewhere makes the name taken', () {
+      final from = File(p.join(tmp.path, 'from'))..writeAsStringSync('a');
+      final to = p.join(tmp.path, 'to');
+      final lock = lockFor(to)..createSync(); // another copy, mid-publish
+
+      expect(publishWithLock(from.path, to), PublishOutcome.taken);
+      expect(File(to).existsSync(), isFalse);
+      expect(lock.existsSync(), isTrue, reason: 'not ours to remove');
+    });
+
+    test("a crash's stale lock is cleared", () {
+      final from = File(p.join(tmp.path, 'from'))..writeAsStringSync('a');
+      final to = p.join(tmp.path, 'to');
+      lockFor(to)
+        ..createSync()
+        ..setLastModifiedSync(
+          DateTime.now().subtract(kPublishLockStale * 2),
+        );
+
+      expect(publishWithLock(from.path, to), PublishOutcome.published);
+      expect(lockFor(to).existsSync(), isFalse);
+    });
+  });
+
   group('publishNoReplace', () {
     test('gives the file its name and removes the old one', () {
       final from = File(p.join(tmp.path, 'from'))..writeAsStringSync('a');

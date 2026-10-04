@@ -68,9 +68,12 @@ final _RenamexNpD? _renamexNp =
 /// land. So: `link(2)`, which fails rather than replace and works on every
 /// POSIX filesystem with hard links; then an atomic no-replace rename for
 /// filesystems without hard links (exFAT/FAT camera cards and drives, some
-/// SMB shares); only if both are refused, a check-then-rename. errno isn't
-/// read (the Dart VM may clobber it between the call and the read) — whether
-/// the name is taken is asked of the filesystem instead.
+/// SMB shares); only if both are refused, [publishWithLock]. Measured: Linux
+/// refuses `link` on exFAT and vfat but honours `renameat2` there; macOS
+/// honours `renamex_np` on FAT32 but refuses both on exFAT — the usual
+/// format of a Mac's external drives — so that's where the lock runs. errno
+/// isn't read (the Dart VM may clobber it between the call and the read) —
+/// whether the name is taken is asked of the filesystem instead.
 PublishOutcome publishNoReplace(String from, String to) {
   if (_exists(to)) return PublishOutcome.taken;
   final f = from.toNativeUtf8();
@@ -97,15 +100,62 @@ PublishOutcome publishNoReplace(String from, String to) {
     }
     if (_exists(to)) return PublishOutcome.taken;
 
-    // Last resort for filesystems refusing both (a narrow race remains here,
-    // but only where the OS offers nothing better).
-    File(from).renameSync(to);
-    return PublishOutcome.published;
+    return publishWithLock(from, to);
   } finally {
     malloc
       ..free(f)
       ..free(t);
   }
+}
+
+/// How old a publish lock must be before it's taken for a crash's leftover.
+/// Publishing is a check and a rename — milliseconds — so a minute is ample.
+const Duration kPublishLockStale = Duration(minutes: 1);
+
+/// [publishNoReplace] for a filesystem with no atomic no-replace call: a
+/// check-then-rename, serialised by a hidden lock file beside [to].
+///
+/// The lock (`.<name>.publish`) is created exclusively — which exFAT does
+/// support — so two Cullimingo copies racing for one name (two handoffs into
+/// the same folder) can't both pass the check: the second finds the lock and
+/// reports the name taken, and its caller compares the files as usual. A lock
+/// a crash left behind is cleared once it's [kPublishLockStale]. Writers other
+/// than Cullimingo don't take the lock, so against them a narrow window
+/// remains — only where the OS offers nothing better.
+PublishOutcome publishWithLock(String from, String to) {
+  final lock = File(p.join(p.dirname(to), '.${p.basename(to)}.publish'));
+  if (!_claim(lock)) return PublishOutcome.taken;
+  try {
+    if (_exists(to)) return PublishOutcome.taken;
+    File(from).renameSync(to);
+    return PublishOutcome.published;
+  } finally {
+    try {
+      lock.deleteSync();
+    } on Object {
+      // A stray lock only delays this name for [kPublishLockStale].
+    }
+  }
+}
+
+// Takes [lock] exclusively; a stale one (a crash's) is removed and retried
+// once. False: another publish of this name is in progress.
+bool _claim(File lock) {
+  for (var attempt = 0; attempt < 2; attempt++) {
+    try {
+      lock.createSync(exclusive: true);
+      return true;
+    } on FileSystemException {
+      try {
+        final age = DateTime.now().difference(lock.lastModifiedSync());
+        if (age < kPublishLockStale) return false;
+        lock.deleteSync();
+      } on FileSystemException {
+        // Vanished meanwhile (its publish finished): just retry.
+      }
+    }
+  }
+  return false;
 }
 
 // Anything at all at [path] — including a dangling symlink, which
