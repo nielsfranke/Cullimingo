@@ -62,8 +62,10 @@ packages/
   `unmountedDriveFor` still refuses a root under `/Volumes` / `/media` /
   `/run/media` whose path resolves to a volume outside that folder, and (Linux)
   one under an `/etc/fstab` mount point missing from mountinfo; `/mnt` is
-  judged by fstab only. Each run first sweeps stale part files (ctime > 1 h,
-  exact `kPartFileName` pattern) from its destination folders,
+  judged by fstab only. Each run first sweeps stale part files (created > 1 h
+  ago by the epoch seconds in their name — file times can't tell: a copy
+  backdates its part's mtime and exFAT/FAT have no real ctime — exact
+  `kPartFileName` pattern) from its destination folders,
   non-recursively, on an isolate alongside the copies (`part_cleanup.dart`).
   The import's backup root is
   always verified. Volume info is libc FFI (`posix_fs.dart`): `statfs` on

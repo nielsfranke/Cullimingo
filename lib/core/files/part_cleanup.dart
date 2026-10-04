@@ -4,14 +4,19 @@ import 'dart:isolate';
 import 'package:cullimingo/core/files/verified_copy.dart';
 import 'package:path/path.dart' as p;
 
-/// Exactly the names [partPathFor] produces: `.<name>.<12 hex>.part`. Nothing
-/// else — not a user's `photo.part`, not `.x.part` — is ever touched.
-final RegExp kPartFileName = RegExp(r'^\..+\.[0-9a-f]{12}\.part$');
+/// Exactly the names [partPathFor] produces:
+/// `.<name>.<12 hex>.<epoch seconds>.part` (group 1: the creation time).
+/// Nothing else — not a user's `photo.part`, not `.x.part` — is ever touched.
+final RegExp kPartFileName = RegExp(
+  r'^\..+\.[0-9a-f]{12}\.([0-9]{9,12})\.part$',
+);
 
-/// How long a part file must have gone untouched (its status-change time)
-/// before it counts as left behind. A copy in flight keeps touching its part
-/// file, so an hour-idle one belongs to a run that crashed or was killed —
-/// never to a concurrent run.
+/// How long ago a part file must have been created (the time in its name)
+/// before it counts as left behind. A copy publishes its part file within
+/// seconds to minutes, so an hour-old one belongs to a run that crashed or
+/// was killed — never to a concurrent run. File times aren't used: a copy
+/// sets its part file's mtime to the capture date, and exFAT/FAT keep no
+/// separate ctime, so a live part file there looks years old.
 const Duration kStalePartAge = Duration(hours: 1);
 
 /// Deletes stale part files ([kPartFileName], older than [olderThan]) directly
@@ -35,17 +40,15 @@ int removeStalePartFilesSync(
     }
     for (final entry in entries) {
       if (entry is! File) continue;
-      final name = p.basename(entry.path);
-      if (!kPartFileName.hasMatch(name)) continue;
+      final match = kPartFileName.firstMatch(p.basename(entry.path));
+      if (match == null) continue;
+      final created = DateTime.fromMillisecondsSinceEpoch(
+        int.parse(match[1]!) * 1000,
+      );
+      if (!created.isBefore(cutoff)) continue;
       try {
-        // ctime, not mtime: a copy sets its part file's mtime back to the
-        // photo's capture date just before publishing it, which would make
-        // a live part file look ancient. Every write and that very mtime
-        // change bump ctime to now.
-        if (entry.statSync().changed.isBefore(cutoff)) {
-          entry.deleteSync();
-          removed++;
-        }
+        entry.deleteSync();
+        removed++;
       } on FileSystemException {
         // Best effort: gone already, or not ours to delete.
       }

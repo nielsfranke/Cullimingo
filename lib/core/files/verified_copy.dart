@@ -298,15 +298,23 @@ const String kPartFileSuffix = '.part';
 
 final Random _partRandom = Random.secure();
 
-/// A fresh hidden part-file path beside [dest]: `.<name>.<random>.part`. The
-/// random tag keeps concurrent copies of the same name (two handoffs into one
-/// folder) in separate files.
-String partPathFor(String dest) {
+/// A fresh hidden part-file path beside [dest]:
+/// `.<name>.<12 hex random>.<epoch seconds>.part`. The random tag keeps
+/// concurrent copies of the same name (two handoffs into one folder) in
+/// separate files; the creation time in the name is what the leftover sweep
+/// (`part_cleanup.dart`) judges age by — file times can't be trusted for
+/// that: a copy sets its part file's mtime to the capture date, and exFAT and
+/// FAT keep no separate ctime.
+String partPathFor(String dest, {DateTime? now}) {
   final tag = List.generate(
     6,
     (_) => _partRandom.nextInt(256).toRadixString(16).padLeft(2, '0'),
   ).join();
-  return p.join(p.dirname(dest), '.${p.basename(dest)}.$tag$kPartFileSuffix');
+  final created = (now ?? DateTime.now()).millisecondsSinceEpoch ~/ 1000;
+  return p.join(
+    p.dirname(dest),
+    '.${p.basename(dest)}.$tag.$created$kPartFileSuffix',
+  );
 }
 
 /// Streams [src] once, writing every chunk to each of [parts] — each created
