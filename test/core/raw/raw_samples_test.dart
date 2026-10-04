@@ -21,6 +21,10 @@ import 'package:path/path.dart' as p;
 /// - `embedded`: the camera's own embedded JPEG (the fast path);
 /// - `none`: nothing — e.g. Nikon HE/HE* files LibRaw can't decode, which must
 ///   never come back as a demosaiced noise frame;
+/// - `thumbnail-or-none`: never a demosaic, but the embedded JPEG — however
+///   small — is fine. For files where LibRaw versions differ only in which
+///   thumbnail they find: 0.22 extracts the Nikon Z 8 HE* NEF's 160×120 JPEG,
+///   0.21 picks an undecodable sub-image and yields nothing;
 /// - `heif`: not a RAW — a HEIF/HIF that [Vips.thumbnail] must decode at both
 ///   grid and loupe sizes (e.g. a Sony `.HIF` whose embedded thumbnails some
 ///   libheif builds can't decode, #10).
@@ -92,6 +96,8 @@ void main() {
         case 'embedded':
           expect(out, isNotNull);
           expect(out!.demosaiced, isFalse);
+        case 'thumbnail-or-none':
+          expect(out?.demosaiced ?? false, isFalse, reason: 'noise frame');
         case 'none':
           expect(out?.demosaiced ?? false, isFalse, reason: 'noise frame');
           expect(out, isNull);

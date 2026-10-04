@@ -112,3 +112,27 @@ Release notes carry the install steps (chmod for Linux; drag + `xattr -cr` for
 macOS). Run it without cutting a tag via the **workflow_dispatch** trigger — it
 builds both and leaves them as downloadable run artifacts (no Release). The
 published Release is what the in-app update check reads.
+
+### Before tagging
+
+1. Run the real-sample check (`test/core/raw/raw_samples_test.dart`) against
+   the samples folder, on the same LibRaw the release links — Homebrew's for
+   the `.dmg` (`CULLIMINGO_LIBRAW=$(brew --prefix libraw)/lib/libraw.dylib`):
+
+   ```sh
+   CULLIMINGO_SAMPLES=~/.cache/cullimingo/samples \
+     flutter test test/core/raw/raw_samples_test.dart
+   ```
+
+   Real camera files (HLG/HE* NEFs, an SDR NEF, a Sony HIF, …) never go into
+   the repo; the test is skipped without `CULLIMINGO_SAMPLES`. Its doc comment
+   lists the `expectations.json` values. Do the same **before any LibRaw
+   upgrade** (a `brew upgrade` changes what the next `.dmg` bundles): a new
+   LibRaw can pick a different embedded thumbnail or decode what it used to
+   refuse, and only real files show it.
+2. Date the `## Unreleased` section of `CHANGELOG.md` with the version — the
+   Release notes are extracted from `## <version>`.
+3. Bump `version:` in `pubspec.yaml`, run `dart run tool/gen_version.dart`,
+   commit `chore(release): X.Y.Z`, push `main`, then push the single `vX.Y.Z`
+   tag (never several tags in one push: GitHub drops the events and no
+   release runs).
