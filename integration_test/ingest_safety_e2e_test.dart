@@ -33,8 +33,11 @@ void main() {
   });
   tearDown(() => scratch.deleteSync(recursive: true));
 
-  /// Pre-fills the destination the dialog loads (the picker can't be driven).
+  /// Pre-fills the destination the dialog loads (the picker can't be driven),
+  /// creating it: a destination that doesn't exist is refused as a drive
+  /// that's gone.
   Future<void> useDestination(String dest) async {
+    Directory(dest).createSync(recursive: true);
     final dir = await getApplicationSupportDirectory();
     dir.createSync(recursive: true);
     File(
@@ -43,13 +46,18 @@ void main() {
   }
 
   /// A camera card under [root]: `<name>/DCIM` with [count] JPEG-named files
-  /// of [bytes] each (content is irrelevant to the copy).
+  /// of [bytes] each (content is irrelevant to the copy). Dated an hour ago,
+  /// like real shots: a file written moments before is held back as still
+  /// being written.
   Directory card(String root, String name, int count, {int bytes = 16}) {
     final dcim = Directory(p.join(root, name, 'DCIM'))
       ..createSync(recursive: true);
     final data = Uint8List(bytes);
+    final shotAt = DateTime.now().subtract(const Duration(hours: 1));
     for (var i = 0; i < count; i++) {
-      File(p.join(dcim.path, 'IMG_$i.JPG')).writeAsBytesSync(data);
+      File(p.join(dcim.path, 'IMG_$i.JPG'))
+        ..writeAsBytesSync(data)
+        ..setLastModifiedSync(shotAt);
     }
     return Directory(p.join(root, name));
   }
@@ -187,7 +195,7 @@ void main() {
   );
 
   testWidgets(
-    'a full destination fails the overflow cleanly instead of hanging',
+    'a destination without room is refused before anything is copied',
     (tester) async {
       final small = Platform.environment['SMALL_FS'];
       if (small == null) {
@@ -205,18 +213,15 @@ void main() {
       await waitFor(tester, find.text('Import 8 photos'));
 
       await tester.tap(find.text('Import 8 photos'));
-      // It used to sit on "Importing…" forever.
-      await waitFor(tester, find.text('Import finished with issues'));
+      // It used to start, fill the disk and fail the overflow (before 1.3.5:
+      // sit on "Importing…" forever). Now it doesn't start at all.
+      await waitFor(tester, find.textContaining('Not enough space'));
 
-      expect(stat(tester, 'Failed'), greaterThan(0));
-      final files = Directory(
-        small,
-      ).listSync(recursive: true).whereType<File>().toList();
-      expect(stat(tester, 'Copied & verified'), files.length);
-      // No truncated partial copies left behind.
-      for (final f in files) {
-        expect(f.lengthSync(), fileBytes, reason: f.path);
-      }
+      expect(find.text('Import 8 photos'), findsOneWidget);
+      expect(
+        Directory(small).listSync(recursive: true).whereType<File>(),
+        isEmpty,
+      );
     },
   );
 }

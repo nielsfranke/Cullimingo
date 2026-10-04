@@ -10,6 +10,9 @@ All notable user-facing changes to Cullimingo. The format loosely follows
   EXIF**, not only when `{camera}` is in the naming template. The file date
   is used only when a file has no valid capture date. Scanning a card reads
   a little more, in the background.
+- **The import's backup copy is always verified.** The checksum checkbox now
+  only governs the main destination; the backup is read back regardless,
+  since a bad backup is otherwise found out on the day it's needed.
 
 ### Fixed
 - **HEIC and Sony HIF photos open on Linux:** the AppImage shipped without an
@@ -36,6 +39,32 @@ All notable user-facing changes to Cullimingo. The format loosely follows
   photos:** when part of the folder can't be read (a locked sub-folder, a
   stalling card reader), new files are still picked up but nothing is
   removed, and a warning says how many items couldn't be read.
+  ([#9](https://github.com/nielsfranke/Cullimingo/issues/9))
+- **An interrupted copy no longer leaves half a photo under its real name:**
+  import and handoff write each copy to a hidden `.part` file, verify it
+  there, and only then give it its name — never replacing a file that's
+  already there. A crash or a dropped drive used to leave a truncated file
+  that the next import called a conflict and kept, so that photo never
+  arrived. A symlink at the destination can no longer redirect a copy
+  elsewhere, and two handoffs into one folder can't truncate or delete each
+  other's files.
+- **Files still being written are held back:** a file changed in the last
+  few seconds (a tether, a sync tool, a camera still writing over USB) is
+  no longer copied while it's momentarily idle. The summary lists it as
+  "still being written"; import again once it has settled.
+- **A drive or network share that stops responding no longer freezes the
+  import:** a copy that makes no progress for a minute is given up on and
+  listed as failed, and Cancel ends the run within a few seconds even when
+  a copy is stuck (that file is listed as "cancelled mid-copy").
+- **An unplugged destination drive is no longer filled in from the system
+  disk:** Cullimingo remembers which drive a destination folder lives on
+  and refuses to import or hand off into it when that drive isn't mounted
+  — including the empty mount-point folder an unplugged drive leaves
+  behind on Linux. A destination folder that has vanished is never
+  recreated. If a folder really moved, choose it again.
+- **Not enough room? The import doesn't start:** free space is checked per
+  drive before anything is copied (main and backup on one drive add up;
+  files already there don't count), instead of failing part-way through.
   ([#9](https://github.com/nielsfranke/Cullimingo/issues/9))
 
 ## 1.3.5 — 2026-10-02

@@ -46,6 +46,22 @@ packages/
   rotate rewrites EXIF (new mtime), a RAW rotate is a widget-layer turn.
   Decode-once, reuse.
 
+- **Copy pipeline** (import + handoff, `core/files/`): `verifiedCopy` writes
+  each copy to a hidden `.<name>.<random>.part` (O_EXCL), flushes and
+  verifies it there, then publishes it with `publishNoReplace` (`link(2)`,
+  else `renameat2`/`renamex_np` no-replace, else a checked rename) — a final
+  name is never replaced and never holds a partial file. Sources modified
+  within `kSourceQuietPeriod` are held back (`sourceBusy`). The app's copies
+  run through `watchedCopy`: own isolate, progress heartbeat, killed after
+  `kCopyStallTimeout` without progress or when the run abandons it (Cancel
+  grace in `runIngest`, listener cancel in `runTransfer`). Before a run,
+  `checkDestinations` refuses a destination whose remembered volume (mount
+  point, `AppSettings.destinationVolumes`) isn't the one it now resolves to,
+  a vanished import root, and too little free space per filesystem; its
+  mount points become per-copy volume guards. The import's backup root is
+  always verified. Volume info is libc FFI (`posix_fs.dart`): `statfs` on
+  macOS, `/proc/self/mountinfo` + `statvfs` on Linux, 64-bit layouts only.
+
 ## Deviations from BUILD_PLAN.md (keep this list honest)
 - **Missing/tiny-preview RAW fallback:** embedded JPEGs remain the normal fast
   path, including previews smaller than the current loupe tier. When a RAW has

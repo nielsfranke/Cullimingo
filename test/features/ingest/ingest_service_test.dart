@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:cullimingo/core/files/verified_copy.dart';
+import 'package:cullimingo/core/files/watched_copy.dart';
 import 'package:cullimingo/core/naming/rename_template.dart';
 import 'package:cullimingo/features/ingest/data/ingest_service.dart';
 import 'package:cullimingo/features/library/data/folder_scanner.dart';
@@ -277,6 +278,7 @@ void main() {
         required String source,
         required List<String> destinations,
         bool verify = true,
+        Set<String> alwaysVerify = const {},
       }) async {
         if (source == xmp.path) {
           return CopyResult(
@@ -316,6 +318,7 @@ void main() {
         required String source,
         required List<String> destinations,
         bool verify = true,
+        Set<String> alwaysVerify = const {},
       }) async {
         if (source.endsWith('a')) throw const FileSystemException('ENOSPC');
         return CopyResult(source: source, outcome: CopyOutcome.copied);
@@ -350,6 +353,7 @@ void main() {
         required String source,
         required List<String> destinations,
         bool verify = true,
+        Set<String> alwaysVerify = const {},
       }) async {
         started++;
         await release.future;
@@ -393,6 +397,81 @@ void main() {
 
       final summary = IngestSummary([for (final t in ticks) t.last]);
       expect(summary.failed, 1);
+      expect(summary.allOk, isFalse);
+    });
+
+    test('cancel ends the run even when a copy never returns', () async {
+      Future<CopyResult> hang({
+        required String source,
+        required List<String> destinations,
+        bool verify = true,
+        Set<String> alwaysVerify = const {},
+      }) => Completer<CopyResult>().future; // a dropped NAS
+
+      var cancelled = false;
+      final ticks = <IngestProgress>[];
+      final run = runIngest(
+        plan: const IngestPlan([
+          IngestItem(source: '/nas/a.arw', relPath: 'a.arw'),
+          IngestItem(source: '/nas/b.arw', relPath: 'b.arw'),
+        ]),
+        destinationRoots: ['/out'],
+        copier: hang,
+        concurrency: 1,
+        shouldStop: () => cancelled,
+        cancelGrace: const Duration(milliseconds: 100),
+      ).forEach(ticks.add);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      cancelled = true;
+
+      await run.timeout(const Duration(seconds: 5));
+
+      expect(ticks, hasLength(1), reason: 'b.arw never started');
+      expect(ticks.single.last.outcome, CopyOutcome.error);
+      expect(ticks.single.last.message, kCopyAbandonedMessage);
+    });
+
+    test('the backup is always verified, even with verify off', () async {
+      final calls = <({bool verify, Set<String> always})>[];
+      Future<CopyResult> spy({
+        required String source,
+        required List<String> destinations,
+        bool verify = true,
+        Set<String> alwaysVerify = const {},
+      }) async {
+        calls.add((verify: verify, always: alwaysVerify));
+        return CopyResult(source: source, outcome: CopyOutcome.copied);
+      }
+
+      await runIngest(
+        plan: const IngestPlan([
+          IngestItem(
+            source: '/card/a.arw',
+            relPath: 'a.arw',
+            companions: [(source: '/card/a.xmp', relPath: 'a.xmp')],
+          ),
+        ]),
+        destinationRoots: ['/main', '/backup'],
+        verify: false,
+        copier: spy,
+      ).toList();
+
+      expect(calls, hasLength(2)); // the photo and its sidecar
+      for (final c in calls) {
+        expect(c.verify, isFalse);
+        expect(c.always, hasLength(1));
+        expect(c.always.single, startsWith('/backup'));
+      }
+    });
+
+    test('summary keeps files still being written apart from failures', () {
+      const summary = IngestSummary([
+        CopyResult(source: '/c/a', outcome: CopyOutcome.copied),
+        CopyResult(source: '/c/b', outcome: CopyOutcome.sourceBusy),
+      ]);
+
+      expect(summary.stillBeingWritten, 1);
+      expect(summary.failed, 0);
       expect(summary.allOk, isFalse);
     });
   });

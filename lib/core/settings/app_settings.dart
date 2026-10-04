@@ -69,6 +69,19 @@ class AppSettings {
   Future<void> setLastDestination(String path) =>
       _setAll({'lastDestination': path});
 
+  /// The volume each chosen destination folder lived on when it was picked
+  /// (folder → mount point). A run refuses a destination whose volume is no
+  /// longer the one it sits on — an unplugged drive's empty mount point.
+  Map<String, String> get destinationVolumes =>
+      (_data['destinationVolumes'] as Map<String, dynamic>?)
+          ?.cast<String, String>() ??
+      const {};
+
+  /// Remembers that destination [path] lives on the volume at [mountPoint].
+  Future<void> setDestinationVolume(String path, String mountPoint) => _setAll({
+    'destinationVolumes': {...destinationVolumes, path: mountPoint},
+  });
+
   /// The last window size, or `null` if never saved (record kept Flutter-free).
   ({double width, double height})? get windowSize {
     final w = _data['windowWidth'];
