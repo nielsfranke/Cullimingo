@@ -22,8 +22,9 @@ class _Job {
   final CancelToken? cancel;
 }
 
-/// Tag of the worker → pool message `[tag, jobId]` sent when a job enters the
-/// slow LibRaw demosaic fallback (see [PreviewPool.slowJobTimeout]).
+/// Tag of the worker → pool message `[tag, jobId]` sent when a job enters a
+/// slow decode — the LibRaw demosaic fallback or a HEIF (see
+/// [PreviewPool.slowJobTimeout]).
 @visibleForTesting
 const String previewPoolDemosaicTag = 'demosaic';
 
@@ -75,9 +76,10 @@ class PreviewPool implements PreviewExtractor {
   /// video poster — takes milliseconds, so a hung one is reclaimed quickly.
   final Duration fastJobTimeout;
 
-  /// The budget a job gets once its worker announces the LibRaw demosaic
-  /// fallback, which can legitimately take much longer on a slow external
-  /// drive. Counted from the announcement (GitHub #5).
+  /// The budget a job gets once its worker announces a slow decode — the
+  /// LibRaw demosaic fallback, or a HEIF that may need a full HEVC decode —
+  /// which can legitimately take much longer on a slow external drive or CPU.
+  /// Counted from the announcement (GitHub #5).
   final Duration slowJobTimeout;
 
   // Live workers by id, with the reverse port→id map filled at registration —
@@ -359,7 +361,7 @@ void _previewWorkerMain(List<Object?> init) {
         libraw,
         vips,
         demosaics,
-        onDemosaic: () => toMain.send([previewPoolDemosaicTag, id]),
+        onSlowDecode: () => toMain.send([previewPoolDemosaicTag, id]),
       );
     } on Object {
       bytes = null;
@@ -388,7 +390,7 @@ Future<Uint8List?> _extractInWorker(
   FlutterLibRawBindings? libraw,
   Vips? vips,
   DemosaicCache demosaics, {
-  required void Function() onDemosaic,
+  required void Function() onSlowDecode,
 }) async {
   // Videos: grab a poster frame via the OS (QuickLook), never load the whole
   // file. Returns null (→ placeholder) when no frame can be produced.
@@ -408,12 +410,15 @@ Future<Uint8List?> _extractInWorker(
       longEdge: longEdge,
       vips: () => vips,
       cache: demosaics,
-      onDemosaic: onDemosaic,
+      onDemosaic: onSlowDecode,
     );
     if (raw == null) return null;
     if (raw.demosaiced || longEdge <= 0) return raw.bytes;
     source = raw.bytes;
   } else {
+    // A HEIF may need a full HEVC decode (see `Vips.thumbnail`), which can
+    // outlast the short watchdog on a big file and a slow CPU (#10).
+    if (isHeifPath(path)) onSlowDecode();
     // Full-resolution request: the original bitmap, undownscaled.
     if (longEdge <= 0) return _extractFull(path, vips);
     final file = File(path);

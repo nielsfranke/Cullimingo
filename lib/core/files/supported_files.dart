@@ -78,6 +78,9 @@ bool carriesEmbeddedXmp(String path) {
 /// Whether [path] is a video file.
 bool isVideoPath(String path) => kVideoExtensions.contains(_ext(path));
 
+/// Whether [path] is a HEIF-family image (HEIC, HEIF, Sony HIF, AVIF).
+bool isHeifPath(String path) => kHeifExtensions.contains(_ext(path));
+
 /// Whether [path] is media the ingest should copy (photo or video).
 bool isSupportedMedia(String path) =>
     isSupportedPhoto(path) || isVideoPath(path);
