@@ -94,12 +94,17 @@ class CopyResult {
 ///
 /// [alwaysVerify] names destinations read back even when [verify] is off —
 /// the import's backup copy, which nobody looks at until the day it's needed.
+///
+/// [onProgress] is called as the copy moves (every chunk read, written or
+/// hashed) — the heartbeat `watchedCopy` uses to tell a slow copy from a
+/// hung one.
 Future<CopyResult> verifiedCopy({
   required String source,
   required List<String> destinations,
   bool verify = true,
   Set<String> alwaysVerify = const {},
   Duration quietPeriod = Duration.zero,
+  void Function()? onProgress,
 }) async {
   final src = File(source);
   if (!src.existsSync()) {
@@ -155,14 +160,19 @@ Future<CopyResult> verifiedCopy({
     if (fresh.isNotEmpty) {
       // One source read copies to every fresh destination (and hashes it if
       // we'll need the hash).
-      sourceHash = await _streamCopy(src, parts.values, hash: needHash);
+      sourceHash = await _streamCopy(
+        src,
+        parts.values,
+        hash: needHash,
+        onProgress: onProgress,
+      );
     } else if (needHash) {
-      sourceHash = await _hashFile(src);
+      sourceHash = await _hashFile(src, onProgress);
     }
 
     // Existing dests: identical → skip; different → conflict (left untouched).
     for (final dest in existing) {
-      if (await _hashFile(File(dest)) != sourceHash) {
+      if (await _hashFile(File(dest), onProgress) != sourceHash) {
         parts.values.forEach(_deleteQuietly);
         return CopyResult(
           source: source,
@@ -175,7 +185,7 @@ Future<CopyResult> verifiedCopy({
     // Verify each freshly written copy by re-reading it.
     for (final MapEntry(key: dest, value: part) in parts.entries) {
       if (!verifies(dest)) continue;
-      if (await _hashFile(File(part)) != sourceHash) {
+      if (await _hashFile(File(part), onProgress) != sourceHash) {
         parts.values.forEach(_deleteQuietly);
         return CopyResult(
           source: source,
@@ -218,7 +228,8 @@ Future<CopyResult> verifiedCopy({
       final same =
           FileSystemEntity.typeSync(dest, followLinks: false) ==
               FileSystemEntityType.file &&
-          await _hashFile(File(dest)) == await _hashFile(File(part));
+          await _hashFile(File(dest), onProgress) ==
+              await _hashFile(File(part), onProgress);
       _deleteQuietly(part);
       if (!same) {
         parts.values.forEach(_deleteQuietly);
@@ -283,6 +294,7 @@ Future<Digest?> _streamCopy(
   File src,
   Iterable<String> parts, {
   required bool hash,
+  void Function()? onProgress,
 }) async {
   Digest? digest;
   Sink<List<int>>? hashInput;
@@ -307,6 +319,7 @@ Future<Digest?> _streamCopy(
       for (final out in outs) {
         await out.writeFrom(chunk);
       }
+      onProgress?.call();
     }
     // On disk before verify reads it back and before it gets its real name.
     for (final out in outs) {
@@ -328,13 +341,16 @@ Future<Digest?> _streamCopy(
 }
 
 /// Streams [file] through SHA-256 so even a 50 MB RAW never loads fully in RAM.
-Future<Digest> _hashFile(File file) async {
+Future<Digest> _hashFile(File file, [void Function()? onProgress]) async {
   Digest? digest;
   final sink = ChunkedConversionSink<Digest>.withCallback(
     (digests) => digest = digests.single,
   );
   final input = sha256.startChunkedConversion(sink);
-  await file.openRead().forEach(input.add);
+  await file.openRead().forEach((chunk) {
+    input.add(chunk);
+    onProgress?.call();
+  });
   input.close();
   return digest!;
 }

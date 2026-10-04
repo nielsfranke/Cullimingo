@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:cullimingo/core/files/sidecar_path.dart';
 import 'package:cullimingo/core/files/verified_copy.dart';
+import 'package:cullimingo/core/files/watched_copy.dart';
 import 'package:path/path.dart' as p;
 
 /// Whether a transfer copies files to the destination or *moves* them — a move
@@ -158,13 +158,30 @@ Stream<TransferProgress> runTransfer({
   required TransferMode mode,
   bool verify = true,
   int concurrency = 4,
-  Copier copier = _isolateCopy,
+  Copier? copier,
 }) {
   final total = plan.length;
   final controller = StreamController<TransferProgress>();
   var next = 0;
   var done = 0;
   var stopped = false;
+
+  // Completes when the listener cancels: copies in flight are given up on
+  // (their isolates killed) instead of running on unseen — a move never
+  // deletes an original whose copy didn't report back.
+  final abandon = Completer<void>();
+  final copyOne =
+      copier ??
+      ({
+        required String source,
+        required List<String> destinations,
+        bool verify = true,
+      }) => watchedCopy(
+        source: source,
+        destinations: destinations,
+        verify: verify,
+        abandon: abandon.future,
+      );
 
   Future<void> worker() async {
     while (!stopped) {
@@ -179,7 +196,7 @@ Stream<TransferProgress> runTransfer({
       if (p.equals(dest, item.source)) {
         result = CopyResult(source: item.source, outcome: CopyOutcome.skipped);
       } else {
-        result = await copier(
+        result = await copyOne(
           source: item.source,
           destinations: [dest],
           // A move deletes the original next: only a copy that was read back
@@ -187,7 +204,7 @@ Stream<TransferProgress> runTransfer({
           verify: verify || mode == TransferMode.move,
         );
         if (result.ok && item.sidecar != null && !stopped) {
-          final sidecarResult = await copier(
+          final sidecarResult = await copyOne(
             source: item.sidecar!.source,
             destinations: [p.join(destinationRoot, item.sidecar!.relPath)],
             verify: verify || mode == TransferMode.move,
@@ -224,25 +241,13 @@ Stream<TransferProgress> runTransfer({
       await Future.wait([for (var w = 0; w < workerCount; w++) worker()]);
       if (!controller.isClosed) await controller.close();
     }
-    ..onCancel = () => stopped = true;
+    ..onCancel = () {
+      stopped = true;
+      if (!abandon.isCompleted) abandon.complete();
+    };
 
   return controller.stream;
 }
-
-// Default copier: run the verified copy on a one-off background isolate so the
-// hash + I/O never touch the UI isolate (`BUILD_PLAN.md` §0.6 / rule #2).
-Future<CopyResult> _isolateCopy({
-  required String source,
-  required List<String> destinations,
-  bool verify = true,
-}) => Isolate.run(
-  () => verifiedCopy(
-    source: source,
-    destinations: destinations,
-    verify: verify,
-    quietPeriod: kSourceQuietPeriod,
-  ),
-);
 
 void _deleteQuietly(String path) {
   try {

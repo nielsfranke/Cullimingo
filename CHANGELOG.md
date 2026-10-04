@@ -23,6 +23,10 @@ All notable user-facing changes to Cullimingo. The format loosely follows
   few seconds (a tether, a sync tool, a camera still writing over USB) is
   no longer copied while it's momentarily idle. The summary lists it as
   "still being written"; import again once it has settled.
+- **A drive or network share that stops responding no longer freezes the
+  import:** a copy that makes no progress for a minute is given up on and
+  listed as failed, and Cancel ends the run within a few seconds even when
+  a copy is stuck (that file is listed as "cancelled mid-copy").
 
 ## 1.3.5 — 2026-10-02
 

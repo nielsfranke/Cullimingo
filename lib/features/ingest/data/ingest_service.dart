@@ -1,8 +1,8 @@
 import 'dart:async';
-import 'dart:isolate';
 
 import 'package:cullimingo/core/files/sidecar_path.dart';
 import 'package:cullimingo/core/files/verified_copy.dart';
+import 'package:cullimingo/core/files/watched_copy.dart';
 import 'package:cullimingo/core/naming/rename_template.dart';
 import 'package:cullimingo/features/library/data/folder_scanner.dart';
 import 'package:path/path.dart' as p;
@@ -304,6 +304,12 @@ typedef Copier =
 /// the subscription also stops launching new copies, but drops the results of
 /// the ones in flight; prefer [shouldStop].
 ///
+/// A copy that hangs (a dropped network share) is given up on by the default
+/// copier's stall watchdog (`watchedCopy`). After a cancel, copies still in
+/// flight get [cancelGrace] to finish; then the run stops waiting for them
+/// and reports them as failed ("cancelled mid-copy"), so Cancel always ends
+/// the run.
+///
 /// [verify] governs the primary destination (the first root). Every further
 /// root is a backup and is always verified: an unverified backup is only
 /// found to be bad on the day it's needed.
@@ -312,8 +318,9 @@ Stream<IngestProgress> runIngest({
   required List<String> destinationRoots,
   bool verify = true,
   int concurrency = 4,
-  Copier copier = _isolateCopy,
+  Copier? copier,
   bool Function()? shouldStop,
+  Duration cancelGrace = const Duration(seconds: 5),
 }) {
   final total = plan.items.length;
   final controller = StreamController<IngestProgress>();
@@ -321,6 +328,28 @@ Stream<IngestProgress> runIngest({
   var done = 0;
   var bytesDone = 0;
   var stopped = false;
+
+  // Completes once the run stops waiting for copies in flight (cancel grace
+  // over, or the listener gone). The default copier kills its isolate then.
+  final abandon = Completer<void>();
+  void abandonInFlight() {
+    if (!abandon.isCompleted) abandon.complete();
+  }
+
+  final copyOne =
+      copier ??
+      ({
+        required String source,
+        required List<String> destinations,
+        bool verify = true,
+        Set<String> alwaysVerify = const {},
+      }) => watchedCopy(
+        source: source,
+        destinations: destinations,
+        verify: verify,
+        alwaysVerify: alwaysVerify,
+        abandon: abandon.future,
+      );
 
   // Each worker pulls the next index until the plan is exhausted. The shared
   // counters are safe: only the copy itself runs in an isolate, the
@@ -330,12 +359,21 @@ Stream<IngestProgress> runIngest({
   // "Importing…" forever.
   Future<CopyResult> copy(String source, List<String> destinations) async {
     try {
-      return await copier(
-        source: source,
-        destinations: destinations,
-        verify: verify,
-        alwaysVerify: destinations.skip(1).toSet(),
-      );
+      return await Future.any([
+        copyOne(
+          source: source,
+          destinations: destinations,
+          verify: verify,
+          alwaysVerify: destinations.skip(1).toSet(),
+        ),
+        abandon.future.then(
+          (_) => CopyResult(
+            source: source,
+            outcome: CopyOutcome.error,
+            message: kCopyAbandonedMessage,
+          ),
+        ),
+      ]);
     } on Object catch (e) {
       return CopyResult(
         source: source,
@@ -396,27 +434,23 @@ Stream<IngestProgress> runIngest({
       final workerCount = total == 0
           ? 0
           : (concurrency < 1 ? 1 : (concurrency > total ? total : concurrency));
+      // Watch for a cancel while copies are in flight: give them the grace
+      // period, then stop waiting.
+      Timer? grace;
+      final watch = Timer.periodic(const Duration(milliseconds: 200), (t) {
+        if (!(shouldStop?.call() ?? false)) return;
+        t.cancel();
+        grace = Timer(cancelGrace, abandonInFlight);
+      });
       await Future.wait([for (var w = 0; w < workerCount; w++) worker()]);
+      watch.cancel();
+      grace?.cancel();
       if (!controller.isClosed) await controller.close();
     }
-    ..onCancel = () => stopped = true;
+    ..onCancel = () {
+      stopped = true;
+      abandonInFlight();
+    };
 
   return controller.stream;
 }
-
-// Default copier: run the verified copy on a one-off background isolate so the
-// hash + I/O never touch the UI isolate (`BUILD_PLAN.md` §0.6).
-Future<CopyResult> _isolateCopy({
-  required String source,
-  required List<String> destinations,
-  bool verify = true,
-  Set<String> alwaysVerify = const {},
-}) => Isolate.run(
-  () => verifiedCopy(
-    source: source,
-    destinations: destinations,
-    verify: verify,
-    alwaysVerify: alwaysVerify,
-    quietPeriod: kSourceQuietPeriod,
-  ),
-);
