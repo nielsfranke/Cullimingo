@@ -71,6 +71,15 @@ void main() {
     expect(out!.sublist(0, 2), [0xFF, 0xD8]); // JPEG magic
   });
 
+  test('recognises ISO base-media (HEIF/AVIF) buffers only', () {
+    expect(Vips.isIsoBmff(warmupAvif), isTrue);
+    expect(Vips.isIsoBmff(jpeg(img.Image(width: 2, height: 2))), isFalse);
+    expect(
+      Vips.isIsoBmff(Uint8List.fromList(utf8.encode('xxxxftyp'))),
+      isFalse,
+    );
+  });
+
   test('encodes and downsizes interleaved RGB pixels', () {
     if (!hasVips) {
       markTestSkipped('libvips not installed');

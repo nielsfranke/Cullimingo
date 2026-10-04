@@ -3,6 +3,15 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **HEIC and Sony HIF photos open on Linux:** the AppImage shipped without an
+  HEVC decoder, so these files showed only a placeholder in the grid and the
+  loupe. It now bundles one, and a HEIF whose built-in thumbnail can't be
+  decoded (Sony `.HIF` on some libheif versions) is decoded in full instead.
+  Thanks to heinerjost-dev for the report and sample file (#10).
+
 ## 1.3.5 — 2026-10-02
 
 ### Fixed

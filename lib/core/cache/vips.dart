@@ -37,6 +37,18 @@ typedef _ThumbDart =
       Pointer<Void>,
     );
 
+// vips_image_new_from_buffer(const void* buf, size_t len, const char* options,
+// ...) -> VipsImage*. A plain load, with no embedded-thumbnail shortcut.
+typedef _ImageFromBufferNative =
+    Pointer<Void> Function(
+      Pointer<Void>,
+      Size,
+      Pointer<Utf8>,
+      VarArgs<(Pointer<Void>,)>,
+    );
+typedef _ImageFromBufferDart =
+    Pointer<Void> Function(Pointer<Void>, int, Pointer<Utf8>, Pointer<Void>);
+
 // vips_image_new_from_memory(data, len, width, height, bands, format)
 typedef _ImageFromMemoryNative =
     Pointer<Void> Function(
@@ -162,6 +174,7 @@ const Map<String, List<String>> _candidates = {
 class Vips {
   Vips._(
     this._thumb,
+    this._imageFromBuffer,
     this._imageFromMemory,
     this._thumbImage,
     this._save,
@@ -170,9 +183,11 @@ class Vips {
     this._gUnref,
     this._errorClear,
   ) : _heightKey = 'height'.toNativeUtf8(),
-      _qualityKey = 'Q'.toNativeUtf8();
+      _qualityKey = 'Q'.toNativeUtf8(),
+      _noOptions = ''.toNativeUtf8();
 
   final _ThumbDart _thumb;
+  final _ImageFromBufferDart _imageFromBuffer;
   final _ImageFromMemoryDart _imageFromMemory;
   final _ThumbImageDart _thumbImage;
   final _SaveDart _save;
@@ -182,6 +197,7 @@ class Vips {
   final _ErrorClearDart _errorClear;
   final Pointer<Utf8> _heightKey;
   final Pointer<Utf8> _qualityKey;
+  final Pointer<Utf8> _noOptions;
 
   static bool _warmedUp = false;
 
@@ -287,6 +303,9 @@ class Vips {
 
       return Vips._(
         vips.lookupFunction<_ThumbNative, _ThumbDart>('vips_thumbnail_buffer'),
+        vips.lookupFunction<_ImageFromBufferNative, _ImageFromBufferDart>(
+          'vips_image_new_from_buffer',
+        ),
         vips.lookupFunction<_ImageFromMemoryNative, _ImageFromMemoryDart>(
           'vips_image_new_from_memory',
         ),
@@ -315,6 +334,18 @@ class Vips {
     final outBuf = malloc<Pointer<Void>>();
     final outLen = malloc<Size>();
     var haveImage = false;
+    // vips is lazy: a HEIF's broken embedded thumbnail (see
+    // [_thumbnailFullDecode]) can fail here or only later, at save.
+    Uint8List? failed() {
+      // Clear the process-global error buffer: every failed decode appends
+      // to it, so a folder full of corrupt/exotic files slowly grew native
+      // memory (the encoder in core/vips already does this).
+      _errorClear();
+      return isIsoBmff(jpeg)
+          ? _thumbnailFullDecode(input.cast(), jpeg.length, longEdge)
+          : null;
+    }
+
     try {
       final rc = _thumb(
         input.cast(),
@@ -325,19 +356,10 @@ class Vips {
         longEdge,
         nullptr,
       );
-      if (rc != 0) {
-        // Clear the process-global error buffer: every failed decode appends
-        // to it, so a folder full of corrupt/exotic files slowly grew native
-        // memory (the encoder in core/vips already does this).
-        _errorClear();
-        return null;
-      }
+      if (rc != 0) return failed();
       haveImage = true;
 
-      if (_save(outImage.value, outBuf, outLen, nullptr) != 0) {
-        _errorClear();
-        return null;
-      }
+      if (_save(outImage.value, outBuf, outLen, nullptr) != 0) return failed();
       final bytes = Uint8List.fromList(
         outBuf.value.cast<Uint8>().asTypedList(outLen.value),
       );
@@ -354,6 +376,68 @@ class Vips {
         ..free(outLen);
     }
   }
+
+  /// [thumbnail] for a HEIF whose embedded thumbnail won't decode: load the
+  /// primary image in full, then downscale it.
+  ///
+  /// `vips_thumbnail_buffer` decodes a HEIF's embedded thumbnail instead of
+  /// the primary image whenever it's big enough. Some libheif builds can't
+  /// decode those: libheif 1.17 + libvips 8.15 (Ubuntu 24.04, what the
+  /// AppImage bundles) fail Sony `.HIF` thumbnails with "bad image dimensions
+  /// on decode" while the primary image decodes fine (#10). A full HEVC decode
+  /// is slower, but this only runs after the fast path failed.
+  Uint8List? _thumbnailFullDecode(Pointer<Void> buf, int len, int longEdge) {
+    final source = _imageFromBuffer(buf, len, _noOptions, nullptr);
+    if (source == nullptr) {
+      _errorClear();
+      return null;
+    }
+    final outImage = calloc<Pointer<Void>>();
+    final outBuf = calloc<Pointer<Void>>();
+    final outLen = calloc<Size>();
+    var haveThumbnail = false;
+    try {
+      if (_thumbImage(
+            source,
+            outImage,
+            longEdge,
+            _heightKey,
+            longEdge,
+            nullptr,
+          ) !=
+          0) {
+        _errorClear();
+        return null;
+      }
+      haveThumbnail = true;
+      if (_save(outImage.value, outBuf, outLen, nullptr) != 0) {
+        _errorClear();
+        return null;
+      }
+      return Uint8List.fromList(
+        outBuf.value.cast<Uint8>().asTypedList(outLen.value),
+      );
+    } on Object {
+      return null;
+    } finally {
+      if (haveThumbnail) _gUnref(outImage.value);
+      _gUnref(source);
+      if (outBuf.value != nullptr) _gFree(outBuf.value);
+      calloc
+        ..free(outImage)
+        ..free(outBuf)
+        ..free(outLen);
+    }
+  }
+
+  /// Whether [bytes] is an ISO base-media file (HEIF, HEIC, AVIF, Sony HIF):
+  /// a `ftyp` box right at the start.
+  static bool isIsoBmff(Uint8List bytes) =>
+      bytes.length >= 12 &&
+      bytes[4] == 0x66 && // f
+      bytes[5] == 0x74 && // t
+      bytes[6] == 0x79 && // y
+      bytes[7] == 0x70; // p
 
   /// Downscales interleaved 8-bit [rgb] pixels and encodes a JPEG.
   ///

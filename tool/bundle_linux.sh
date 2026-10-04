@@ -162,10 +162,17 @@ for moddir in "$vips_libdir"/vips-modules-*; do
   done < <(ldd "$dest/vips-heif.so" 2>/dev/null | awk '$2=="=>" {print $1, $3}')
 
   # libheif itself dlopens its codec backends from a plugin dir (aom encoder
-  # for AVIF). Bundle them + their libaom/libde265 into
-  # <bundle>/lib/libheif/plugins/; VipsEncoder sets LIBHEIF_PLUGIN_PATH there.
+  # for AVIF, libde265 decoder for HEIC/HIF). Bundle them + their
+  # libaom/libde265 into <bundle>/lib/libheif/plugins/; VipsEncoder sets
+  # LIBHEIF_PLUGIN_PATH there — so the app never sees the host's plugins, and
+  # a decoder missing here means no HEIC/HIF at all (#10).
   plugin_src="$vips_libdir/libheif/plugins"
   if [[ -d "$plugin_src" ]]; then
+    if [[ ! -e "$plugin_src/libheif-libde265.so" ]]; then
+      echo "error: no HEVC decoder in $plugin_src — HEIC/HIF wouldn't open" >&2
+      echo "       install it, e.g. 'apt install libheif-plugin-libde265'" >&2
+      exit 1
+    fi
     plugin_dest="$LIBS_DIR/libheif/plugins"
     mkdir -p "$plugin_dest"
     for plug in "$plugin_src"/*.so; do

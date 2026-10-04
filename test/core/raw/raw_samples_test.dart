@@ -20,7 +20,10 @@ import 'package:path/path.dart' as p;
 ///   lossless HLG NEF whose only embedded JPEG is a 160×120 thumbnail);
 /// - `embedded`: the camera's own embedded JPEG (the fast path);
 /// - `none`: nothing — e.g. Nikon HE/HE* files LibRaw can't decode, which must
-///   never come back as a demosaiced noise frame.
+///   never come back as a demosaiced noise frame;
+/// - `heif`: not a RAW — a HEIF/HIF that [Vips.thumbnail] must decode at both
+///   grid and loupe sizes (e.g. a Sony `.HIF` whose embedded thumbnails some
+///   libheif builds can't decode, #10).
 ///
 /// Run before a release or a LibRaw upgrade:
 ///
@@ -61,6 +64,16 @@ void main() {
       }
       final path = p.join(root!, rel);
       expect(File(path).existsSync(), isTrue, reason: 'missing sample $path');
+      if (value == 'heif') {
+        final bytes = File(path).readAsBytesSync();
+        for (final longEdge in const [320, 2560]) {
+          final out = vips.thumbnail(bytes, longEdge);
+          expect(out, isNotNull, reason: 'no decode at $longEdge px');
+          final dims = jpegDimensions(out!)!;
+          expect(dims.width > dims.height ? dims.width : dims.height, longEdge);
+        }
+        return;
+      }
       final lr = FlutterLibRawBindings(DynamicLibrary.open(libPath));
       const longEdge = 320;
 
