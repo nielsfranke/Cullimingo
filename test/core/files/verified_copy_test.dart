@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cullimingo/core/files/posix_fs.dart';
 import 'package:cullimingo/core/files/supported_files.dart';
 import 'package:cullimingo/core/files/verified_copy.dart';
 import 'package:cullimingo/features/library/data/folder_scanner.dart';
@@ -168,6 +169,42 @@ void main() {
     );
     expect(r.outcome, CopyOutcome.sourceMissing);
     expect(r.ok, isFalse);
+  });
+
+  group('volume guards (#9)', () {
+    test(
+      'refuses to write under a root that left its volume mid-run',
+      () async {
+        final s = src('g.arw', 'photo');
+        final root = Directory(p.join(tmp.path, 'nas'))..createSync();
+
+        final r = await verifiedCopy(
+          source: s.path,
+          destinations: [p.join(root.path, '2026', 'g.arw')],
+          // Checked while the share was mounted there; now it isn't.
+          volumeGuards: {root.path: root.path},
+        );
+
+        expect(r.outcome, CopyOutcome.error);
+        expect(r.message, contains("isn't connected"));
+        expect(root.listSync(), isEmpty, reason: 'wrote into the mount point');
+      },
+      testOn: 'mac-os || linux',
+    );
+
+    test('a root still on its volume is copied into', () async {
+      final s = src('h.arw', 'photo');
+      final root = Directory(p.join(tmp.path, 'photos'))..createSync();
+      final mount = volumeInfo(root.path)!.mountPoint;
+
+      final r = await verifiedCopy(
+        source: s.path,
+        destinations: [p.join(root.path, 'h.arw')],
+        volumeGuards: {root.path: mount},
+      );
+
+      expect(r.outcome, CopyOutcome.copied);
+    }, testOn: 'mac-os || linux');
   });
 
   group('quiet period (#9)', () {

@@ -27,6 +27,15 @@ All notable user-facing changes to Cullimingo. The format loosely follows
   import:** a copy that makes no progress for a minute is given up on and
   listed as failed, and Cancel ends the run within a few seconds even when
   a copy is stuck (that file is listed as "cancelled mid-copy").
+- **An unplugged destination drive is no longer filled in from the system
+  disk:** Cullimingo remembers which drive a destination folder lives on
+  and refuses to import or hand off into it when that drive isn't mounted
+  — including the empty mount-point folder an unplugged drive leaves
+  behind on Linux. A destination folder that has vanished is never
+  recreated. If a folder really moved, choose it again.
+- **Not enough room? The import doesn't start:** free space is checked per
+  drive before anything is copied (main and backup on one drive add up;
+  files already there don't count), instead of failing part-way through.
 
 ## 1.3.5 — 2026-10-02
 

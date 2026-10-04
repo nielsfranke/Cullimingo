@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cullimingo/app/theme/tokens.dart';
+import 'package:cullimingo/core/files/destination_check.dart';
 import 'package:cullimingo/core/files/directory_picker.dart';
 import 'package:cullimingo/core/files/supported_files.dart';
 import 'package:cullimingo/core/files/verified_copy.dart';
@@ -74,6 +75,11 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
   final Set<DateTime> _excludedDates = {};
 
   bool _running = false;
+  // True while the destinations are being checked, before any copy starts.
+  bool _checking = false;
+  // Why the last Import didn't start (drive not connected, not enough
+  // space, …) — shown under the destinations until they change.
+  List<String> _destProblems = const [];
   bool _cancelled = false;
   // Whether the finished run verified its copies — the summary says so only
   // when it's true (the checkbox is remembered between imports).
@@ -312,7 +318,13 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
   Future<void> _pickDest({required bool backup}) async {
     final dir = await pickDirectory(initialDirectory: backup ? _dest2 : _dest);
     if (dir == null) return;
-    setState(() => backup ? _dest2 = dir : _dest = dir);
+    setState(() {
+      backup ? _dest2 = dir : _dest = dir;
+      _destProblems = const [];
+    });
+    // Learn which volume it lives on, so a later run can tell the drive is
+    // gone. Picking again is also how a folder that really moved is re-learnt.
+    unawaited(rememberDestinationVolume(dir));
   }
 
   bool get _canRun =>
@@ -339,8 +351,49 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
         }),
       ),
     );
+    final roots = [dest, if (_backup && _dest2 != null) _dest2!];
     setState(() {
       _running = true;
+      _checking = true;
+      _progress = null;
+      _destProblems = const [];
+    });
+    // Before anything is written: each destination still on its own drive,
+    // and enough room on every drive involved.
+    final remembered = (await AppSettings.load()).destinationVolumes;
+    final check = await checkDestinations(
+      roots: roots,
+      files: [
+        for (final item in plan.items) ...[
+          (
+            source: item.source,
+            relPath: item.relPath,
+            sizeBytes: item.sizeBytes,
+          ),
+          for (final c in item.companions)
+            (source: c.source, relPath: c.relPath, sizeBytes: -1),
+        ],
+      ],
+      rememberedMounts: remembered,
+    );
+    if (!mounted) return;
+    if (!check.ok) {
+      setState(() {
+        _running = false;
+        _checking = false;
+        _destProblems = check.problems;
+      });
+      return;
+    }
+    // Destinations chosen before volumes were remembered learn theirs now.
+    for (final root in roots) {
+      final mount = check.mounts[root];
+      if (mount != null && !remembered.containsKey(root)) {
+        unawaited(updateSettings((s) => s.setDestinationVolume(root, mount)));
+      }
+    }
+    setState(() {
+      _checking = false;
       _cancelled = false;
       _ranVerified = _verify;
       _ranBackup = _backup && _dest2 != null;
@@ -350,7 +403,6 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     _stopwatch
       ..reset()
       ..start();
-    final roots = [dest, if (_backup && _dest2 != null) _dest2!];
     final results = <CopyResult>[];
     // Cancel stops new files from starting; copies already in flight finish
     // and are still reported, so the summary matches what's on disk (breaking
@@ -360,6 +412,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       destinationRoots: roots,
       verify: _verify,
       shouldStop: () => _cancelled,
+      volumeGuards: check.mounts,
     )) {
       results.add(tick.last);
       if (mounted) setState(() => _progress = tick);
@@ -536,6 +589,14 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
           path: _dest2,
           onPick: () => _pickDest(backup: true),
           hint: 'Choose backup…',
+        ),
+      for (final problem in _destProblems)
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.xs),
+          child: Text(
+            problem,
+            style: const TextStyle(color: AppColors.labelYellow, fontSize: 13),
+          ),
         ),
     ],
   );
@@ -821,7 +882,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
         const SizedBox(height: AppSpacing.xs),
         Text(
           pr == null
-              ? 'Starting…'
+              ? (_checking ? 'Checking destinations…' : 'Starting…')
               : 'Copying ${pr.done} / ${pr.total}  ·  ${_speed(pr)}  —  '
                     '${p.basename(pr.last.source)}',
           maxLines: 1,

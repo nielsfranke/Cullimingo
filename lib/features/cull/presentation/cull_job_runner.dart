@@ -3,10 +3,12 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:cullimingo/core/db/database.dart';
+import 'package:cullimingo/core/files/destination_check.dart';
 import 'package:cullimingo/core/files/open_external.dart';
 import 'package:cullimingo/core/files/verified_copy.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
 import 'package:cullimingo/core/secrets/secret_store.dart';
+import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:cullimingo/features/cull/data/phash_compute.dart';
 import 'package:cullimingo/features/cull/domain/perceptual_hash.dart';
 import 'package:cullimingo/features/cull/domain/similarity_sensitivity.dart';
@@ -367,6 +369,36 @@ class CullJobRunner {
       includeSidecars: request.includeSidecars,
     );
     if (plan.isEmpty) return;
+    // The destination must still be on the drive it was picked on (the
+    // optional subfolder may not exist yet — it's created, the drive isn't),
+    // with room for the files.
+    final root = request.destinationRoot;
+    final remembered = (await AppSettings.load()).destinationVolumes;
+    final known = remembered.keys
+        .where((k) => k == root || p.isWithin(k, root))
+        .fold<String?>(
+          null,
+          (best, k) => best == null || k.length > best.length ? k : best,
+        );
+    final check = await checkDestinations(
+      roots: [root],
+      files: [
+        for (final item in plan) ...[
+          (source: item.source, relPath: item.relPath, sizeBytes: -1),
+          if (item.sidecar case final sc?)
+            (source: sc.source, relPath: sc.relPath, sizeBytes: -1),
+        ],
+      ],
+      rememberedMounts: known == null ? const {} : {root: remembered[known]!},
+      mustExist: false,
+    );
+    if (!check.ok) {
+      _notify(
+        "${isMove ? 'Move' : 'Copy'} not started: ${check.problems.join(' ')}",
+        kind: NoticeKind.warning,
+      );
+      return;
+    }
     final results = <CopyResult>[];
     _jobs.startTransfer(isMove ? 'Moving' : 'Copying', plan.length);
     // Kept in _transferSub and cancelled in cancelTransfer/_shutdown.
@@ -375,6 +407,7 @@ class CullJobRunner {
           plan: plan,
           destinationRoot: request.destinationRoot,
           mode: request.mode,
+          volumeGuards: check.mounts,
         ).listen(
           (tick) {
             results.add(tick.last);

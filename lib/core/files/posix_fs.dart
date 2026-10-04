@@ -136,7 +136,7 @@ class VolumeInfo {
 /// write into if the folders were created — so a destination whose drive was
 /// unplugged reports the *system* volume, not its own.
 VolumeInfo? volumeInfo(String path) {
-  final existing = _nearestExisting(p.absolute(path));
+  final existing = nearestExistingDirectory(path);
   if (existing == null) return null;
   final String real;
   try {
@@ -149,8 +149,11 @@ VolumeInfo? volumeInfo(String path) {
   return null;
 }
 
-String? _nearestExisting(String path) {
-  var dir = path;
+/// [path] itself when it's a directory, else its nearest ancestor that is —
+/// the folder anything created under [path] would actually land in. Null
+/// when not even the filesystem root resolves.
+String? nearestExistingDirectory(String path) {
+  var dir = p.absolute(path);
   while (true) {
     if (FileSystemEntity.isDirectorySync(dir)) return dir;
     final parent = p.dirname(dir);

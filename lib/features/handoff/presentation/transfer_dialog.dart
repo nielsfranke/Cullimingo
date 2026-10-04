@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cullimingo/app/theme/tokens.dart';
+import 'package:cullimingo/core/files/destination_check.dart';
 import 'package:cullimingo/core/files/directory_picker.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:cullimingo/features/handoff/data/transfer_service.dart';
@@ -94,7 +95,11 @@ class _TransferDialogState extends State<_TransferDialog> {
 
   Future<void> _pickDestination() async {
     final dir = await pickDirectory(initialDirectory: _destination);
-    if (dir != null && mounted) setState(() => _destination = dir);
+    if (dir != null && mounted) {
+      setState(() => _destination = dir);
+      // So a later run can tell when this folder's drive is gone.
+      unawaited(rememberDestinationVolume(dir));
+    }
   }
 
   void _submit() {

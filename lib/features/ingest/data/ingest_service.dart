@@ -310,6 +310,9 @@ typedef Copier =
 /// and reports them as failed ("cancelled mid-copy"), so Cancel always ends
 /// the run.
 ///
+/// [volumeGuards] (from `checkDestinations`) make the default copier refuse
+/// to write under a root whose drive has gone since the run was checked.
+///
 /// [verify] governs the primary destination (the first root). Every further
 /// root is a backup and is always verified: an unverified backup is only
 /// found to be bad on the day it's needed.
@@ -321,6 +324,7 @@ Stream<IngestProgress> runIngest({
   Copier? copier,
   bool Function()? shouldStop,
   Duration cancelGrace = const Duration(seconds: 5),
+  Map<String, String> volumeGuards = const {},
 }) {
   final total = plan.items.length;
   final controller = StreamController<IngestProgress>();
@@ -348,6 +352,7 @@ Stream<IngestProgress> runIngest({
         destinations: destinations,
         verify: verify,
         alwaysVerify: alwaysVerify,
+        volumeGuards: volumeGuards,
         abandon: abandon.future,
       );
 

@@ -159,6 +159,7 @@ Stream<TransferProgress> runTransfer({
   bool verify = true,
   int concurrency = 4,
   Copier? copier,
+  Map<String, String> volumeGuards = const {},
 }) {
   final total = plan.length;
   final controller = StreamController<TransferProgress>();
@@ -180,6 +181,7 @@ Stream<TransferProgress> runTransfer({
         source: source,
         destinations: destinations,
         verify: verify,
+        volumeGuards: volumeGuards,
         abandon: abandon.future,
       );
 

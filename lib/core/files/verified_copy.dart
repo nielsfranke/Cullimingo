@@ -95,6 +95,12 @@ class CopyResult {
 /// [alwaysVerify] names destinations read back even when [verify] is off —
 /// the import's backup copy, which nobody looks at until the day it's needed.
 ///
+/// [volumeGuards] maps destination roots to the mount point their volume was
+/// on when the run was checked (`checkDestinations`). Before writing under
+/// such a root, the copy makes sure it's still there and on that volume —
+/// never creating it — so a drive unplugged mid-run fails its files instead
+/// of filling the system disk through an empty mount point.
+///
 /// [onProgress] is called as the copy moves (every chunk read, written or
 /// hashed) — the heartbeat `watchedCopy` uses to tell a slow copy from a
 /// hung one.
@@ -104,6 +110,7 @@ Future<CopyResult> verifiedCopy({
   bool verify = true,
   Set<String> alwaysVerify = const {},
   Duration quietPeriod = Duration.zero,
+  Map<String, String> volumeGuards = const {},
   void Function()? onProgress,
 }) async {
   final src = File(source);
@@ -146,6 +153,16 @@ Future<CopyResult> verifiedCopy({
         source: source,
         outcome: CopyOutcome.conflict,
         message: "Destination exists and isn't a plain file: $dest",
+      );
+    }
+  }
+  for (final dest in fresh) {
+    final problem = _volumeProblem(dest, volumeGuards);
+    if (problem != null) {
+      return CopyResult(
+        source: source,
+        outcome: CopyOutcome.error,
+        message: problem,
       );
     }
   }
@@ -255,6 +272,19 @@ Future<CopyResult> verifiedCopy({
       message: '$e',
     );
   }
+}
+
+/// Why [dest] must not be written right now, or null: its guarded root is
+/// gone or no longer on the volume it was checked on.
+String? _volumeProblem(String dest, Map<String, String> guards) {
+  for (final MapEntry(key: root, value: mount) in guards.entries) {
+    if (!p.isWithin(root, dest)) continue;
+    if (!Directory(root).existsSync() ||
+        volumeInfo(root)?.mountPoint != mount) {
+      return "Destination drive isn't connected any more ($root)";
+    }
+  }
+  return null;
 }
 
 /// How long a source must have been left alone before the app copies it —

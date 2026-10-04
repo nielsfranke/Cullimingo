@@ -34,6 +34,7 @@ Future<CopyResult> watchedCopy({
   bool verify = true,
   Set<String> alwaysVerify = const {},
   Duration quietPeriod = kSourceQuietPeriod,
+  Map<String, String> volumeGuards = const {},
   Duration stallTimeout = kCopyStallTimeout,
   Future<void>? abandon,
 }) async {
@@ -86,6 +87,7 @@ Future<CopyResult> watchedCopy({
         verify: verify,
         alwaysVerify: alwaysVerify,
         quietPeriod: quietPeriod,
+        volumeGuards: volumeGuards,
       ),
       onExit: port.sendPort,
       onError: port.sendPort,
@@ -106,6 +108,7 @@ class _CopyJob {
     required this.verify,
     required this.alwaysVerify,
     required this.quietPeriod,
+    required this.volumeGuards,
   });
 
   final SendPort reply;
@@ -114,6 +117,7 @@ class _CopyJob {
   final bool verify;
   final Set<String> alwaysVerify;
   final Duration quietPeriod;
+  final Map<String, String> volumeGuards;
 }
 
 Future<void> _copyEntry(_CopyJob job) async {
@@ -131,6 +135,7 @@ Future<void> _copyEntry(_CopyJob job) async {
     verify: job.verify,
     alwaysVerify: job.alwaysVerify,
     quietPeriod: job.quietPeriod,
+    volumeGuards: job.volumeGuards,
     onProgress: beat,
   );
   job.reply.send(result);
