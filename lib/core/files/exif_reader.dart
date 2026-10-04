@@ -1,9 +1,9 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:cullimingo/core/files/exif_values.dart';
 import 'package:cullimingo/core/files/image_dimensions.dart';
 import 'package:exif/exif.dart';
+import 'package:flutter/foundation.dart';
 
 /// The handful of EXIF fields the cull workflow needs: capture time (drives the
 /// grid sort and Phase 3 rename tokens), camera, pixel dimensions, and the GPS
@@ -64,19 +64,24 @@ class PhotoExif {
       exposureTime == null;
 }
 
-/// Reads [PhotoExif] from [file] using the streaming `exif` reader (no full
-/// decode, works on JPEG and TIFF-based RAW). Returns an empty result on any
-/// error, so a missing/odd header never breaks a scan.
+/// Header prefixes [readPhotoExif] parses from memory before falling back to
+/// the file itself: a JPEG's whole EXIF block fits the first (APP1 is capped
+/// at 64 KB), a TIFF-based RAW's IFD0/EXIF/GPS IFDs the second.
+const List<int> kExifHeadSizes = [64 * 1024, 1024 * 1024];
+
+/// Reads [PhotoExif] from [file] (no full decode, works on JPEG, HEIF and
+/// TIFF-based RAW). Returns an empty result on any error, so a missing/odd
+/// header never breaks a scan.
+///
+/// The import scan reads every file on a card, so this has to be cheap. The
+/// `exif` package's file reader seeks and reads a few bytes at a time — a
+/// Nikon NEF took ~190 000 read calls and ~180 ms, warm cache — and by
+/// default also decodes maker notes and thumbnails nobody here uses. So the
+/// header is read in one go and parsed from memory without those
+/// ([kExifHeadSizes]); only a file whose tags lie further in (or a format the
+/// prefix can't parse) falls back to the file reader.
 Future<PhotoExif> readPhotoExif(File file) async {
-  Map<String, IfdTag> tags;
-  try {
-    tags = await readExifFromFile(file);
-  } on Object {
-    // Fall through with no tags so the header-based dimension pass below still
-    // runs (HEIF/AVIF have no EXIF the reader understands, but they do carry an
-    // `ispe` box).
-    tags = const {};
-  }
+  final tags = await _readTags(file);
   var width = _int(tags['EXIF ExifImageWidth'] ?? tags['Image ImageWidth']);
   var height = _int(tags['EXIF ExifImageLength'] ?? tags['Image ImageLength']);
   // Fall back to the image's own header (JPEG frame / PNG IHDR / HEIF `ispe`)
@@ -94,6 +99,66 @@ Future<PhotoExif> readPhotoExif(File file) async {
 
   return _fromTags(tags, width: width, height: height);
 }
+
+/// The standard IFD0/EXIF/GPS tags of [file], as [readPhotoExif] reads them;
+/// empty when it has none the reader understands. HEIF/AVIF then still get
+/// the header-based dimension pass (they carry an `ispe` box).
+@visibleForTesting
+Future<Map<String, IfdTag>> readExifTags(File file) => _readTags(file);
+
+Future<Map<String, IfdTag>> _readTags(File file) async {
+  final RandomAccessFile raf;
+  try {
+    raf = await file.open();
+  } on FileSystemException {
+    return const {};
+  }
+  try {
+    final length = await raf.length();
+    for (final size in kExifHeadSizes) {
+      final whole = size >= length;
+      final head = await raf.read(whole ? length : size);
+      await raf.setPosition(0);
+      // HEIF/AVIF keep their Exif item wherever the muxer put it (past 1 MB
+      // in a Sony HIF); the reader's box walk already finds it in a few
+      // large reads, so don't buffer a prefix for nothing.
+      if (!whole && _isIsoBmff(head)) break;
+      try {
+        final tags = await readExifFromBytes(head, details: false);
+        // A date found means the IFDs it lives in were inside the prefix. At
+        // the largest prefix, tags without a date are a dateless file (an
+        // export), not a cut-off one — re-reading it all wouldn't help.
+        if (whole ||
+            tags.containsKey('EXIF DateTimeOriginal') ||
+            tags.containsKey('Image DateTime') ||
+            (size == kExifHeadSizes.last && tags.isNotEmpty)) {
+          return tags;
+        }
+      } on Object {
+        // Offsets past the prefix (or a truncated structure): read more —
+        // unless this already was the whole file.
+        if (whole) return const {};
+      }
+    }
+  } on FileSystemException {
+    return const {};
+  } finally {
+    await raf.close();
+  }
+  try {
+    return await readExifFromFile(file, details: false);
+  } on Object {
+    return const {};
+  }
+}
+
+// An ISO base-media file (HEIF, HEIC, AVIF): a `ftyp` box at the start.
+bool _isIsoBmff(List<int> head) =>
+    head.length >= 8 &&
+    head[4] == 0x66 && // f
+    head[5] == 0x74 && // t
+    head[6] == 0x79 && // y
+    head[7] == 0x70; // p
 
 /// Reads [PhotoExif] from in-memory [bytes] — used to pull EXIF out of a RAW's
 /// embedded preview JPEG (extracted by LibRaw) for container formats like Fuji

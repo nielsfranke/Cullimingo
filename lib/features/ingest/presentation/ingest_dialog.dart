@@ -24,14 +24,42 @@ import 'package:path/path.dart' as p;
 class IngestDialog extends ConsumerStatefulWidget {
   /// Creates the ingest dialog. [initialSource] preselects a source (e.g. a
   /// just-inserted card); [volumeSearchRoots] overrides volume discovery for
-  /// tests.
-  const IngestDialog({this.initialSource, this.volumeSearchRoots, super.key});
+  /// tests. The remaining parameters are test seams: the real scan, check and
+  /// copy hop to background isolates, which a widget test's fake clock never
+  /// sees finish.
+  const IngestDialog({
+    this.initialSource,
+    this.volumeSearchRoots,
+    @visibleForTesting this.initialDestination,
+    @visibleForTesting this.scan = scanSources,
+    @visibleForTesting this.destinationChecker = checkDestinations,
+    @visibleForTesting this.copier,
+    super.key,
+  });
 
   /// Source path to preselect, if any.
   final String? initialSource;
 
   /// Override for [listVolumes] search roots (tests).
   final List<String>? volumeSearchRoots;
+
+  /// Destination to preselect instead of the remembered one (tests: the
+  /// folder picker is native and can't be driven).
+  final String? initialDestination;
+
+  /// Scans a source (default [scanSources]).
+  final Future<SourceScan> Function(String source) scan;
+
+  /// Checks the destinations before a run (default [checkDestinations]).
+  final Future<DestinationCheck> Function({
+    required List<String> roots,
+    required List<PlannedCopy> files,
+    Map<String, String> rememberedMounts,
+  })
+  destinationChecker;
+
+  /// Copies one file during a run (default: `runIngest`'s watched copy).
+  final Copier? copier;
 
   @override
   ConsumerState<IngestDialog> createState() => _IngestDialogState();
@@ -133,6 +161,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
   void initState() {
     super.initState();
     _source = widget.initialSource;
+    _dest = widget.initialDestination;
     unawaited(_init());
   }
 
@@ -237,7 +266,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       try {
         // Always scans videos too (scanSources defaults includeVideos: true);
         // the toggle filters the plan, not the scan.
-        scan = await scanSources(source);
+        scan = await widget.scan(source);
       } on Object catch (e) {
         // Never leave the dialog stuck on "Scanning…": surface the failure and
         // let the user pick another source or retry.
@@ -369,7 +398,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     // Before anything is written: each destination still on its own drive,
     // and enough room on every drive involved.
     final remembered = (await AppSettings.load()).destinationVolumes;
-    final check = await checkDestinations(
+    final check = await widget.destinationChecker(
       roots: roots,
       files: [
         for (final item in plan.items) ...[
@@ -421,6 +450,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       verify: _verify,
       shouldStop: () => _cancelled,
       volumeGuards: check.mounts,
+      copier: widget.copier,
     )) {
       results.add(tick.last);
       if (mounted) setState(() => _progress = tick);
