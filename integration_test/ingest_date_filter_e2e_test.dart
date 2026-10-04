@@ -13,6 +13,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path/path.dart' as p;
 
+/// Pumps until [finder] matches — the scan runs on real isolates (and reads
+/// EXIF for every file), so a fixed wait is either flaky or slow.
+Future<void> pumpUntil(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 20),
+}) async {
+  final end = DateTime.now().add(timeout);
+  while (DateTime.now().isBefore(end)) {
+    await tester.pump(const Duration(milliseconds: 100));
+    if (finder.evaluate().isNotEmpty) return;
+  }
+  fail('timed out waiting for $finder');
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -42,21 +57,20 @@ void main() {
         ),
       ),
     );
-    // Real isolate scan — give it real wall-clock time to finish.
-    await tester.pumpAndSettle(const Duration(milliseconds: 500));
+    // Real isolate scan — wait for the plan, in real wall-clock time.
+    await pumpUntil(tester, find.text('Import 3 photos'));
 
-    expect(find.textContaining('more than one day'), findsOneWidget);
-    expect(find.textContaining('3 photos'), findsOneWidget);
+    expect(find.text('Days on this card — 2 of 2 included'), findsOneWidget);
     expect(find.text('Jan 1 · 1'), findsOneWidget);
 
     await tester.tap(find.text('Jan 1 · 1'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('2 photos'), findsOneWidget);
-    expect(find.textContaining('3 photos'), findsNothing);
+    expect(find.text('Import 2 photos'), findsOneWidget);
+    expect(find.text('Days on this card — 1 of 2 included'), findsOneWidget);
 
     await tester.tap(find.text('Jan 1 · 1'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('3 photos'), findsOneWidget);
+    expect(find.text('Import 3 photos'), findsOneWidget);
   });
 
   testWidgets('single-day card shows no day-filter row', (tester) async {
@@ -80,9 +94,8 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle(const Duration(milliseconds: 500));
+    await pumpUntil(tester, find.text('Import 2 photos'));
 
-    expect(find.textContaining('more than one day'), findsNothing);
-    expect(find.textContaining('2 photos'), findsOneWidget);
+    expect(find.textContaining('Days on this card'), findsNothing);
   });
 }
