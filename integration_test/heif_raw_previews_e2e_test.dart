@@ -7,8 +7,8 @@
 //   CULLIMINGO_SAMPLES=~/.cache/cullimingo/samples \
 //     flutter test integration_test/heif_raw_previews_e2e_test.dart -d linux
 //
-// CULLIMINGO_SHOTS=<dir> saves screenshots (spectacle on KDE, ImageMagick
-// `import` under X11/Xvfb).
+// CULLIMINGO_SHOTS=<dir> saves screenshots (screencapture on macOS,
+// spectacle on KDE, ImageMagick `import` under X11/Xvfb).
 import 'dart:io';
 
 import 'package:cullimingo/app/app.dart';
@@ -24,6 +24,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:window_manager/window_manager.dart';
 
 /// Sample-set paths (relative to CULLIMINGO_SAMPLES) → what they exercise.
 const samples = {
@@ -37,6 +39,10 @@ Future<void> shot(String name) async {
   if (dir == null) return;
   Directory(dir).createSync(recursive: true);
   final out = p.join(dir, '$name.png');
+  if (Platform.isMacOS) {
+    await Process.run('screencapture', ['-x', out]);
+    return;
+  }
   final r = await Process.run('spectacle', ['-abno', out]).catchError(
     (_) => Process.run('import', ['-window', 'root', out]),
   );
@@ -69,7 +75,26 @@ void main() {
     'HIF and RAW samples render in the grid and the loupe',
     skip: root == null,
     (tester) async {
+      // The app under test shares the real app's settings.json (open
+      // folders, window size): put it back exactly as it was afterwards.
+      final settings = File(
+        p.join((await getApplicationSupportDirectory()).path, 'settings.json'),
+      );
+      final saved = settings.existsSync() ? settings.readAsBytesSync() : null;
+      addTearDown(() {
+        if (saved == null) {
+          if (settings.existsSync()) settings.deleteSync();
+        } else {
+          settings.writeAsBytesSync(saved);
+        }
+      });
+
       Vips.warmUpProcess(); // as main() does, before pool workers spawn
+      // main() sizes the window (default 1280×800, never below 960×640);
+      // without it the test window opens narrower than the app allows and
+      // the loupe toolbar overflows.
+      await windowManager.ensureInitialized();
+      await windowManager.setSize(const Size(1280, 800));
 
       final shoot = await Directory(
         p.join(Platform.environment['HOME']!, '.cache'),
@@ -94,8 +119,9 @@ void main() {
       final container = ProviderScope.containerOf(
         tester.element(find.byType(CullimingoApp)),
       );
-      // Start from a cold preview cache, so every tier is really decoded.
-      await container.read(previewCacheProvider).clear();
+      // Every tier is really decoded: the samples are copied to a fresh
+      // folder each run, so their cache keys are new. (Never clear() here —
+      // the cache is the real app's.)
       final repo = container.read(libraryRepositoryProvider);
       final (importId, _) = await repo.findOrCreateImport(shoot.path);
       container

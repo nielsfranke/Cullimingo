@@ -101,7 +101,10 @@ void main() {
         expect(
           info.mountPoint == '/' ||
               p.isWithin(info.mountPoint, real) ||
-              info.mountPoint == real,
+              info.mountPoint == real ||
+              // macOS firmlinks /private, /Users, … into the Data volume:
+              // statfs names its mount point, which is no path prefix.
+              (Platform.isMacOS && info.mountPoint == '/System/Volumes/Data'),
           isTrue,
           reason: '${info.mountPoint} should contain $real',
         );
