@@ -95,6 +95,39 @@ void main() {
       return c.stream;
     }
 
+    test('hidden entries are neither photos nor problems', () async {
+      // What a Mac leaves on an exFAT/FAT card or drive: AppleDouble `._`
+      // companions beside every file, and protected system folders.
+      File(p.join(tmp.path, '._p1.jpg')).writeAsStringSync('appledouble');
+      File(p.join(tmp.path, 'sub', '._p2.arw')).writeAsStringSync('x');
+      final trash = Directory(p.join(tmp.path, '.Trashes', '501'))
+        ..createSync(recursive: true);
+      File(p.join(trash.path, 'deleted.jpg')).writeAsStringSync('x');
+      File(
+        p.join(tmp.path, '.p3.jpg.0a1b2c3d4e5f.part'),
+      ).writeAsStringSync('x');
+
+      final scan = await walkFolder(
+        tmp.path,
+        recursive: true,
+        includeVideos: false,
+        lister: (dir) => listingWith([
+          ...dir.listSync(recursive: true),
+          FileSystemException(
+            'Directory listing failed',
+            p.join(tmp.path, '.Spotlight-V100'),
+            const OSError('Operation not permitted', 1),
+          ),
+        ]),
+      );
+      expect(await names(scan.files), {'p1.jpg', 'p2.arw'});
+      expect(scan.complete, isTrue, reason: '${scan.unreadable}');
+      // A hidden root itself is still scanned.
+      final hiddenRoot = Directory(p.join(tmp.path, '.shoot'))..createSync();
+      File(p.join(hiddenRoot.path, 'p4.jpg')).writeAsStringSync('x');
+      expect(await names(await scanFolderFast(hiddenRoot.path)), {'p4.jpg'});
+    });
+
     test('a complete scan has no problems', () async {
       final scan = await scanFolder(tmp.path);
       expect(scan.complete, isTrue);

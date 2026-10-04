@@ -15,6 +15,12 @@ All notable user-facing changes to Cullimingo. The format loosely follows
   since a bad backup is otherwise found out on the day it's needed.
 
 ### Fixed
+- **Mac metadata files on cards and drives are no longer listed as
+  photos:** the hidden `._DSC1.ARW` files macOS writes beside every file on
+  an exFAT or FAT card or drive, and photos inside a card's `.Trashes`, are
+  skipped like any hidden file. Protected system folders such as
+  `.Spotlight-V100` no longer count as part of the card that couldn't be
+  read.
 - **HEIC and Sony HIF photos open on Linux:** the AppImage shipped without an
   HEVC decoder, so these files showed only a placeholder in the grid and the
   loupe. It now bundles one, and a HEIF whose built-in thumbnail can't be

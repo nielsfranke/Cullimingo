@@ -201,6 +201,16 @@ Future<FolderScan> walkFolder(
   // real media files — but each skip is *recorded*, not just logged: an import
   // summary used to say all OK over a card folder it never read, and the card
   // then got formatted.
+  //
+  // Hidden entries — any name under [root] starting with "." — are skipped
+  // outright, like Lightroom and Photo Mechanic do: the AppleDouble
+  // `._DSC1.ARW` a Mac writes beside every file on an exFAT/FAT card or drive
+  // isn't a photo, a card's `.Trashes` holds deleted ones, the copy
+  // pipeline's part files are hidden, and a macOS-protected `.Trashes` or
+  // `.Spotlight-V100` failing to list is no reason to warn that the card
+  // couldn't be read.
+  bool hidden(String path) =>
+      p.split(p.relative(path, from: root)).any((s) => s.startsWith('.'));
   final entities = <FileSystemEntity>[];
   final listing =
       lister?.call(dir) ?? dir.list(recursive: recursive, followLinks: false);
@@ -208,8 +218,9 @@ Future<FolderScan> walkFolder(
     await listing
         .handleError(
           (Object e) {
-            appTalker.warning('Scan: skipping unreadable entry: $e');
             final fse = e as FileSystemException;
+            if (fse.path != null && hidden(fse.path!)) return;
+            appTalker.warning('Scan: skipping unreadable entry: $e');
             unreadable.add(
               ScanProblem(
                 fse.path ?? root,
@@ -220,6 +231,7 @@ Future<FolderScan> walkFolder(
           test: (e) => e is FileSystemException,
         )
         .timeout(_scanStallTimeout)
+        .where((e) => !hidden(e.path))
         .forEach(entities.add);
   } on TimeoutException {
     appTalker.warning(
