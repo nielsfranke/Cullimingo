@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:crypto/crypto.dart';
+import 'package:cullimingo/core/files/posix_fs.dart';
+import 'package:path/path.dart' as p;
 
 /// What happened to one source file during a verified copy.
 enum CopyOutcome {
@@ -60,10 +63,21 @@ class CopyResult {
 /// caller runs this off the UI isolate.
 ///
 /// Per destination: an identical existing file is a clean skip (resume); an
-/// existing file that differs is a [CopyOutcome.conflict] and is **never**
-/// overwritten; otherwise the file is copied and its hash re-checked, deleting
-/// the copy on a [CopyOutcome.verifyFailed]. The worst outcome across all
-/// destinations is returned.
+/// existing file that differs — or anything at that name that isn't a plain
+/// file, like a symlink — is a [CopyOutcome.conflict] and is **never**
+/// touched; otherwise the file is copied and its hash re-checked. The worst
+/// outcome across all destinations is returned.
+///
+/// A copy never appears under its final name half-written. It is written to
+/// a hidden part file beside the destination (`.<name>.<random>.part`,
+/// created exclusively, so a symlink planted at that name can't redirect the
+/// write), verified there, and only then published under the real name with
+/// [publishNoReplace] — which refuses rather than replaces. Writing straight
+/// to the final name used to leave half a photo under it when the app was
+/// killed or the drive dropped; the next import called that a conflict, kept
+/// it, and never imported the photo. Two runs copying into the same folder
+/// can't truncate or delete each other's files either: each only ever
+/// touches its own part files.
 Future<CopyResult> verifiedCopy({
   required String source,
   required List<String> destinations,
@@ -83,12 +97,26 @@ Future<CopyResult> verifiedCopy({
   // deletes the newer original. Compare the source before and after instead.
   final before = src.statSync();
 
-  // Split into destinations that need writing vs. ones already present.
+  // Split into destinations that need writing vs. ones already present. A
+  // symlink (even a dangling one) or a folder at the name is never written
+  // through or compared — following it would put the copy somewhere else.
   final fresh = <String>[];
   final existing = <String>[];
   for (final dest in destinations) {
-    (File(dest).existsSync() ? existing : fresh).add(dest);
+    final type = FileSystemEntity.typeSync(dest, followLinks: false);
+    if (type == FileSystemEntityType.notFound) {
+      fresh.add(dest);
+    } else if (type == FileSystemEntityType.file) {
+      existing.add(dest);
+    } else {
+      return CopyResult(
+        source: source,
+        outcome: CopyOutcome.conflict,
+        message: "Destination exists and isn't a plain file: $dest",
+      );
+    }
   }
+  final parts = {for (final dest in fresh) dest: partPathFor(dest)};
 
   try {
     // The source hash is only needed to compare existing dests or to verify a
@@ -98,7 +126,7 @@ Future<CopyResult> verifiedCopy({
     if (fresh.isNotEmpty) {
       // One source read copies to every fresh destination (and hashes it if
       // we'll need the hash).
-      sourceHash = await _streamCopy(src, fresh, hash: needHash);
+      sourceHash = await _streamCopy(src, parts.values, hash: needHash);
     } else if (needHash) {
       sourceHash = await _hashFile(src);
     }
@@ -106,6 +134,7 @@ Future<CopyResult> verifiedCopy({
     // Existing dests: identical → skip; different → conflict (left untouched).
     for (final dest in existing) {
       if (await _hashFile(File(dest)) != sourceHash) {
+        parts.values.forEach(_deleteQuietly);
         return CopyResult(
           source: source,
           outcome: CopyOutcome.conflict,
@@ -116,9 +145,9 @@ Future<CopyResult> verifiedCopy({
 
     // Verify each freshly written copy by re-reading it.
     if (verify) {
-      for (final dest in fresh) {
-        if (await _hashFile(File(dest)) != sourceHash) {
-          _deleteQuietly(dest);
+      for (final MapEntry(key: dest, value: part) in parts.entries) {
+        if (await _hashFile(File(part)) != sourceHash) {
+          parts.values.forEach(_deleteQuietly);
           return CopyResult(
             source: source,
             outcome: CopyOutcome.verifyFailed,
@@ -130,7 +159,7 @@ Future<CopyResult> verifiedCopy({
 
     final after = src.statSync();
     if (after.size != before.size || after.modified != before.modified) {
-      fresh.forEach(_deleteQuietly);
+      parts.values.forEach(_deleteQuietly);
       return CopyResult(
         source: source,
         outcome: CopyOutcome.sourceChanged,
@@ -140,24 +169,47 @@ Future<CopyResult> verifiedCopy({
 
     // Keep the capture-time mtime on the copy, like the original card file:
     // re-importing or re-scanning copies (no EXIF read) dates them by mtime,
-    // and a fresh "now" put a whole backup into today's date folder.
-    if (fresh.isNotEmpty) {
-      final mtime = src.lastModifiedSync();
-      for (final dest in fresh) {
-        try {
-          File(dest).setLastModifiedSync(mtime);
-        } on Object {
-          // Best effort: some filesystems (SMB, FAT edge cases) refuse it.
-        }
+    // and a fresh "now" put a whole backup into today's date folder. Set on
+    // the part file, so the published name never shows any other date.
+    for (final part in parts.values) {
+      try {
+        File(part).setLastModifiedSync(before.modified);
+      } on Object {
+        // Best effort: some filesystems (SMB, FAT edge cases) refuse it.
+      }
+    }
+
+    // Publish. A name taken since the scan above (another run copying the
+    // same photo into the same folder) is compared, never replaced.
+    var published = 0;
+    for (final MapEntry(key: dest, value: part) in parts.entries) {
+      if (publishNoReplace(part, dest) == PublishOutcome.published) {
+        published++;
+        continue;
+      }
+      final same =
+          FileSystemEntity.typeSync(dest, followLinks: false) ==
+              FileSystemEntityType.file &&
+          await _hashFile(File(dest)) == await _hashFile(File(part));
+      _deleteQuietly(part);
+      if (!same) {
+        parts.values.forEach(_deleteQuietly);
+        return CopyResult(
+          source: source,
+          outcome: CopyOutcome.conflict,
+          message: 'Destination appeared during the copy and differs: $dest',
+        );
       }
     }
 
     return CopyResult(
       source: source,
-      outcome: fresh.isEmpty ? CopyOutcome.skipped : CopyOutcome.copied,
+      outcome: published == 0 ? CopyOutcome.skipped : CopyOutcome.copied,
     );
   } on Object catch (e) {
-    fresh.forEach(_deleteQuietly); // don't leave half-written files behind
+    // Don't leave half-written part files behind. Published copies stay: each
+    // was verified (or would be, by a re-run) before it got its name.
+    parts.values.forEach(_deleteQuietly);
     return CopyResult(
       source: source,
       outcome: CopyOutcome.error,
@@ -166,9 +218,29 @@ Future<CopyResult> verifiedCopy({
   }
 }
 
-/// Streams [src] once, writing every chunk to each of [dests]. When [hash] is
-/// set it also feeds the stream through SHA-256 (so the source is read a single
-/// time for copy + hash) and returns the digest; otherwise returns `null`.
+/// Suffix of the hidden part files a copy is written to before it's
+/// published. Not a supported photo type, so a part file left behind by a
+/// crash is never listed, imported or culled as a photo.
+const String kPartFileSuffix = '.part';
+
+final Random _partRandom = Random.secure();
+
+/// A fresh hidden part-file path beside [dest]: `.<name>.<random>.part`. The
+/// random tag keeps concurrent copies of the same name (two handoffs into one
+/// folder) in separate files.
+String partPathFor(String dest) {
+  final tag = List.generate(
+    6,
+    (_) => _partRandom.nextInt(256).toRadixString(16).padLeft(2, '0'),
+  ).join();
+  return p.join(p.dirname(dest), '.${p.basename(dest)}.$tag$kPartFileSuffix');
+}
+
+/// Streams [src] once, writing every chunk to each of [parts] — each created
+/// exclusively (so nothing already at that name, symlinks included, is ever
+/// written through) and flushed to disk before it's closed. When [hash] is
+/// set it also feeds the stream through SHA-256 (so the source is read a
+/// single time for copy + hash) and returns the digest; otherwise `null`.
 ///
 /// Writes go through [RandomAccessFile] rather than an `IOSink`: a sink only
 /// reports a write error (ENOSPC on a full card/SSD, EIO on a dropped mount)
@@ -177,7 +249,7 @@ Future<CopyResult> verifiedCopy({
 /// `writeFrom` calls throw where they fail, so the caller's catch cleans up.
 Future<Digest?> _streamCopy(
   File src,
-  List<String> dests, {
+  Iterable<String> parts, {
   required bool hash,
 }) async {
   Digest? digest;
@@ -192,15 +264,21 @@ Future<Digest?> _streamCopy(
   final outs = <RandomAccessFile>[];
   (Object, StackTrace)? closeError;
   try {
-    for (final dest in dests) {
-      File(dest).parent.createSync(recursive: true);
-      outs.add(await File(dest).open(mode: FileMode.writeOnly));
+    for (final part in parts) {
+      File(part).parent.createSync(recursive: true);
+      // O_EXCL: fails on anything already there, a dangling symlink included.
+      File(part).createSync(exclusive: true);
+      outs.add(await File(part).open(mode: FileMode.writeOnly));
     }
     await for (final chunk in src.openRead()) {
       hashInput?.add(chunk);
       for (final out in outs) {
         await out.writeFrom(chunk);
       }
+    }
+    // On disk before verify reads it back and before it gets its real name.
+    for (final out in outs) {
+      await out.flush();
     }
   } finally {
     hashInput?.close();

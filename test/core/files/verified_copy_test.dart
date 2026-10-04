@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:cullimingo/core/files/supported_files.dart';
 import 'package:cullimingo/core/files/verified_copy.dart';
+import 'package:cullimingo/features/library/data/folder_scanner.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -149,5 +151,99 @@ void main() {
     );
     expect(r.outcome, CopyOutcome.sourceMissing);
     expect(r.ok, isFalse);
+  });
+
+  group('part file + publish (#9)', () {
+    test('nothing appears under the final name until verified', () async {
+      final s = File(p.join(tmp.path, 'big.raw'))
+        ..writeAsBytesSync(List.filled(32 * 1024 * 1024, 7));
+      final dest = p.join(tmp.path, 'out', 'big.raw');
+
+      var copying = true;
+      var sawPartial = false;
+      final copy = verifiedCopy(
+        source: s.path,
+        destinations: [dest],
+      ).whenComplete(() => copying = false);
+      while (copying) {
+        final f = File(dest);
+        if (f.existsSync() && f.lengthSync() < 32 * 1024 * 1024) {
+          sawPartial = true;
+        }
+        await Future<void>.delayed(Duration.zero);
+      }
+      final r = await copy;
+
+      expect(r.outcome, CopyOutcome.copied);
+      expect(sawPartial, isFalse, reason: 'half a photo under the real name');
+      expect(File(dest).lengthSync(), 32 * 1024 * 1024);
+    });
+
+    test('leaves no part files behind after a copy', () async {
+      final s = src('a.arw', 'photo');
+      final out = Directory(p.join(tmp.path, 'out'));
+
+      await verifiedCopy(
+        source: s.path,
+        destinations: [p.join(out.path, 'a.arw')],
+      );
+
+      expect(out.listSync().map((e) => p.basename(e.path)), ['a.arw']);
+    });
+
+    test(
+      'a dangling symlink at the destination never redirects the write',
+      () async {
+        final s = src('l.arw', 'photo');
+        Directory(p.join(tmp.path, 'outside')).createSync();
+        final outside = p.join(tmp.path, 'outside', 'target.arw');
+        final out = Directory(p.join(tmp.path, 'out'))..createSync();
+        final dest = p.join(out.path, 'l.arw');
+        Link(dest).createSync(outside);
+
+        final r = await verifiedCopy(source: s.path, destinations: [dest]);
+
+        expect(r.outcome, CopyOutcome.conflict);
+        expect(File(outside).existsSync(), isFalse, reason: 'wrote outside');
+        expect(Link(dest).targetSync(), outside, reason: 'link replaced');
+      },
+      testOn: '!windows',
+    );
+
+    test(
+      'two copies into one name never truncate or delete each other',
+      () async {
+        final a = File(p.join(tmp.path, 'a.raw'))
+          ..writeAsBytesSync(List.filled(8 * 1024 * 1024, 1));
+        final b = File(p.join(tmp.path, 'b.raw'))
+          ..writeAsBytesSync(List.filled(8 * 1024 * 1024, 2));
+        final dest = p.join(tmp.path, 'out', 'same.raw');
+
+        final results = await Future.wait([
+          verifiedCopy(source: a.path, destinations: [dest]),
+          verifiedCopy(source: b.path, destinations: [dest]),
+        ]);
+
+        final outcomes = results.map((r) => r.outcome).toSet();
+        expect(outcomes, {CopyOutcome.copied, CopyOutcome.conflict});
+        final winner = results.first.outcome == CopyOutcome.copied ? a : b;
+        expect(File(dest).readAsBytesSync(), winner.readAsBytesSync());
+        expect(
+          Directory(p.dirname(dest)).listSync().map((e) => p.basename(e.path)),
+          ['same.raw'],
+        );
+      },
+    );
+
+    test("a part file left by a crash isn't a photo", () async {
+      final folder = Directory(p.join(tmp.path, 'lib'))..createSync();
+      final part = partPathFor(p.join(folder.path, 'DSC_0001.NEF'));
+      File(part).writeAsStringSync('half a photo');
+
+      expect(p.basename(part), startsWith('.DSC_0001.NEF.'));
+      expect(part, endsWith(kPartFileSuffix));
+      expect(isSupportedMedia(part), isFalse);
+      expect(await scanFolderFast(folder.path), isEmpty);
+    });
   });
 }

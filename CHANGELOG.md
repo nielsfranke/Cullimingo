@@ -3,6 +3,18 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **An interrupted copy no longer leaves half a photo under its real name:**
+  import and handoff write each copy to a hidden `.part` file, verify it
+  there, and only then give it its name — never replacing a file that's
+  already there. A crash or a dropped drive used to leave a truncated file
+  that the next import called a conflict and kept, so that photo never
+  arrived. A symlink at the destination can no longer redirect a copy
+  elsewhere, and two handoffs into one folder can't truncate or delete each
+  other's files.
+
 ## 1.3.5 — 2026-10-02
 
 ### Fixed
