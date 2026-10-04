@@ -387,11 +387,16 @@ class CullJobRunner {
               '${isMove ? 'Moved' : 'Copied'} ${summary.transferred} photo(s)',
               if (summary.conflicts > 0)
                 '${summary.conflicts} skipped (name in use)',
+              if (summary.stillBeingWritten > 0)
+                '${summary.stillBeingWritten} still being written (retry)',
               if (summary.failed > 0) '${summary.failed} failed',
             ];
             _notify(
               parts.join(' · '),
-              kind: summary.failed > 0 || summary.conflicts > 0
+              kind:
+                  summary.failed > 0 ||
+                      summary.conflicts > 0 ||
+                      summary.stillBeingWritten > 0
                   ? NoticeKind.warning
                   : NoticeKind.success,
             );

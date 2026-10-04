@@ -30,6 +30,11 @@ enum CopyOutcome {
   /// deleted: they hold a version that no longer exists.
   sourceChanged,
 
+  /// The source was modified moments before the copy started — most likely
+  /// still being written (a tether, a sync tool, a camera over USB). Held
+  /// back untouched; importing again once it has settled copies it.
+  sourceBusy,
+
   /// Any other I/O error.
   error,
 }
@@ -78,10 +83,19 @@ class CopyResult {
 /// it, and never imported the photo. Two runs copying into the same folder
 /// can't truncate or delete each other's files either: each only ever
 /// touches its own part files.
+///
+/// A source modified less than [quietPeriod] ago (either way: a clock skewed
+/// into the future by more than that is a camera clock, not a write) is held
+/// back as [CopyOutcome.sourceBusy] before anything is written. The mid-copy
+/// check catches a file that changes *during* the copy; a half-written file
+/// that happens to sit idle for a moment only shows up here. The app's
+/// copiers pass [kSourceQuietPeriod]; the default of none is for callers
+/// whose sources are known to be complete.
 Future<CopyResult> verifiedCopy({
   required String source,
   required List<String> destinations,
   bool verify = true,
+  Duration quietPeriod = Duration.zero,
 }) async {
   final src = File(source);
   if (!src.existsSync()) {
@@ -96,6 +110,16 @@ Future<CopyResult> verifiedCopy({
   // the copy is stale while every check passes — and a handoff *move* then
   // deletes the newer original. Compare the source before and after instead.
   final before = src.statSync();
+  if (quietPeriod > Duration.zero &&
+      DateTime.now().difference(before.modified).abs() < quietPeriod) {
+    return CopyResult(
+      source: source,
+      outcome: CopyOutcome.sourceBusy,
+      message:
+          'Changed seconds ago (still being written?) — not copied, '
+          'import again in a moment',
+    );
+  }
 
   // Split into destinations that need writing vs. ones already present. A
   // symlink (even a dangling one) or a folder at the name is never written
@@ -217,6 +241,10 @@ Future<CopyResult> verifiedCopy({
     );
   }
 }
+
+/// How long a source must have been left alone before the app copies it —
+/// see `verifiedCopy`'s `quietPeriod`.
+const Duration kSourceQuietPeriod = Duration(seconds: 3);
 
 /// Suffix of the hidden part files a copy is written to before it's
 /// published. Not a supported photo type, so a part file left behind by a

@@ -275,6 +275,10 @@ class IngestSummary {
       _count(CopyOutcome.sourceChanged) +
       _count(CopyOutcome.error);
 
+  /// Files held back because they were still being written (not in
+  /// [failed]): running again once they have settled copies them.
+  int get stillBeingWritten => _count(CopyOutcome.sourceBusy);
+
   /// Whether every planned file landed safely — never true for a cancelled
   /// run, which used to read "Import complete" over a partial import.
   bool get allOk => !cancelled && notStarted == 0 && results.every((r) => r.ok);
@@ -404,5 +408,6 @@ Future<CopyResult> _isolateCopy({
     source: source,
     destinations: destinations,
     verify: verify,
+    quietPeriod: kSourceQuietPeriod,
   ),
 );

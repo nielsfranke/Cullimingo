@@ -127,6 +127,10 @@ class TransferSummary {
       _count(CopyOutcome.sourceChanged) +
       _count(CopyOutcome.error);
 
+  /// Files held back because they were still being written (not in
+  /// [failed]): running again once they have settled copies them.
+  int get stillBeingWritten => _count(CopyOutcome.sourceBusy);
+
   /// Whether every photo landed safely.
   bool get allOk => results.isNotEmpty && results.every((r) => r.ok);
 }
@@ -236,6 +240,7 @@ Future<CopyResult> _isolateCopy({
     source: source,
     destinations: destinations,
     verify: verify,
+    quietPeriod: kSourceQuietPeriod,
   ),
 );
 

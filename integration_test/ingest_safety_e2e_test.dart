@@ -43,13 +43,18 @@ void main() {
   }
 
   /// A camera card under [root]: `<name>/DCIM` with [count] JPEG-named files
-  /// of [bytes] each (content is irrelevant to the copy).
+  /// of [bytes] each (content is irrelevant to the copy). Dated an hour ago,
+  /// like real shots: a file written moments before is held back as still
+  /// being written.
   Directory card(String root, String name, int count, {int bytes = 16}) {
     final dcim = Directory(p.join(root, name, 'DCIM'))
       ..createSync(recursive: true);
     final data = Uint8List(bytes);
+    final shotAt = DateTime.now().subtract(const Duration(hours: 1));
     for (var i = 0; i < count; i++) {
-      File(p.join(dcim.path, 'IMG_$i.JPG')).writeAsBytesSync(data);
+      File(p.join(dcim.path, 'IMG_$i.JPG'))
+        ..writeAsBytesSync(data)
+        ..setLastModifiedSync(shotAt);
     }
     return Directory(p.join(root, name));
   }

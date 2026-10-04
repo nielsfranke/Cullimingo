@@ -393,6 +393,17 @@ void main() {
       expect(summary.failed, 1);
       expect(summary.allOk, isFalse);
     });
+
+    test('summary keeps files still being written apart from failures', () {
+      const summary = IngestSummary([
+        CopyResult(source: '/c/a', outcome: CopyOutcome.copied),
+        CopyResult(source: '/c/b', outcome: CopyOutcome.sourceBusy),
+      ]);
+
+      expect(summary.stillBeingWritten, 1);
+      expect(summary.failed, 0);
+      expect(summary.allOk, isFalse);
+    });
   });
 
   group('captureDateCounts / excludeCaptureDates', () {

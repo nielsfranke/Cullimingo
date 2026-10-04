@@ -14,6 +14,10 @@ All notable user-facing changes to Cullimingo. The format loosely follows
   arrived. A symlink at the destination can no longer redirect a copy
   elsewhere, and two handoffs into one folder can't truncate or delete each
   other's files.
+- **Files still being written are held back:** a file changed in the last
+  few seconds (a tether, a sync tool, a camera still writing over USB) is
+  no longer copied while it's momentarily idle. The summary lists it as
+  "still being written"; import again once it has settled.
 
 ## 1.3.5 — 2026-10-02
 

@@ -153,6 +153,54 @@ void main() {
     expect(r.ok, isFalse);
   });
 
+  group('quiet period (#9)', () {
+    const quiet = Duration(seconds: 3);
+
+    test('holds back a file modified moments ago, untouched', () async {
+      final s = src('busy.arw', 'half written');
+      final dest = p.join(tmp.path, 'out', 'busy.arw');
+
+      final r = await verifiedCopy(
+        source: s.path,
+        destinations: [dest],
+        quietPeriod: quiet,
+      );
+
+      expect(r.outcome, CopyOutcome.sourceBusy);
+      expect(r.ok, isFalse);
+      expect(r.message, contains('still being written'));
+      expect(Directory(p.join(tmp.path, 'out')).existsSync(), isFalse);
+    });
+
+    test('copies a file that has settled', () async {
+      final s = src('done.arw', 'complete')
+        ..setLastModifiedSync(
+          DateTime.now().subtract(const Duration(seconds: 10)),
+        );
+
+      final r = await verifiedCopy(
+        source: s.path,
+        destinations: [p.join(tmp.path, 'out', 'done.arw')],
+        quietPeriod: quiet,
+      );
+
+      expect(r.outcome, CopyOutcome.copied);
+    });
+
+    test("a camera clock set in the future doesn't block forever", () async {
+      final s = src('future.arw', 'shot')
+        ..setLastModifiedSync(DateTime.now().add(const Duration(hours: 2)));
+
+      final r = await verifiedCopy(
+        source: s.path,
+        destinations: [p.join(tmp.path, 'out', 'future.arw')],
+        quietPeriod: quiet,
+      );
+
+      expect(r.outcome, CopyOutcome.copied);
+    });
+  });
+
   group('part file + publish (#9)', () {
     test('nothing appears under the final name until verified', () async {
       final s = File(p.join(tmp.path, 'big.raw'))

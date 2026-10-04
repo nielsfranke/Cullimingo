@@ -870,8 +870,10 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
         _statRow('Already present (skipped)', s.skipped),
         if (s.notStarted > 0) _statRow('Not copied (cancelled)', s.notStarted),
         if (s.conflicts > 0) _statRow('Conflicts (kept existing)', s.conflicts),
+        if (s.stillBeingWritten > 0)
+          _statRow('Still being written (import again)', s.stillBeingWritten),
         if (s.failed > 0) _statRow('Failed', s.failed),
-        if (s.conflicts > 0 || s.failed > 0) ...[
+        if (s.conflicts > 0 || s.failed > 0 || s.stillBeingWritten > 0) ...[
           const SizedBox(height: AppSpacing.sm),
           for (final r in s.results.where((r) => !r.ok).take(8))
             Text(
