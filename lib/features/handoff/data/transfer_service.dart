@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:cullimingo/core/files/part_cleanup.dart';
 import 'package:cullimingo/core/files/sidecar_path.dart';
 import 'package:cullimingo/core/files/verified_copy.dart';
 import 'package:cullimingo/core/files/watched_copy.dart';
@@ -251,6 +252,18 @@ Stream<TransferProgress> runTransfer({
 
   controller
     ..onListen = () async {
+      // Part files a crashed or killed earlier run left in these folders.
+      // Alongside the copies, not before them: this run's own part files are
+      // fresh, so the cleanup never touches them.
+      unawaited(
+        removeStalePartFiles({
+          for (final item in plan) ...[
+            p.dirname(p.join(destinationRoot, item.relPath)),
+            if (item.sidecar case final sc?)
+              p.dirname(p.join(destinationRoot, sc.relPath)),
+          ],
+        }),
+      );
       final workerCount = total == 0
           ? 0
           : (concurrency < 1 ? 1 : (concurrency > total ? total : concurrency));
