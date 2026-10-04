@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cullimingo/core/files/part_cleanup.dart';
 import 'package:cullimingo/core/files/sidecar_path.dart';
 import 'package:cullimingo/core/files/verified_copy.dart';
 import 'package:cullimingo/core/files/watched_copy.dart';
@@ -471,6 +472,19 @@ Stream<IngestProgress> runIngest({
       final workerCount = total == 0
           ? 0
           : (concurrency < 1 ? 1 : (concurrency > total ? total : concurrency));
+      // Part files a crashed or killed earlier run left in these folders.
+      // Alongside the copies, not before them: this run's own part files are
+      // fresh, so the cleanup never touches them.
+      unawaited(
+        removeStalePartFiles({
+          for (final root in destinationRoots)
+            for (final item in plan.items) ...[
+              p.dirname(p.join(root, item.relPath)),
+              for (final c in item.companions)
+                p.dirname(p.join(root, c.relPath)),
+            ],
+        }),
+      );
       // Watch for a cancel while copies are in flight: give them the grace
       // period, then stop waiting.
       Timer? grace;

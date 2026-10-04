@@ -58,7 +58,14 @@ packages/
   `checkDestinations` refuses a destination whose remembered volume (mount
   point, `AppSettings.destinationVolumes`) isn't the one it now resolves to,
   a vanished import root, and too little free space per filesystem; its
-  mount points become per-copy volume guards. The import's backup root is
+  mount points become per-copy volume guards. Without a remembered volume,
+  `unmountedDriveFor` still refuses a root under `/Volumes` / `/media` /
+  `/run/media` whose path resolves to a volume outside that folder, and (Linux)
+  one under an `/etc/fstab` mount point missing from mountinfo; `/mnt` is
+  judged by fstab only. Each run first sweeps stale part files (ctime > 1 h,
+  exact `kPartFileName` pattern) from its destination folders,
+  non-recursively, on an isolate alongside the copies (`part_cleanup.dart`).
+  The import's backup root is
   always verified. Volume info is libc FFI (`posix_fs.dart`): `statfs` on
   macOS, `/proc/self/mountinfo` + `statvfs` on Linux, 64-bit layouts only.
 

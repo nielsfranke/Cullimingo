@@ -67,7 +67,13 @@ All notable user-facing changes to Cullimingo. The format loosely follows
   and refuses to import or hand off into it when that drive isn't mounted
   — including the empty mount-point folder an unplugged drive leaves
   behind on Linux. A destination folder that has vanished is never
-  recreated. If a folder really moved, choose it again.
+  recreated. If a folder really moved, choose it again. Destinations chosen
+  before this update are protected too: a folder on an external drive
+  (under `/Volumes`, `/media` or `/run/media`) or on a drive listed in
+  `/etc/fstab` is refused while that drive isn't mounted.
+- **Leftovers from an interrupted copy are tidied up:** the hidden `.part`
+  files a crash or a dropped drive can leave in a destination folder are
+  removed on the next import or handoff into that folder.
 - **Moving a photo no longer leaves its marks behind:** if its `.xmp`
   sidecar couldn't be copied, the photo used to be moved anyway and reported
   as done, with its rating and labels left in the old folder. The original
