@@ -182,34 +182,53 @@ String _unique(String rel, Set<String> used) {
   return '${base}_$n$ext';
 }
 
+/// A scanned source: the files to plan from, plus whatever the scan couldn't
+/// read. A non-empty [unreadable] means the card holds files the import will
+/// never see — the dialog and the summary must say so, or the card gets
+/// formatted with photos still on it.
+class SourceScan {
+  /// Creates a source scan.
+  const SourceScan(this.sources, {this.unreadable = const []});
+
+  /// The files found, with capture time and camera resolved.
+  final List<IngestSource> sources;
+
+  /// Folders/files on the source the scan couldn't read.
+  final List<ScanProblem> unreadable;
+}
+
 /// Scans [sourceRoot] into [IngestSource]s (the slow, source-dependent step).
-/// Capture time comes from the file mtime (cameras set it to the shot time on
-/// the card); EXIF is only read when [withCamera] is set (`{camera}` token),
-/// since reading EXIF for a whole card is slow. Cache the result and re-run
+/// Capture time is the EXIF `DateTimeOriginal`, read for every file (header
+/// only, on a background isolate) so date folders match when the photo was
+/// taken; the file mtime is the fallback when a file has no usable date (an
+/// impossible one is rejected by the reader). Cache the result and re-run
 /// [buildPlan] on template/shoot changes — those don't need a re-scan.
-Future<List<IngestSource>> scanSources(
+/// [scanner] lists the source (injectable for tests).
+Future<SourceScan> scanSources(
   String sourceRoot, {
   bool includeVideos = true,
-  bool withCamera = false,
+  FolderScanner scanner = scanFolder,
 }) async {
-  final files = await scanFolderFast(sourceRoot, includeVideos: includeVideos);
-  final byPath = withCamera
-      ? {
-          for (final e in await scanExif(files.map((f) => f.path).toList()))
-            e.path: e,
-        }
-      : const <String, ScannedExif>{};
+  final scan = await scanner(sourceRoot, includeVideos: includeVideos);
+  final files = scan.files;
+  final byPath = {
+    for (final e in await scanExif(files.map((f) => f.path).toList()))
+      e.path: e,
+  };
 
-  return [
-    for (final f in files)
-      IngestSource(
-        path: f.path,
-        capturedAt: byPath[f.path]?.capturedAt ?? f.mtime,
-        camera: byPath[f.path]?.camera,
-        sizeBytes: f.sizeBytes,
-        companions: f.companions,
-      ),
-  ];
+  return SourceScan(
+    [
+      for (final f in files)
+        IngestSource(
+          path: f.path,
+          capturedAt: byPath[f.path]?.capturedAt ?? f.mtime,
+          camera: byPath[f.path]?.camera,
+          sizeBytes: f.sizeBytes,
+          companions: f.companions,
+        ),
+    ],
+    unreadable: scan.unreadable,
+  );
 }
 
 /// Progress tick during a run: [done] of [total] processed, with the [last]
@@ -239,9 +258,14 @@ class IngestProgress {
 /// Aggregate outcome of a run.
 class IngestSummary {
   /// Creates a summary over [results]. [planned] is the plan's size (defaults
-  /// to the results); [cancelled] marks a run the user stopped early.
-  const IngestSummary(this.results, {int? planned, this.cancelled = false})
-    : planned = planned ?? -1;
+  /// to the results); [cancelled] marks a run the user stopped early;
+  /// [unreadable] lists what the source scan couldn't read.
+  const IngestSummary(
+    this.results, {
+    int? planned,
+    this.cancelled = false,
+    this.unreadable = const [],
+  }) : planned = planned ?? -1;
 
   /// Per-file results, in run order.
   final List<CopyResult> results;
@@ -252,6 +276,9 @@ class IngestSummary {
 
   /// Whether the user cancelled the run.
   final bool cancelled;
+
+  /// Folders/files on the source the scan couldn't read, so never imported.
+  final List<ScanProblem> unreadable;
 
   /// Planned files never copied because the run was cancelled.
   int get notStarted =>
@@ -276,8 +303,13 @@ class IngestSummary {
       _count(CopyOutcome.error);
 
   /// Whether every planned file landed safely — never true for a cancelled
-  /// run, which used to read "Import complete" over a partial import.
-  bool get allOk => !cancelled && notStarted == 0 && results.every((r) => r.ok);
+  /// run, which used to read "Import complete" over a partial import, nor
+  /// when part of the source couldn't be read (its files were never planned).
+  bool get allOk =>
+      !cancelled &&
+      notStarted == 0 &&
+      unreadable.isEmpty &&
+      results.every((r) => r.ok);
 }
 
 /// Signature of the verified-copy step, injectable so tests skip the isolate.

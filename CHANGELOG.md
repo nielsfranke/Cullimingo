@@ -5,7 +5,18 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 
 ## Unreleased
 
+### Changed
+- **Import date folders always follow the capture date in the photo's
+  EXIF**, not only when `{camera}` is in the naming template. The file date
+  is used only when a file has no valid capture date. Scanning a card reads
+  a little more, in the background.
+
 ### Fixed
+- **Import tells you when it couldn't read part of the card:** an unreadable
+  folder (or a card reader that stalls) used to be skipped silently, and the
+  summary still said "Import complete". The dialog now warns before
+  importing, the summary lists what couldn't be read and reads "finished
+  with issues", and both say not to format the card yet.
 - **Refreshing (⌘R) a folder that's only partly readable no longer removes
   photos:** when part of the folder can't be read (a locked sub-folder, a
   stalling card reader), new files are still picked up but nothing is

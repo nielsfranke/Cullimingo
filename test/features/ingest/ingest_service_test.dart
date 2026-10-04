@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:cullimingo/core/files/verified_copy.dart';
 import 'package:cullimingo/core/naming/rename_template.dart';
 import 'package:cullimingo/features/ingest/data/ingest_service.dart';
+import 'package:cullimingo/features/library/data/folder_scanner.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 
 void main() {
@@ -392,6 +394,77 @@ void main() {
       final summary = IngestSummary([for (final t in ticks) t.last]);
       expect(summary.failed, 1);
       expect(summary.allOk, isFalse);
+    });
+  });
+
+  group('scanSources', () {
+    late Directory tmp;
+    // A file date on another day than the shot, as after a card copy that
+    // didn't keep mtimes, or a camera clock reset.
+    final fileDate = DateTime(2026, 1, 15, 12);
+
+    setUp(() async {
+      tmp = await Directory.systemTemp.createTemp('ingest_scan');
+    });
+    tearDown(() async => tmp.delete(recursive: true));
+
+    File jpeg(String name, {String? dateTimeOriginal}) {
+      final image = img.Image(width: 8, height: 8);
+      if (dateTimeOriginal != null) {
+        image.exif.exifIfd['DateTimeOriginal'] = dateTimeOriginal;
+      }
+      return File(p.join(tmp.path, name))
+        ..writeAsBytesSync(img.encodeJpg(image))
+        ..setLastModifiedSync(fileDate);
+    }
+
+    test('dates come from EXIF, whatever the naming template', () async {
+      jpeg('a.jpg', dateTimeOriginal: '2026:06:01 10:30:45');
+
+      final scan = await scanSources(tmp.path);
+
+      expect(scan.sources.single.capturedAt, DateTime(2026, 6, 1, 10, 30, 45));
+      expect(scan.unreadable, isEmpty);
+    });
+
+    test('no or impossible EXIF date falls back to the file date', () async {
+      jpeg('none.jpg');
+      jpeg('bad.jpg', dateTimeOriginal: '2026:02:31 10:00:00');
+
+      final scan = await scanSources(tmp.path);
+
+      expect(scan.sources.map((s) => s.capturedAt), [fileDate, fileDate]);
+    });
+
+    test('what the scan could not read is passed on', () async {
+      jpeg('a.jpg');
+      final locked = p.join(tmp.path, 'DCIM', '101');
+      Future<FolderScan> partial(
+        String root, {
+        bool recursive = true,
+        bool includeVideos = false,
+      }) async => FolderScan(
+        (await scanFolder(root, includeVideos: includeVideos)).files,
+        unreadable: [ScanProblem(locked, 'Permission denied')],
+      );
+
+      final scan = await scanSources(tmp.path, scanner: partial);
+
+      expect(scan.sources, hasLength(1));
+      expect(scan.unreadable.single.path, locked);
+    });
+
+    test('an unreadable source part means the run is not all OK', () {
+      const ok = CopyResult(source: '/c/a.jpg', outcome: CopyOutcome.copied);
+      expect(const IngestSummary([ok], planned: 1).allOk, isTrue);
+      expect(
+        const IngestSummary(
+          [ok],
+          planned: 1,
+          unreadable: [ScanProblem('/c/DCIM/101', 'Permission denied')],
+        ).allOk,
+        isFalse,
+      );
     });
   });
 
