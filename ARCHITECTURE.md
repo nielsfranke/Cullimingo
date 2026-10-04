@@ -27,7 +27,12 @@ packages/
 - **Read model vs. truth:** drift (SQLite) is the fast read model the UI binds
   to; the filesystem + XMP sidecars are the durable source of truth. Sync on
   import and on manual refresh (⌘R re-scans the folder; sidecars resync on
-  focus/refresh) — there is **no** filesystem watcher.
+  focus/refresh) — there is **no** filesystem watcher. A refresh only removes
+  rows when the listing is complete: a missing/empty root, or a scan that
+  couldn't read part of the folder (`FolderScan.unreadable`), adds and
+  updates but never deletes. The ingest scan reports the same unreadable
+  entries in the plan and the summary, and always reads EXIF for capture
+  dates (mtime is only the fallback).
 - **Sidecar naming** (`core/files/sidecar_path.dart`): RAW uses the LR/C1
   shared-stem `DSC1.xmp`. The non-RAW half of a RAW+JPEG pair uses a per-file
   `DSC1.JPG.xmp` (darktable style) so both keep independent marks; a lone

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cullimingo/features/library/data/folder_scanner.dart';
@@ -73,8 +74,74 @@ void main() {
 
     // The recursive walk hits "permission denied" descending into `locked`,
     // but completes over the readable files instead of throwing/hanging.
-    final files = await scanFolderFast(tmp.path, includeVideos: true);
-    expect(await names(files), {'p1.jpg', 'p2.arw', 'v1.mp4', 'v2.mov'});
+    final scan = await scanFolder(tmp.path, includeVideos: true);
+    expect(await names(scan.files), {'p1.jpg', 'p2.arw', 'v1.mp4', 'v2.mov'});
+    // …and says so: the listing is incomplete, naming the locked folder.
+    expect(scan.complete, isFalse);
+    expect(scan.unreadable.map((u) => u.path), contains(locked.path));
+  });
+
+  group('unreadable entries are reported, not just logged', () {
+    // An injected listing: tests run as root in Docker, where `chmod 000`
+    // restricts nothing, so the real case above is skipped there.
+    // Errors are error *events* the listing carries on past, as a recursive
+    // Directory.list does.
+    Stream<FileSystemEntity> listingWith(List<Object> events) {
+      final c = StreamController<FileSystemEntity>();
+      for (final e in events) {
+        e is FileSystemEntity ? c.add(e) : c.addError(e);
+      }
+      unawaited(c.close());
+      return c.stream;
+    }
+
+    test('a complete scan has no problems', () async {
+      final scan = await scanFolder(tmp.path);
+      expect(scan.complete, isTrue);
+      expect(scan.unreadable, isEmpty);
+    });
+
+    test('a permission error is recorded with its path and reason', () async {
+      final locked = p.join(tmp.path, 'DCIM', '101MSDCF');
+      final scan = await walkFolder(
+        tmp.path,
+        recursive: true,
+        includeVideos: false,
+        lister: (_) => listingWith([
+          File(p.join(tmp.path, 'p1.jpg')),
+          FileSystemException(
+            'Directory listing failed',
+            locked,
+            const OSError('Permission denied', 13),
+          ),
+          File(p.join(tmp.path, 'sub', 'p2.arw')),
+        ]),
+      );
+      expect(await names(scan.files), {'p1.jpg', 'p2.arw'});
+      expect(scan.complete, isFalse);
+      expect(scan.unreadable.single.path, locked);
+      expect(scan.unreadable.single.reason, 'Permission denied');
+    });
+
+    test(
+      'a stalled listing keeps what it found and is marked incomplete',
+      () async {
+        final scan = await walkFolder(
+          tmp.path,
+          recursive: true,
+          includeVideos: false,
+          // A seized card reader: one entry, then the next never comes.
+          lister: (_) =>
+              (StreamController<FileSystemEntity>()
+                    ..add(File(p.join(tmp.path, 'p1.jpg'))))
+                  .stream,
+        );
+        expect(await names(scan.files), {'p1.jpg'});
+        expect(scan.unreadable.single.path, tmp.path);
+        expect(scan.unreadable.single.reason, contains('stalled'));
+      },
+      timeout: const Timeout(Duration(seconds: 30)),
+    );
   });
 
   test('attaches same-stem companions, ignores orphan sidecars', () async {

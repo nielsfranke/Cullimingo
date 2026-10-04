@@ -8,6 +8,7 @@ import 'package:cullimingo/core/naming/rename_template.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:cullimingo/features/ingest/data/ingest_service.dart';
 import 'package:cullimingo/features/ingest/data/volume_detector.dart';
+import 'package:cullimingo/features/library/data/folder_scanner.dart';
 import 'package:cullimingo/features/naming/domain/name_preset.dart';
 import 'package:cullimingo/features/naming/presentation/name_builder.dart';
 import 'package:cullimingo/shared/widgets/dialog_kit.dart';
@@ -55,9 +56,13 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
   IngestPlan? _plan;
   // Cached scan of the source, plus the key it was scanned with, so typing a
   // shoot name only re-runs the (instant, pure) buildPlan — no re-scan, no
-  // flicker. Re-scan only when source / includeVideos / camera-need changes.
+  // flicker. Re-scan only when the source changes.
   List<IngestSource>? _sources;
   String? _scannedKey;
+  // What the cached scan couldn't read on the source — warned about before
+  // the run and carried into the summary, so a partly unreadable card never
+  // reads as fully imported.
+  List<ScanProblem> _unreadable = const [];
 
   // Monotonic scan counter: only the newest in-flight scan may write state
   // back (see `_refresh`), so overlapping scans can't race each other.
@@ -167,8 +172,8 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     await _refresh();
   }
 
-  /// Scans the source only when needed (source/videos/camera-need changed),
-  /// then rebuilds the plan. Cheap calls (shoot/template tweaks) skip the scan.
+  /// Scans the source only when needed (the source changed), then rebuilds
+  /// the plan. Cheap calls (shoot/template tweaks) skip the scan.
   // A whole-drive root in the volume list that isn't a camera card — scanning
   // an entire disk (e.g. an external drive) is never wanted and can OOM.
   bool _isWholeDriveRoot(String path) =>
@@ -179,6 +184,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     if (source == null) {
       setState(() {
         _sources = null;
+        _unreadable = const [];
         _plan = null;
         _wholeDrive = false;
         _excludedDates.clear();
@@ -188,6 +194,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     if (_isWholeDriveRoot(source)) {
       setState(() {
         _sources = null;
+        _unreadable = const [];
         _plan = null;
         _wholeDrive = true;
         _excludedDates.clear();
@@ -195,11 +202,11 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       return;
     }
     _wholeDrive = false;
-    final needsCamera = _template.pattern.contains('{camera}');
     // The scan always includes videos and caches them; the "include videos"
     // toggle just filters the plan (see `_visibleSources`), so flipping it is
-    // instant and never re-scans the card. So it's not part of the scan key.
-    final key = '$source|$needsCamera';
+    // instant and never re-scans the card. EXIF (capture date + camera) is
+    // always read, so the naming template isn't part of the key either.
+    final key = source;
     if (_sources == null || _scannedKey != key) {
       // Overlapping scans (slow card scan still running while the user picks
       // another source) used to land in completion order — source A's files
@@ -215,13 +222,14 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
         // card A, switch to card B, and "Import N photos" imported A.
         _sources = null;
         _scannedKey = null;
+        _unreadable = const [];
         _plan = null;
       });
-      final List<IngestSource> sources;
+      final SourceScan scan;
       try {
         // Always scans videos too (scanSources defaults includeVideos: true);
         // the toggle filters the plan, not the scan.
-        sources = await scanSources(source, withCamera: needsCamera);
+        scan = await scanSources(source);
       } on Object catch (e) {
         // Never leave the dialog stuck on "Scanning…": surface the failure and
         // let the user pick another source or retry.
@@ -233,9 +241,9 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
         return;
       }
       if (!mounted || seq != _scanSeq) return;
-      final desiredKey = '$_source|${_template.pattern.contains('{camera}')}';
-      if (key == desiredKey) {
-        _sources = sources;
+      if (key == _source) {
+        _sources = scan.sources;
+        _unreadable = scan.unreadable;
         _scannedKey = key;
         // A fresh scan may cover different capture dates than before, so any
         // earlier exclusions no longer mean anything — start unfiltered.
@@ -368,6 +376,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
         results,
         planned: plan.items.length,
         cancelled: _cancelled,
+        unreadable: _unreadable,
       );
       _running = false;
     });
@@ -466,6 +475,10 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
           const SizedBox(height: AppSpacing.sm),
           status,
         ],
+        if (!_scanning && _unreadable.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          _unreadableWarning(),
+        ],
         if (_dateCounts.length > 1) ...[
           const SizedBox(height: AppSpacing.md),
           _dayFilter(),
@@ -545,8 +558,8 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
         savedPresets: _savedNaming,
         onChanged: (p) {
           setState(() => _naming = p);
-          // Changing the pattern can add/remove {camera}, which drives whether
-          // the scan must read EXIF — so re-run the (cached) refresh.
+          // Only the plan follows the pattern (the cached scan already has
+          // EXIF), so this rebuilds it without re-scanning.
           unawaited(_refresh());
         },
         onSavePreset: _saveNaming,
@@ -808,6 +821,47 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
     return null;
   }
 
+  /// Before the run: part of the source couldn't be read, so its files are
+  /// not in the plan. Loud on purpose — the next step after an import is
+  /// often formatting the card.
+  Widget _unreadableWarning() {
+    final n = _unreadable.length;
+    return Column(
+      key: const ValueKey('ingest-unreadable-warning'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "$n ${n == 1 ? 'item' : 'items'} on the source couldn't be read and "
+          "won't be imported. Don't format the card until you've checked it.",
+          style: const TextStyle(color: AppColors.labelYellow, fontSize: 13),
+        ),
+        ..._unreadableLines(_unreadable),
+      ],
+    );
+  }
+
+  /// Up to a few unreadable paths (relative to the source), with the reason.
+  List<Widget> _unreadableLines(List<ScanProblem> problems) {
+    final root = _source;
+    String shown(String path) => root != null && p.isWithin(root, path)
+        ? p.relative(path, from: root)
+        : path;
+    return [
+      for (final u in problems.take(5))
+        Text(
+          '• ${shown(u.path)}: ${u.reason}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+        ),
+      if (problems.length > 5)
+        Text(
+          '• …and ${problems.length - 5} more',
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+        ),
+    ];
+  }
+
   Widget _progressView() {
     final pr = _progress;
     final value = (pr == null || pr.total == 0) ? null : pr.done / pr.total;
@@ -871,6 +925,17 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
         if (s.notStarted > 0) _statRow('Not copied (cancelled)', s.notStarted),
         if (s.conflicts > 0) _statRow('Conflicts (kept existing)', s.conflicts),
         if (s.failed > 0) _statRow('Failed', s.failed),
+        if (s.unreadable.isNotEmpty) ...[
+          _statRow("Couldn't read on the source", s.unreadable.length),
+          const SizedBox(height: AppSpacing.sm),
+          const Text(
+            "Part of the source couldn't be read, so its files weren't "
+            "imported. Don't format the card until you've checked it.",
+            key: ValueKey('ingest-summary-unreadable'),
+            style: TextStyle(color: AppColors.labelYellow, fontSize: 13),
+          ),
+          ..._unreadableLines(s.unreadable),
+        ],
         if (s.conflicts > 0 || s.failed > 0) ...[
           const SizedBox(height: AppSpacing.sm),
           for (final r in s.results.where((r) => !r.ok).take(8))

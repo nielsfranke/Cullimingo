@@ -13,7 +13,15 @@ import 'package:path/path.dart' as p;
 class LibraryRepository {
   /// Creates a repository over [db]. When [metadata] is given, existing XMP
   /// sidecars seed the read model on import.
-  const LibraryRepository(AppDatabase db, {this.metadata}) : _db = db;
+  ///
+  /// [scanner] lists a folder (default [scanFolder]); tests inject one that
+  /// reports unreadable entries.
+  const LibraryRepository(
+    AppDatabase db, {
+    this.metadata,
+    FolderScanner scanner = scanFolder,
+  }) : _db = db,
+       _scan = scanner;
 
   // The read-model database. Private: queries stay behind named AppDatabase
   // methods so the schema never becomes this repository's public API.
@@ -21,6 +29,8 @@ class LibraryRepository {
 
   /// Optional metadata repository for sidecar sync.
   final MetadataRepository? metadata;
+
+  final FolderScanner _scan;
 
   /// Finds the import for [root] if it was opened before, else creates an empty
   /// one. Returns `(importId, isNew)`. Reusing the existing import is what lets
@@ -51,11 +61,11 @@ class LibraryRepository {
   }) async {
     // Include videos so clips show in the grid (with a poster frame / placeholder
     // and external-player open); the grid is otherwise photo-centric.
-    final files = await scanFolderFast(
+    final files = (await _scan(
       root,
       recursive: recursive,
       includeVideos: true,
-    );
+    )).files;
     await _db.claimPhotos(
       importId,
       files.map(
@@ -91,8 +101,19 @@ class LibraryRepository {
   /// is set: an unplugged card or drive (or a Linux mount point left empty)
   /// must not read as "every photo was deleted", which used to drop every row
   /// and the database-only state with it (rotation, stacks, selections).
+  ///
+  /// Likewise, when the scan couldn't read part of the folder (a permission
+  /// error on a sub-folder, a stalled card reader), the listing is incomplete:
+  /// new and changed files are still picked up, but nothing is removed, and
+  /// `unreadable` counts what the scan skipped.
   Future<
-    ({int added, int removed, List<String> changedPaths, bool unavailable})
+    ({
+      int added,
+      int removed,
+      List<String> changedPaths,
+      bool unavailable,
+      int unreadable,
+    })
   >
   refreshImport(
     int importId,
@@ -104,15 +125,17 @@ class LibraryRepository {
       removed: 0,
       changedPaths: <String>[],
       unavailable: true,
+      unreadable: 0,
     );
     // Async on purpose: the root may sit on slow removable media.
     // ignore: avoid_slow_async_io
     if (!await Directory(root).exists()) return unavailable;
-    final files = await scanFolderFast(
+    final scan = await _scan(
       root,
       recursive: recursive,
       includeVideos: true,
     );
+    final files = scan.files;
     final diskPaths = files.map((f) => f.path).toSet();
     final existing = await _db.photosForImport(importId);
     if (files.isEmpty && existing.isNotEmpty) return unavailable;
@@ -125,7 +148,11 @@ class LibraryRepository {
     final newFiles = files
         .where((f) => !existingPaths.contains(f.path))
         .toList();
-    final removedPaths = existingPaths.difference(diskPaths).toList();
+    // A file missing from an incomplete listing may just sit in the part the
+    // scan couldn't read — never treat that as deleted.
+    final removedPaths = scan.complete
+        ? existingPaths.difference(diskPaths).toList()
+        : const <String>[];
 
     if (newFiles.isNotEmpty) {
       await _db.claimPhotos(
@@ -181,6 +208,7 @@ class LibraryRepository {
       removed: removedPaths.length,
       changedPaths: [for (final f in changedFiles) f.path],
       unavailable: false,
+      unreadable: scan.unreadable.length,
     );
   }
 
