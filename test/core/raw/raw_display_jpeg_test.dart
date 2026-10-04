@@ -1,5 +1,6 @@
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cullimingo/core/cache/vips.dart';
 import 'package:cullimingo/core/raw/libraw_preview_extractor.dart';
@@ -111,6 +112,124 @@ void main() {
       rawDisplayJpeg(lr!, writeDng(), longEdge: 20, vips: () => null),
       completion(isNull),
     );
+  });
+
+  group('demosaic cache (GitHub #7)', () {
+    test('another tier of the same RAW reuses the decode', () async {
+      if (skipWithout()) return;
+      final path = writeDng();
+      final cache = DemosaicCache();
+      var demosaics = 0;
+      Future<RawDisplayJpeg?> ask(int longEdge) => rawDisplayJpeg(
+        lr!,
+        path,
+        longEdge: longEdge,
+        vips: () => vips,
+        cache: cache,
+        onDemosaic: () => demosaics++,
+      );
+
+      final thumb = await ask(10);
+      expect(demosaics, 1);
+      expect(cache.path, path);
+      // Half-size decode (32 px) covers a 20 px tier: no second demosaic, and
+      // the output matches what a fresh decode renders.
+      final loupe = await ask(20);
+      expect(demosaics, 1);
+      expect(img.decodeJpg(thumb!.bytes)!.width, 10);
+      expect(img.decodeJpg(loupe!.bytes)!.width, 20);
+
+      // The half-size bitmap can't serve the full tier → decode again.
+      final full = await ask(0);
+      expect(demosaics, 2);
+      expect(img.decodeJpg(full!.bytes)!.width, 64);
+    });
+
+    test('a changed file is decoded again', () async {
+      if (skipWithout()) return;
+      final path = writeDng();
+      final cache = DemosaicCache();
+      var demosaics = 0;
+      Future<void> ask() => rawDisplayJpeg(
+        lr!,
+        path,
+        longEdge: 20,
+        vips: () => vips,
+        cache: cache,
+        onDemosaic: () => demosaics++,
+      );
+
+      await ask();
+      File(path).setLastModifiedSync(DateTime(2020));
+      await ask();
+      expect(demosaics, 2);
+    });
+
+    test('a corrupt decode is never cached', () async {
+      if (skipWithout()) return;
+      final cache = DemosaicCache();
+      await rawDisplayJpeg(
+        lr!,
+        writeDng(truncate: 1000),
+        longEdge: 20,
+        vips: () => vips,
+        cache: cache,
+      );
+      expect(cache.path, isNull);
+    });
+  });
+
+  group('DemosaicCache', () {
+    const key = DemosaicKey('/a.nef', 10, 1000);
+    CachedDemosaic bitmap({
+      DemosaicKey k = key,
+      int w = 40,
+      int h = 30,
+      bool full = false,
+    }) => CachedDemosaic(
+      k,
+      Uint8List(w * h * 3),
+      width: w,
+      height: h,
+      fullResolution: full,
+    );
+
+    test('serves only the same file version, and only tiers it covers', () {
+      final cache = DemosaicCache()..store(bitmap());
+      expect(cache.lookup(key, longEdge: 40), isNotNull);
+      expect(cache.lookup(key, longEdge: 41), isNull, reason: 'no upscale');
+      expect(cache.lookup(key, longEdge: 0), isNull, reason: 'half-size');
+      expect(
+        cache.lookup(const DemosaicKey('/a.nef', 10, 2000), longEdge: 20),
+        isNull,
+        reason: 'mtime changed',
+      );
+      expect(
+        cache.lookup(const DemosaicKey('/a.nef', 11, 1000), longEdge: 20),
+        isNull,
+        reason: 'size changed',
+      );
+      cache.store(bitmap(full: true));
+      expect(cache.lookup(key, longEdge: 0), isNotNull);
+    });
+
+    test('keeps one entry and never one over the size cap', () {
+      final cache = DemosaicCache(maxBytes: 40 * 30 * 3)..store(bitmap());
+      const other = DemosaicKey('/b.nef', 10, 1000);
+      cache.store(bitmap(k: other));
+      expect(cache.lookup(key, longEdge: 10), isNull);
+      expect(cache.path, '/b.nef');
+      cache.store(bitmap(w: 41));
+      expect(cache.path, '/b.nef', reason: 'over the cap: not stored');
+    });
+
+    test('drops its entry after the TTL', () async {
+      final cache = DemosaicCache(ttl: const Duration(milliseconds: 50))
+        ..store(bitmap());
+      expect(cache.path, isNotNull);
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+      expect(cache.path, isNull);
+    });
   });
 
   test('a corrupt RAW is reported as a failed decode, not noise', () async {

@@ -10,7 +10,17 @@ All notable user-facing changes to Cullimingo. The format loosely follows
   HEVC decoder, so these files showed only a placeholder in the grid and the
   loupe. It now bundles one, and a HEIF whose built-in thumbnail can't be
   decoded (Sony `.HIF` on some libheif versions) is decoded in full instead.
-  Thanks to heinerjost-dev for the report and sample file (#10).
+  Thanks to heinerjost-dev for the report and sample file.
+  ([#10](https://github.com/nielsfranke/Cullimingo/issues/10))
+- **A stuck thumbnail recovers in seconds again:** since 1.3.4 a preview that
+  hung (e.g. a corrupt RAW) kept its cell spinning and a decode slot blocked
+  for a full minute. Only a RAW that actually needs the slow full demosaic now
+  gets the long allowance; everything else is reclaimed after 12 s.
+  ([#5](https://github.com/nielsfranke/Cullimingo/issues/5))
+- **RAWs without a usable embedded preview open faster in the loupe:** the
+  grid and loupe sizes now share one demosaic instead of decoding the same
+  file again for each size.
+  ([#7](https://github.com/nielsfranke/Cullimingo/issues/7))
 
 ## 1.3.5 — 2026-10-02
 

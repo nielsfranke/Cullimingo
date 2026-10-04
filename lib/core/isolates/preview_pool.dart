@@ -3,7 +3,6 @@ import 'dart:collection';
 import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
-import 'dart:typed_data';
 
 import 'package:cullimingo/core/cache/vips.dart';
 import 'package:cullimingo/core/files/supported_files.dart';
@@ -12,6 +11,7 @@ import 'package:cullimingo/core/raw/jpeg_resize.dart';
 import 'package:cullimingo/core/raw/libraw_preview_extractor.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
 import 'package:cullimingo/core/raw/raw_display_jpeg.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_libraw/flutter_libraw.dart';
 
 class _Job {
@@ -21,6 +21,11 @@ class _Job {
   final int longEdge;
   final CancelToken? cancel;
 }
+
+/// Tag of the worker → pool message `[tag, jobId]` sent when a job enters the
+/// slow LibRaw demosaic fallback (see [PreviewPool.slowJobTimeout]).
+@visibleForTesting
+const String previewPoolDemosaicTag = 'demosaic';
 
 /// A persistent pool of worker isolates that extract thumbnails. Each worker
 /// loads libraw **once**. Jobs are served visible-first (on-screen cells jump
@@ -32,15 +37,32 @@ class _Job {
 /// Implements [PreviewExtractor], so it drops into `PreviewCache` in place of
 /// the per-call `PreviewService` (which spawned an isolate and reloaded libraw
 /// for every single thumbnail).
+///
+/// Worker protocol (all lists): a worker registers with `[workerId, port]`,
+/// may announce a slow demosaic with `[previewPoolDemosaicTag, jobId]`, and
+/// answers with `[jobId, TransferableTypedData?, port, cachedPath?]`, where
+/// `cachedPath` is the RAW whose demosaic it is holding (see [DemosaicCache]).
 class PreviewPool implements PreviewExtractor {
   /// Creates a pool. [workers] defaults to cores-1 (clamped 1–8); [librawPath]
-  /// overrides dylib discovery.
-  PreviewPool({int? workers, String? librawPath, this.enableVips = true})
-    : _workerCount = (workers ?? (Platform.numberOfProcessors - 1)).clamp(1, 8),
-      _librawPath = librawPath ?? LibRawPreviewExtractor.resolveLibraryPath();
+  /// overrides dylib discovery. [workerEntry] replaces the worker isolate's
+  /// entry point (tests only).
+  PreviewPool({
+    int? workers,
+    String? librawPath,
+    this.enableVips = true,
+    this.fastJobTimeout = const Duration(seconds: 12),
+    this.slowJobTimeout = const Duration(seconds: 60),
+    @visibleForTesting void Function(List<Object?>)? workerEntry,
+  }) : _workerCount = (workers ?? (Platform.numberOfProcessors - 1)).clamp(
+         1,
+         8,
+       ),
+       _librawPath = librawPath ?? LibRawPreviewExtractor.resolveLibraryPath(),
+       _workerEntry = workerEntry ?? _previewWorkerMain;
 
   final int _workerCount;
   final String? _librawPath;
+  final void Function(List<Object?>) _workerEntry;
 
   /// Whether workers load libvips. It spawns process-global threads that keep a
   /// spawned isolate from terminating, which hangs the test process (the app
@@ -49,18 +71,29 @@ class PreviewPool implements PreviewExtractor {
 
   /// How long a dispatched job may run before its worker is presumed dead or
   /// hung (a native RAW/vips decode can segfault or OOM-kill the isolate, which
-  /// is uncatchable). Most jobs take milliseconds, but the rare full-demosaic
-  /// fallback can legitimately take longer on a slow external drive.
-  static const Duration _jobTimeout = Duration(seconds: 60);
+  /// is uncatchable). Nearly every job — embedded JPEG, bitmap downscale,
+  /// video poster — takes milliseconds, so a hung one is reclaimed quickly.
+  final Duration fastJobTimeout;
+
+  /// The budget a job gets once its worker announces the LibRaw demosaic
+  /// fallback, which can legitimately take much longer on a slow external
+  /// drive. Counted from the announcement (GitHub #5).
+  final Duration slowJobTimeout;
 
   // Live workers by id, with the reverse port→id map filled at registration —
   // so a job timeout can identify and kill exactly the worker that hung, and a
   // late answer from an already-killed worker is recognisably stale.
   final Map<int, Isolate> _workers = {};
   final Map<SendPort, int> _portOwner = {};
-  // Which worker each in-flight job was dispatched to.
+  // Each in-flight job and the worker it was dispatched to.
+  final Map<int, _Job> _inFlight = {};
   final Map<int, SendPort> _dispatched = {};
   final List<SendPort> _free = [];
+  // Which RAW each worker holds a demosaic of, and which RAWs are being
+  // demosaiced right now (→ by whom). Another tier of such a file waits for
+  // that worker instead of decoding the same file again in parallel (#7).
+  final Map<SendPort, String> _warm = {};
+  final Map<String, SendPort> _demosaicing = {};
   // Two FIFOs so on-screen cells jump ahead of off-screen prefetch batches
   // (`BUILD_PLAN.md` §2): _dispatch always drains _visible before _prefetch,
   // and within each queue serves oldest-first (top cells, built first, render
@@ -91,7 +124,7 @@ class PreviewPool implements PreviewExtractor {
   Future<void> _spawnWorker() async {
     if (_disposed) return;
     final workerId = _spawnCount++;
-    final iso = await Isolate.spawn(_previewWorkerMain, [
+    final iso = await Isolate.spawn(_workerEntry, [
       _results!.sendPort,
       _librawPath,
       enableVips,
@@ -110,6 +143,10 @@ class PreviewPool implements PreviewExtractor {
     // results listener would silently freeze the entire pool.
     try {
       final list = message! as List<Object?>;
+      if (list[0] == previewPoolDemosaicTag) {
+        _onDemosaicStarted(list[1]! as int);
+        return;
+      }
       if (list.length == 2) {
         // A worker registering as free: [workerId, port].
         final workerId = list[0]! as int;
@@ -120,16 +157,26 @@ class PreviewPool implements PreviewExtractor {
         _dispatch();
         return;
       }
-      // A job result: [jobId, transferable bytes, port].
+      // A job result: [jobId, transferable bytes, port, cachedPath?].
       final id = list[0]! as int;
       final transfer = list[1] as TransferableTypedData?;
       final bytes = transfer?.materialize().asUint8List();
       final worker = list[2]! as SendPort;
+      final cachedPath = list.length > 3 ? list[3] as String? : null;
       _dispatched.remove(id);
+      final job = _inFlight.remove(id);
       // A worker the watchdog already killed can still have an answer sitting
       // in the mailbox — drop it, its replacement is running. Re-adding it
       // used to grow the pool by one on every slow-but-alive timeout.
       if (!_portOwner.containsKey(worker)) return;
+      if (job != null && _demosaicing[job.path] == worker) {
+        _demosaicing.remove(job.path);
+      }
+      if (cachedPath == null) {
+        _warm.remove(worker);
+      } else {
+        _warm[worker] = cachedPath;
+      }
       _timers.remove(id)?.cancel();
       _waiting.remove(id)?.complete(bytes);
       _free.add(worker);
@@ -139,6 +186,18 @@ class PreviewPool implements PreviewExtractor {
       // once froze the whole pool — workers' results were silently dropped.)
       appTalker.warning('PreviewPool dropped a bad worker message: $e');
     }
+  }
+
+  // The worker entered the demosaic fallback: legitimately slow, so swap the
+  // job's short watchdog for the long one, and hold back other tiers of the
+  // same file until this decode (and its cached bitmap) is done.
+  void _onDemosaicStarted(int id) {
+    final port = _dispatched[id];
+    final job = _inFlight[id];
+    if (port == null || job == null || !_portOwner.containsKey(port)) return;
+    _timers.remove(id)?.cancel();
+    _timers[id] = Timer(slowJobTimeout, () => _onJobTimeout(id));
+    _demosaicing[job.path] = port;
   }
 
   void _dispatch() {
@@ -151,17 +210,39 @@ class PreviewPool implements PreviewExtractor {
         _waiting.remove(job.id)?.complete(null);
         continue;
       }
-      final port = _free.removeLast()..send([job.id, job.path, job.longEdge]);
+      final port = _takeWorkerFor(job.path)
+        ..send([job.id, job.path, job.longEdge]);
       _dispatched[job.id] = port;
-      _timers[job.id] = Timer(_jobTimeout, () => _onJobTimeout(job.id));
+      _inFlight[job.id] = job;
+      _timers[job.id] = Timer(fastJobTimeout, () => _onJobTimeout(job.id));
     }
   }
 
-  // Visible cells first, then prefetch; oldest-first within each (FIFO).
+  // Visible cells first, then prefetch; oldest-first within each (FIFO). A job
+  // whose file is being demosaiced right now waits (keeping its place) so it
+  // can reuse that worker's decode instead of repeating it.
   _Job? _nextJob() {
-    if (_visible.isNotEmpty) return _visible.removeFirst();
-    if (_prefetch.isNotEmpty) return _prefetch.removeFirst();
+    for (final queue in [_visible, _prefetch]) {
+      if (_demosaicing.isEmpty) {
+        if (queue.isNotEmpty) return queue.removeFirst();
+        continue;
+      }
+      for (final job in queue) {
+        if (!_demosaicing.containsKey(job.path)) {
+          queue.remove(job);
+          return job;
+        }
+      }
+    }
     return null;
+  }
+
+  // The free worker already holding [path]'s demosaic, else any free worker.
+  SendPort _takeWorkerFor(String path) {
+    for (var i = 0; i < _free.length; i++) {
+      if (_warm[_free[i]] == path) return _free.removeAt(i);
+    }
+    return _free.removeLast();
   }
 
   // A dispatched job didn't answer in time → its worker likely crashed or hung
@@ -171,6 +252,7 @@ class PreviewPool implements PreviewExtractor {
   // pool by one), and top the pool back up with a fresh one.
   void _onJobTimeout(int id) {
     _timers.remove(id);
+    final job = _inFlight.remove(id);
     final completer = _waiting.remove(id);
     if (completer == null || completer.isCompleted) return;
     appTalker.warning(
@@ -182,9 +264,14 @@ class PreviewPool implements PreviewExtractor {
       final workerId = _portOwner.remove(port);
       final iso = workerId == null ? null : _workers.remove(workerId);
       iso?.kill(priority: Isolate.immediate);
+      _warm.remove(port);
+      _demosaicing.removeWhere((_, owner) => owner == port);
     }
+    if (job != null) _demosaicing.remove(job.path);
     completer.complete(null);
     unawaited(_spawnWorker());
+    // Jobs held back behind that demosaic may run on the other workers now.
+    _dispatch();
   }
 
   @override
@@ -224,6 +311,9 @@ class PreviewPool implements PreviewExtractor {
     _workers.clear();
     _portOwner.clear();
     _dispatched.clear();
+    _inFlight.clear();
+    _warm.clear();
+    _demosaicing.clear();
     _free.clear();
     _visible.clear();
     _prefetch.clear();
@@ -252,6 +342,9 @@ void _previewWorkerMain(List<Object?> init) {
   final enableVips = init[2]! as bool;
   final vips = enableVips ? Vips.tryLoad() : null;
   final workerId = init[3]! as int;
+  // This worker's last demosaic, so the grid, loupe and full tiers of a RAW
+  // without a usable embedded JPEG don't each repeat it (GitHub #7).
+  final demosaics = DemosaicCache();
 
   inbox.listen((message) async {
     final job = message! as List<Object?>;
@@ -260,7 +353,14 @@ void _previewWorkerMain(List<Object?> init) {
     final longEdge = job[2]! as int;
     Uint8List? bytes;
     try {
-      bytes = await _extractInWorker(path, longEdge, libraw, vips);
+      bytes = await _extractInWorker(
+        path,
+        longEdge,
+        libraw,
+        vips,
+        demosaics,
+        onDemosaic: () => toMain.send([previewPoolDemosaicTag, id]),
+      );
     } on Object {
       bytes = null;
     }
@@ -272,6 +372,7 @@ void _previewWorkerMain(List<Object?> init) {
       id,
       if (bytes == null) null else TransferableTypedData.fromList([bytes]),
       inbox.sendPort,
+      demosaics.path,
     ]);
   });
 
@@ -286,7 +387,9 @@ Future<Uint8List?> _extractInWorker(
   int longEdge,
   FlutterLibRawBindings? libraw,
   Vips? vips,
-) async {
+  DemosaicCache demosaics, {
+  required void Function() onDemosaic,
+}) async {
   // Videos: grab a poster frame via the OS (QuickLook), never load the whole
   // file. Returns null (→ placeholder) when no frame can be produced.
   if (isVideoPath(path)) {
@@ -304,6 +407,8 @@ Future<Uint8List?> _extractInWorker(
       path,
       longEdge: longEdge,
       vips: () => vips,
+      cache: demosaics,
+      onDemosaic: onDemosaic,
     );
     if (raw == null) return null;
     if (raw.demosaiced || longEdge <= 0) return raw.bytes;

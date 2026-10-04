@@ -57,9 +57,16 @@ packages/
   over to the embedded JPEG rather than a full-sensor demosaic). LibRaw reports
   undecodable data (Nikon HE/HE\*) only through its data-error callback, which
   some decoders call from OpenMP threads, so it is a `NativeCallable.listener`
-  and a reported error discards the render. RAW cache keys carry a render
-  version (`_rawRenderVersion` in `preview_cache.dart`) so pipeline changes
-  re-extract stale previews.
+  and a reported error discards the render. The pool's watchdog is 12 s per
+  job; a worker announces when it enters the demosaic, and only that job gets
+  the 60 s budget (GitHub #5). Each worker keeps its last demosaic bitmap
+  (`DemosaicCache`: one entry, ≤ 64 MB, 20 s TTL, keyed by path + size +
+  mtime), and the pool routes other tiers of that file to that worker —
+  holding them back while the decode is still running — so the grid and loupe
+  tiers share one half-size decode (GitHub #7). A large sensor's full-size
+  bitmap (45 MP ≈ 135 MB) is over the cap, so its full tier still decodes on
+  its own. RAW cache keys carry a render version (`_rawRenderVersion` in
+  `preview_cache.dart`) so pipeline changes re-extract stale previews.
 - **Deliberate cull ↔ filter/inspector coupling** (July 2026): pure grouping
   domain (bursts, RAW+JPEG pairs, brackets) lives in `shared/grouping/` and
   orientation math in `core/raw/`, so features no longer reach into
