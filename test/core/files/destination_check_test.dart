@@ -138,4 +138,201 @@ void main() {
     },
     testOn: 'mac-os || linux',
   );
+
+  group('a drive that is plainly not mounted, with nothing remembered', () {
+    // System state is faked throughout: anchor = the nearest existing folder
+    // (symlinks resolved), anchorMount = the volume it's on.
+    String? missing(
+      String root, {
+      String? anchor,
+      String? anchorMount,
+      List<String> bases = const ['/media', '/run/media', '/Volumes'],
+      String fstab = '',
+      Set<String> mounted = const {'/'},
+    }) => unmountedDriveFor(
+      root,
+      anchor: anchor,
+      anchorMount: anchorMount,
+      removableBases: bases,
+      fstab: fstab,
+      mounted: mounted,
+    );
+
+    test('macOS: an unplugged /Volumes drive resolves to the boot disk', () {
+      expect(
+        missing('/Volumes/Card/Shoots', anchor: '/Volumes', anchorMount: '/'),
+        '/Volumes/Card',
+      );
+      // A leftover empty /Volumes/Card folder is no better.
+      expect(
+        missing(
+          '/Volumes/Card/Shoots',
+          anchor: '/Volumes/Card',
+          anchorMount: '/',
+        ),
+        '/Volumes/Card',
+      );
+    });
+
+    test('macOS: a connected drive and the boot-disk symlink pass', () {
+      expect(
+        missing(
+          '/Volumes/Card/Shoots',
+          anchor: '/Volumes/Card/Shoots',
+          anchorMount: '/Volumes/Card',
+        ),
+        isNull,
+      );
+      // /Volumes/Macintosh HD → / : resolves out of /Volumes, not judged.
+      expect(
+        missing(
+          '/Volumes/Macintosh HD/Users/me/Photos',
+          anchor: '/Users/me/Photos',
+          anchorMount: '/System/Volumes/Data',
+        ),
+        isNull,
+      );
+    });
+
+    test('Linux: unplugged udisks drives under /media and /run/media', () {
+      expect(
+        missing(
+          '/media/me/Backup/Photos',
+          anchor: '/media/me',
+          anchorMount: '/',
+        ),
+        '/media/me/Backup',
+      );
+      // /run is a tmpfs: the leftover path is on /run, not inside the base.
+      expect(
+        missing(
+          '/run/media/me/Backup/Photos',
+          anchor: '/run/media/me',
+          anchorMount: '/run',
+        ),
+        '/run/media/me/Backup',
+      );
+      expect(
+        missing(
+          '/media/me/Backup/Photos',
+          anchor: '/media/me/Backup/Photos',
+          anchorMount: '/media/me/Backup',
+        ),
+        isNull,
+      );
+    });
+
+    test('the system disk is never refused', () {
+      for (final (root, mount) in [
+        ('/home/me/Pictures/Import', '/'),
+        ('/Users/me/Pictures/Import', '/System/Volumes/Data'),
+        ('/home/me/Pictures/Import', '/home'),
+      ]) {
+        expect(
+          missing(root, anchor: root, anchorMount: mount),
+          isNull,
+          reason: root,
+        );
+      }
+    });
+
+    test('/mnt is judged by fstab only, never by the folder heuristic', () {
+      // A plain /mnt/photos folder on the system disk, nothing in fstab.
+      expect(
+        missing(
+          '/mnt/photos/2026',
+          anchor: '/mnt/photos/2026',
+          anchorMount: '/',
+          bases: const ['/media', '/run/media'], // what Linux uses
+        ),
+        isNull,
+      );
+    });
+
+    const fstab = r'''
+# <file system> <mount point> <type> <options> <dump> <pass>
+UUID=1111 /             ext4  defaults 0 1
+UUID=2222 none          swap  sw       0 0
+//nas/photos /mnt/nas\040photos cifs noauto,user 0 0
+UUID=3333 /srv/archive  ext4  nofail   0 2
+''';
+
+    test('Linux: an fstab mount point that is not mounted is refused', () {
+      expect(
+        missing(
+          '/mnt/nas photos/2026',
+          anchor: '/mnt/nas photos/2026',
+          anchorMount: '/',
+          fstab: fstab,
+          mounted: const {'/', '/srv/archive'},
+        ),
+        '/mnt/nas photos',
+      );
+      expect(
+        missing(
+          '/srv/archive/raw',
+          anchor: '/srv',
+          anchorMount: '/',
+          fstab: fstab,
+        ),
+        '/srv/archive',
+      );
+    });
+
+    test('Linux: fstab passes when mounted, and is ignored when unrelated', () {
+      expect(
+        missing(
+          '/mnt/nas photos/2026',
+          anchor: '/mnt/nas photos/2026',
+          anchorMount: '/mnt/nas photos',
+          fstab: fstab,
+          mounted: const {'/', '/mnt/nas photos'},
+        ),
+        isNull,
+      );
+      // `/` and swap entries never count; /home isn't under any fstab mount.
+      expect(
+        missing(
+          '/home/me/Import',
+          anchor: '/home/me/Import',
+          anchorMount: '/',
+          fstab: fstab,
+        ),
+        isNull,
+      );
+      // No mount table to compare with (unreadable): never guess.
+      expect(
+        missing(
+          '/srv/archive/raw',
+          anchor: '/srv',
+          anchorMount: '/',
+          fstab: fstab,
+          mounted: const {},
+        ),
+        isNull,
+      );
+    });
+
+    test('fstabMountPoints skips comments, / and swap; unescapes', () {
+      expect(fstabMountPoints(fstab), ['/mnt/nas photos', '/srv/archive']);
+    });
+
+    test('checkDestinationsSync refuses with the drive message', () {
+      final check = checkDestinationsSync(
+        roots: ['/media/me/Backup/Photos'],
+        files: [file('a.arw', 1)],
+        mustExist: false,
+        probe: fakeVolumes({'/': 10 * gb}),
+        resolveAnchor: (_) => '/media/me',
+        removableBases: const ['/media'],
+        fstab: '',
+        mountInfo: '',
+      );
+      expect(check.ok, isFalse);
+      expect(
+        check.problems.single,
+        contains("its drive isn't connected (expected at /media/me/Backup)"),
+      );
+    });
+  });
 }

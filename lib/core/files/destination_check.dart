@@ -48,15 +48,33 @@ const int _minHeadroomBytes = 64 * 1024 * 1024;
 /// - **Enough free space**, per filesystem (two roots on one drive add up),
 ///   counting only files not already present at the destination.
 ///
+/// - **Even with nothing remembered** (a destination picked before this
+///   check existed), a root under a removable-media folder (`/Volumes` on
+///   macOS, `/media` and `/run/media` on Linux) must sit on a volume mounted
+///   *inside* that folder, and on Linux an `/etc/fstab` mount point holding
+///   the root must be mounted ([unmountedDriveFor]).
+///
 /// Blocking I/O — use [checkDestinations], which runs this off the UI
-/// isolate with a timeout. [probe] is injectable for tests.
+/// isolate with a timeout. [probe], [resolveAnchor], [removableBases],
+/// [fstab] and [mountInfo] are injectable for tests; by default they come
+/// from the running system.
 DestinationCheck checkDestinationsSync({
   required List<String> roots,
   required List<PlannedCopy> files,
   Map<String, String> rememberedMounts = const {},
   bool mustExist = true,
   VolumeInfo? Function(String path) probe = volumeInfo,
+  String? Function(String root)? resolveAnchor,
+  List<String>? removableBases,
+  String? fstab,
+  String? mountInfo,
 }) {
+  final anchorOf = resolveAnchor ?? _resolvedAnchor;
+  final bases = removableBases ?? _platformRemovableBases();
+  final fstabText = fstab ?? (Platform.isLinux ? _readFstab() : '');
+  final mounted = linuxMountPoints(
+    mountInfo ?? (Platform.isLinux ? readLinuxMountInfo() : ''),
+  );
   final problems = <String>[];
   final mounts = <String, String>{};
   final needed = <String, int>{};
@@ -79,6 +97,21 @@ DestinationCheck checkDestinationsSync({
       problems.add(
         "${p.basename(root)}: its drive isn't connected (expected at "
         '$remembered). Connect it — or choose the folder again if it moved.',
+      );
+      continue;
+    }
+    final expected = unmountedDriveFor(
+      root,
+      anchor: anchorOf(root),
+      anchorMount: volume?.mountPoint,
+      removableBases: bases,
+      fstab: fstabText,
+      mounted: mounted,
+    );
+    if (expected != null) {
+      problems.add(
+        "${p.basename(root)}: its drive isn't connected (expected at "
+        '$expected). Connect it and try again.',
       );
       continue;
     }
@@ -120,6 +153,94 @@ DestinationCheck checkDestinationsSync({
     }
   }
   return DestinationCheck(problems: problems, mounts: mounts);
+}
+
+/// Where [root]'s drive should be mounted when it plainly isn't, else null.
+/// Needs no remembered volume, so it also guards destinations picked before
+/// volumes were remembered. Pure: the caller supplies the system's state.
+///
+/// - **fstab** (Linux): a mount point in [fstab] that is [root] or one of its
+///   ancestors but isn't among [mounted] — an fstab NAS share or USB drive
+///   that's down leaves its mount point as a plain folder on the system disk.
+///   `/mnt/...` destinations are judged by this rule only: `/mnt` is just as
+///   often an ordinary folder. Skipped when [mounted] is empty (no mount
+///   table to compare with — never guess).
+/// - **Removable-media folders**: when [anchor] (the nearest existing folder
+///   of [root], symlinks resolved) lies in one of [removableBases]
+///   (`/Volumes`, `/media`, `/run/media`), its volume, [anchorMount], must be
+///   mounted *inside* that base. A drive that's gone leaves the path
+///   resolving to the folder above it — the system disk, or `/run`'s tmpfs —
+///   which would otherwise be written into. A symlink out of the base (macOS'
+///   `/Volumes/Macintosh HD` → `/`) resolves elsewhere and isn't judged.
+String? unmountedDriveFor(
+  String root, {
+  required String? anchor,
+  required String? anchorMount,
+  required List<String> removableBases,
+  required String fstab,
+  required Set<String> mounted,
+}) {
+  if (mounted.isNotEmpty) {
+    String? missing;
+    for (final mountPoint in fstabMountPoints(fstab)) {
+      final holdsRoot = root == mountPoint || p.isWithin(mountPoint, root);
+      if (!holdsRoot || mounted.contains(mountPoint)) continue;
+      if (missing == null || mountPoint.length > missing.length) {
+        missing = mountPoint;
+      }
+    }
+    if (missing != null) return missing;
+  }
+
+  if (anchor == null || anchorMount == null) return null;
+  for (final base in removableBases) {
+    if (anchor != base && !p.isWithin(base, anchor)) continue;
+    if (p.isWithin(base, anchorMount)) return null; // its drive is there
+    // Name the drive's folder: /Volumes/<name>, /media/<user>/<label>.
+    final rel = p.isWithin(base, root)
+        ? p.split(p.relative(root, from: base))
+        : <String>[];
+    final depth = base == '/Volumes' ? 1 : 2;
+    return rel.isEmpty ? base : p.joinAll([base, ...rel.take(depth)]);
+  }
+  return null;
+}
+
+/// The mount points `/etc/fstab` text declares, other than `/` and swap.
+List<String> fstabMountPoints(String fstab) => [
+  for (final raw in fstab.split('\n'))
+    if (raw.trim() case final line
+        when line.isNotEmpty && !line.startsWith('#'))
+      if (line.split(RegExp(r'\s+')) case final fields when fields.length >= 2)
+        if (unescapeMountField(fields[1]) case final mountPoint
+            when mountPoint.startsWith('/') &&
+                mountPoint != '/' &&
+                (fields.length < 3 || fields[2] != 'swap'))
+          p.normalize(mountPoint),
+];
+
+List<String> _platformRemovableBases() {
+  if (Platform.isMacOS) return const ['/Volumes'];
+  if (Platform.isLinux) return const ['/media', '/run/media'];
+  return const [];
+}
+
+String? _resolvedAnchor(String root) {
+  final anchor = nearestExistingDirectory(root);
+  if (anchor == null) return null;
+  try {
+    return Directory(anchor).resolveSymbolicLinksSync();
+  } on FileSystemException {
+    return null;
+  }
+}
+
+String _readFstab() {
+  try {
+    return File('/etc/fstab').readAsStringSync();
+  } on FileSystemException {
+    return '';
+  }
 }
 
 /// [checkDestinationsSync] off the UI isolate. A volume that doesn't answer

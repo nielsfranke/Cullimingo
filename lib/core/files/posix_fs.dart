@@ -192,7 +192,7 @@ VolumeInfo? _macStatfs(String path) {
 const int _linuxStatvfsSize = 112;
 
 VolumeInfo? _linuxVolume(String path) {
-  final mount = linuxMountPointOf(path, _readMountInfo());
+  final mount = linuxMountPointOf(path, readLinuxMountInfo());
   if (mount == null) return null;
   final statvfs = _libc.lookupFunction<_StatN, _StatD>('statvfs');
   final buf = calloc<Uint8>(_linuxStatvfsSize);
@@ -209,7 +209,8 @@ VolumeInfo? _linuxVolume(String path) {
   }
 }
 
-String _readMountInfo() {
+/// This process's `/proc/self/mountinfo`, or '' where there is none.
+String readLinuxMountInfo() {
   try {
     return File('/proc/self/mountinfo').readAsStringSync();
   } on FileSystemException {
@@ -225,15 +226,23 @@ String? linuxMountPointOf(String path, String mountInfo) {
   for (final line in mountInfo.split('\n')) {
     final fields = line.split(' ');
     if (fields.length < 5) continue;
-    final mount = _unescapeMountField(fields[4]);
+    final mount = unescapeMountField(fields[4]);
     final covers = mount == '/' || path == mount || p.isWithin(mount, path);
     if (covers && (best == null || mount.length >= best.length)) best = mount;
   }
   return best;
 }
 
-// mountinfo escapes space, tab, newline and backslash as `\ooo` octal.
-String _unescapeMountField(String field) => field.replaceAllMapped(
+/// Every mount point listed in a `/proc/self/mountinfo` dump. Pure.
+Set<String> linuxMountPoints(String mountInfo) => {
+  for (final line in mountInfo.split('\n'))
+    if (line.split(' ') case final fields when fields.length >= 5)
+      unescapeMountField(fields[4]),
+};
+
+/// Undoes the `\ooo` octal escapes (space, tab, newline, backslash) that
+/// mountinfo and fstab use in paths.
+String unescapeMountField(String field) => field.replaceAllMapped(
   RegExp(r'\\([0-7]{3})'),
   (m) => String.fromCharCode(int.parse(m[1]!, radix: 8)),
 );
