@@ -67,10 +67,11 @@ unsigned. See [DISTRIBUTION.md](DISTRIBUTION.md) for the details.
 
 ## What it does
 
-- **Cull at speed** — open a folder of RAWs/JPEGs → virtualized, dense dark grid
-  → keyboard rate / flag / colour that persists instantly. Turn on
-  auto-advance (Settings → General) to jump to the next photo after each mark.
-  Multi-select + batch marking, right-click palette, tabs for multiple folders.
+- **Cull at speed** — open a folder of RAWs, JPEGs or HEIC/HIF → virtualized,
+  dense dark grid → keyboard rate / flag / colour that persists instantly. Turn
+  on auto-advance (Settings → General) to jump to the next photo after each mark.
+  Multi-select + batch marking, right-click palette (incl. Delete… to the
+  Trash, sidecars and all), tabs for multiple folders.
 - **Loupe & compare** — full-screen loupe (zoom/pan, neighbour prefetch) and a
   2-up / n-up compare view, both keyboard-cullable.
 - **Exposure brackets** — auto-detected from EXIF and collapsed to one cell per
@@ -79,10 +80,16 @@ unsigned. See [DISTRIBUTION.md](DISTRIBUTION.md) for the details.
   brackets before export — plus optional mark-the-whole-bracket, and manual
   stack / unstack that round-trips via XMP.
 - **Real filtering & selections** — quick-filter bar (rating / flag / colour /
-  keyworded / selected, live counts), saved named selections, and ⌘F find by a
-  pasted filename list. Import a Picdrop/CSV list to select the matching RAWs.
+  keyworded / selected, live counts), live filename search, a RAW / JPEG
+  file-type filter, saved named selections, and ⌘F find by a pasted filename
+  list. Import a Picdrop/CSV list to select the matching RAWs.
 - **Ingest** — verified (SHA-256) card import with a token-based rename template,
-  dual-destination, throughput readout, and auto card-detect.
+  dual-destination (the backup is always read back), throughput readout, and
+  auto card-detect that opens Import on insert. Pick which shooting days to
+  bring in, with or without the JPEGs. Copies land under a hidden part name
+  and are published only once verified, never replacing an existing file; a
+  full disk or an unplugged destination is caught before anything is copied,
+  and a partly unreadable card is reported instead of passing as imported.
 - **Metadata & interop** — XMP sidecars round-trip rating + colour + keywords
   with Capture One and Lightroom (read embedded XMP too); pick/reject lives in a
   private `cullimingo:` namespace. Re-sync adopts external edits, flags conflicts.
