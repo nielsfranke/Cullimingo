@@ -123,7 +123,9 @@ packages/
   is the as-built source of truth, not §7.
 
 ## Build / CI
-- CI on Forgejo Actions (`.forgejo/workflows/ci.yml`), GitHub-Actions-compatible.
-  Jobs: `analyze`, `test`, `build-linux`, `build-macos`.
+- CI on GitHub Actions (`.github/workflows/ci.yml`; originally Forgejo Actions,
+  moved once GitHub became the source of truth and Forgejo a pull mirror).
+  Jobs: `analyze`, `test-linux`, `test-macos`, `build-linux`, `build-macos`.
+  Releases: `.github/workflows/release.yml` on a `v*` tag.
 - Local dev: macOS needs full Xcode + CocoaPods; Linux needs the GTK dev libs
   listed in the CI workflow.

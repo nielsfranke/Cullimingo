@@ -33,7 +33,7 @@ Riverpod (`@riverpod`), freezed, json_serializable and drift all use build_runne
 ## Hooks & CI
 
 - lefthook pre-commit: `dart format` on staged files, `flutter analyze`, version regen. Pre-push runs `flutter test` — red code can't reach the remote; main stays green.
-- Primary CI is Forgejo Actions (`.forgejo/workflows/ci.yml`): format check, analyze, test with coverage, Linux + macOS release builds. GitHub is a squashed public mirror (`tool/publish_github.sh`); its only workflow is `release.yml`, fired by pushing a `v*` tag.
+- GitHub (`origin`) is the source of truth; Forgejo only pull-mirrors it (Actions off there). CI is GitHub Actions: `.github/workflows/ci.yml` (format check, analyze, tests on Linux + macOS, Linux + macOS release builds) on push to main and PRs; `release.yml` builds the AppImage + DMG and publishes the GitHub Release when a `v*` tag is pushed.
 - Lint set is `very_good_analysis`. riverpod_lint/custom_lint are deliberately disabled (dependency conflict — see the note in `analysis_options.yaml`); don't try to re-add them without checking that note.
 - `CHANGELOG.md` tracks user-facing changes manually (Keep-a-Changelog style).
 

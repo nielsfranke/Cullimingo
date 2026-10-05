@@ -3,9 +3,9 @@
 #
 # Why a Release (not just a tag): the app's startup update check reads
 # `api.github.com/repos/nielsfranke/Cullimingo/releases/latest`, and that
-# endpoint only returns *published Releases*. The Forgejo → GitHub mirror copies
-# tags but never creates Releases, so this workflow turns each mirrored `v*` tag
-# into a Release with downloadable artifacts.
+# endpoint only returns *published Releases*. Pushing a tag doesn't create one,
+# so this workflow turns each `v*` tag into a Release with downloadable
+# artifacts.
 #
 # Tag convention: `v<pubspec version>` (e.g. `v1.0.0`). Pre-release tags carry a
 # suffix (`v1.1.0-rc.1`) and are flagged as pre-releases so `/releases/latest`
@@ -116,7 +116,7 @@ jobs:
           # Pull this version's section out of CHANGELOG.md (between its
           # "## <version>" heading and the next "## " heading). This is the
           # curated fixes/features list; --generate-notes only lists merged PRs,
-          # which this one-way mirror never has, so it produced empty notes.
+          # which this repo rarely has, so it produced empty notes.
           changelog="$(awk -v v="$VERSION" '
             $0 ~ "^## " v "( |$)" { grab = 1; next }
             /^## / && grab { exit }

@@ -20,9 +20,9 @@ class UpdateInfo {
   String toString() => 'UpdateInfo($version, $releaseUrl)';
 }
 
-/// The GitHub Releases API for the public mirror. The main repo is mirrored
-/// from Forgejo to GitHub on release; `/releases/latest` returns the most
-/// recent **non-prerelease, non-draft** release, which is exactly what we want.
+/// The GitHub Releases API for the public repo. `/releases/latest` returns the
+/// most recent **non-prerelease, non-draft** release, which is exactly what we
+/// want.
 final Uri kReleasesApiEndpoint = Uri.parse(
   'https://api.github.com/repos/nielsfranke/Cullimingo/releases/latest',
 );
