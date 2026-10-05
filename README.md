@@ -68,8 +68,9 @@ unsigned. See [DISTRIBUTION.md](DISTRIBUTION.md) for the details.
 ## What it does
 
 - **Cull at speed** — open a folder of RAWs/JPEGs → virtualized, dense dark grid
-  → keyboard rate / flag / colour that persists instantly. Multi-select
-  + batch marking, right-click palette, tabs for multiple folders.
+  → keyboard rate / flag / colour that persists instantly. Turn on
+  auto-advance (Settings → General) to jump to the next photo after each mark.
+  Multi-select + batch marking, right-click palette, tabs for multiple folders.
 - **Loupe & compare** — full-screen loupe (zoom/pan, neighbour prefetch) and a
   2-up / n-up compare view, both keyboard-cullable.
 - **Exposure brackets** — auto-detected from EXIF and collapsed to one cell per
@@ -129,7 +130,9 @@ is culled by its poster frame; playback hands off to your **system player**
 
 **Instantly familiar** — the defaults follow the de-facto culling keys
 (`1`–`5` rate, `0` clears, `P`/`X` pick/reject, `6`–`9` colours). No new
-muscle memory to learn, and every key is rebindable in Settings.
+muscle memory to learn, and every key is rebindable in Settings. For a
+pick/reject-through-the-shoot pass, enable **Auto-advance to the next photo
+after rating or flagging** in Settings → General.
 
 Full list: [**Keyboard** on the wiki](https://github.com/nielsfranke/Cullimingo/wiki/Keyboard).
 
