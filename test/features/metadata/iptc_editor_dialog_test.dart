@@ -470,15 +470,21 @@ void main() {
         const [IptcCore(caption: 'Kept')],
         pickTemplatePath: () async => path,
         (t) async {
+          // Credit lives in Rights; show it so the poll below can read it.
+          await selectSection(t, 'Rights');
           await t.tap(find.text('Load'));
           await t.pumpAndSettle();
           await t.tap(find.text('From XMP file…'));
           // The parse runs in a real isolate — let it finish outside fake
-          // async.
-          await t.runAsync(
-            () => Future<void>.delayed(const Duration(milliseconds: 200)),
-          );
-          await t.pumpAndSettle();
+          // async. Poll rather than sleep a fixed time: isolate spawn on a
+          // loaded CI runner can take well over 200 ms.
+          for (var i = 0; i < 100; i++) {
+            await t.runAsync(
+              () => Future<void>.delayed(const Duration(milliseconds: 50)),
+            );
+            await t.pumpAndSettle();
+            if (textOf(t, IptcField.credit) == 'AP') break;
+          }
         },
       );
 
