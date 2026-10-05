@@ -28,7 +28,7 @@ jobs:
   build-linux:
     runs-on: ubuntu-24.04 # oldest glibc we support; AppImage is forward-compatible only
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install build + native deps
         run: |
@@ -57,7 +57,7 @@ jobs:
           tool/bundle_linux.sh
           tool/build_appimage.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: appimage
           path: build/linux/Cullimingo-x86_64.AppImage
@@ -66,7 +66,7 @@ jobs:
   build-macos:
     runs-on: macos-14 # Apple Silicon (arm64) — matches the bundled arm64 dylibs
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install native deps
         run: brew install vips libraw dylibbundler
@@ -84,7 +84,7 @@ jobs:
           tool/bundle_macos.sh
           tool/build_dmg.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dmg
           path: build/macos/Cullimingo-arm64.dmg
@@ -101,9 +101,9 @@ jobs:
       GH_REPO: ${{ github.repository }}
       TAG: ${{ github.ref_name }}
     steps:
-      - uses: actions/checkout@v4 # for CHANGELOG.md
+      - uses: actions/checkout@v7 # for CHANGELOG.md
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true # both artifacts land flat in dist/
