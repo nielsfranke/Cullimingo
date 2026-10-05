@@ -38,6 +38,11 @@ packages/
   `DSC1.JPG.xmp` (darktable style) so both keep independent marks; a lone
   JPEG keeps `DSC1.xmp` (or an orphaned `DSC1.JPG.xmp` once its RAW is gone).
   Resolved against the folder listing by `SidecarResolver` (GitHub #3).
+  Marks stay per-file by default; the opt-in propagate-to-pair setting
+  (GitHub #12) writes the same mark to both halves (and both sidecars) via
+  `CullController._grown`, using `RawJpegPairs.groupOf` (same folder only).
+  Rename always takes a target's same-folder, same-stem twins
+  (`withStemPartners`) so a `{seq}` rename never splits a pair.
 - **UI isolate is sacred:** decode/encode/hash/large I/O/XMP go through the
   isolate pool (built in Phase 2). The UI only ever receives results.
 - **Two-tier disk cache:** grid thumbnails + screen-res loupe previews, keyed by

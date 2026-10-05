@@ -11,6 +11,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 Photo _photo({
   int id = 1,
+  int rating = 0,
+  PickFlag flag = PickFlag.none,
   String caption = '',
   String? path,
   bool isRaw = false,
@@ -23,8 +25,8 @@ Photo _photo({
     orientation: 1,
     userRotation: 0,
     hasCrop: false,
-    rating: 0,
-    flag: PickFlag.none,
+    rating: rating,
+    flag: flag,
     colorLabel: ColorLabel.none,
     keywords: const [],
     iptc: IptcCore(caption: caption),
@@ -39,7 +41,7 @@ Future<ProviderContainer> _pumpBar(
   WidgetTester tester,
   List<Photo> photos,
 ) async {
-  tester.view.physicalSize = const Size(1600, 400);
+  tester.view.physicalSize = const Size(2000, 400);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -62,7 +64,7 @@ Future<ProviderContainer> _pumpBar(
 void main() {
   testWidgets('Needs-caption entry counts blank captions and toggles the '
       'filter', (tester) async {
-    tester.view.physicalSize = const Size(1600, 400);
+    tester.view.physicalSize = const Size(2000, 400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -179,5 +181,25 @@ void main() {
     await tester.pump();
     expect(container.read(photoFilterControllerProvider).query, '');
     expect(find.text('dsc_004'), findsNothing);
+  });
+
+  testWidgets('Unflagged and Unrated chips count and toggle their filters', (
+    tester,
+  ) async {
+    final container = await _pumpBar(tester, [
+      _photo(rating: 3, flag: PickFlag.pick),
+      _photo(id: 2, flag: PickFlag.reject),
+      _photo(id: 3),
+    ]);
+
+    await tester.tap(find.text('Unflagged (1)'));
+    await tester.pump();
+    expect(container.read(filteredPhotosProvider).map((p) => p.id), [3]);
+    await tester.tap(find.text('Unflagged (1)'));
+    await tester.pump();
+
+    await tester.tap(find.text('Unrated (2)'));
+    await tester.pump();
+    expect(container.read(filteredPhotosProvider).map((p) => p.id), [2, 3]);
   });
 }

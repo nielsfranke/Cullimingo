@@ -65,4 +65,18 @@ void main() {
     expect(pairs.hiddenJpegIds, {2, 4});
     expect(pairs.isPaired(5), isFalse);
   });
+
+  test('groupOf returns the same-folder pair, or just the photo', () {
+    final pairs = RawJpegPairs([
+      _p(1, '/a/DSCF8912.RAF', isRaw: true),
+      _p(2, '/a/DSCF8912.JPG', isRaw: false),
+      _p(3, '/b/DSCF8912.JPG', isRaw: false), // other folder: another shot
+      _p(4, '/a/DSCF8913.RAF', isRaw: true), // unpaired
+    ]);
+
+    expect(pairs.groupOf(1), {1, 2});
+    expect(pairs.groupOf(2), {1, 2});
+    expect(pairs.groupOf(3), {3});
+    expect(pairs.groupOf(4), {4});
+  });
 }

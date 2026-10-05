@@ -247,6 +247,26 @@ class PropagateMarksToStack extends _$PropagateMarksToStack {
   }
 }
 
+/// Startup seed for [PropagateMarksToPair].
+@Riverpod(keepAlive: true)
+bool propagateMarksToPairSeed(Ref ref) => false;
+
+/// Whether marking a photo also marks the other file of its RAW+JPEG pair
+/// (Settings → RAW+JPEG pairs, GitHub #12). Read by [CullController];
+/// persisted.
+@Riverpod(keepAlive: true)
+class PropagateMarksToPair extends _$PropagateMarksToPair {
+  @override
+  bool build() => ref.watch(propagateMarksToPairSeedProvider);
+
+  /// Turns pair mark-propagation on or off and remembers the choice.
+  // ignore: avoid_positional_boolean_parameters — simple flag setter.
+  void set(bool value) {
+    state = value;
+    unawaited(updateSettings((s) => s.setPropagateMarksToPair(value)));
+  }
+}
+
 /// Startup seed for [AutoExpandBracketsOnSelect].
 @Riverpod(keepAlive: true)
 bool autoExpandBracketsOnSelectSeed(Ref ref) => false;
@@ -971,22 +991,30 @@ class CullController extends _$CullController {
   /// The photos a batch mark applies to: [CullSelection.markTargets], grown to
   /// each target's whole exposure bracket when the propagate-to-stack setting
   /// is on — so rating/flagging the reference frame carries to its ±EV
-  /// siblings without an explicit expand.
-  Set<int> get _effectiveMarkTargets {
-    final base = state.markTargets;
-    if (base.isEmpty || !ref.read(propagateMarksToStackProvider)) return base;
-    final groups = ref.read(bracketGroupsProvider);
-    return {
-      for (final id in base) ...groups.groupOf(id),
-    };
-  }
+  /// siblings without an explicit expand — and to each one's RAW+JPEG twin
+  /// when the propagate-to-pair setting is on.
+  Set<int> get _effectiveMarkTargets => _grown(state.markTargets);
 
-  /// [photoId] grown to its whole exposure bracket when the propagate-to-stack
-  /// setting is on — the single-photo (loupe) counterpart of
-  /// [_effectiveMarkTargets].
-  Set<int> _withBracket(int photoId) => ref.read(propagateMarksToStackProvider)
-      ? {...ref.read(bracketGroupsProvider).groupOf(photoId)}
-      : {photoId};
+  /// [photoId] grown like [_effectiveMarkTargets] — the single-photo (loupe)
+  /// counterpart.
+  Set<int> _withBracket(int photoId) => _grown({photoId});
+
+  /// [ids] grown to their brackets and RAW+JPEG pairs, per the two settings.
+  /// The bracket groups already carry each frame's hidden JPEG twin, so pairs
+  /// are folded in last to also catch a JPEG that is itself a bracket member.
+  Set<int> _grown(Set<int> ids) {
+    if (ids.isEmpty) return ids;
+    var out = ids;
+    if (ref.read(propagateMarksToStackProvider)) {
+      final brackets = ref.read(bracketGroupsProvider);
+      out = {for (final id in out) ...brackets.groupOf(id)};
+    }
+    if (ref.read(propagateMarksToPairProvider)) {
+      final pairs = ref.read(rawJpegPairsProvider);
+      out = {for (final id in out) ...pairs.groupOf(id)};
+    }
+    return out;
+  }
 
   /// Sets [rating] on [photoId] — and its bracket when propagate-to-stack is
   /// on. The loupe's mark path: it ignores the grid selection but honours the

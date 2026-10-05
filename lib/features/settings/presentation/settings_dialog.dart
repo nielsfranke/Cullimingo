@@ -139,6 +139,7 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
   late bool _showTooltips = ref.read(tooltipsEnabledProvider);
   late bool _autoAdvanceAfterMark = ref.read(autoAdvanceAfterMarkProvider);
   late bool _propagateMarksToStack = ref.read(propagateMarksToStackProvider);
+  late bool _propagateMarksToPair = ref.read(propagateMarksToPairProvider);
   late bool _autoExpandBrackets = ref.read(autoExpandBracketsOnSelectProvider);
   late bool _markConfirmation = ref.read(markConfirmationEnabledProvider);
   late bool _autoOpenImportOnCard = ref.read(
@@ -179,6 +180,7 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
     ref
         .read(propagateMarksToStackProvider.notifier)
         .set(_propagateMarksToStack);
+    ref.read(propagateMarksToPairProvider.notifier).set(_propagateMarksToPair);
     ref
         .read(autoExpandBracketsOnSelectProvider.notifier)
         .set(_autoExpandBrackets);
@@ -528,6 +530,13 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
         value: _markConfirmation,
         onChanged: (v) => setState(() => _markConfirmation = v ?? true),
         label: 'Flash a confirmation over the loupe when you mark a photo',
+      ),
+      const SizedBox(height: AppSpacing.lg),
+      const DialogSection('RAW+JPEG pairs'),
+      DialogCheckbox(
+        value: _propagateMarksToPair,
+        onChanged: (v) => setState(() => _propagateMarksToPair = v ?? false),
+        label: 'Apply ratings, flags and colours to both files of a pair',
       ),
       const SizedBox(height: AppSpacing.lg),
       const DialogSection('Exposure brackets'),

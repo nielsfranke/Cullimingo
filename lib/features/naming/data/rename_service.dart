@@ -145,6 +145,33 @@ Future<List<RenameItem>> buildRenamePlan(
   );
 }
 
+/// The key [planRenames] groups by: folder + lower-cased basename stem.
+String _stemKey(String path) =>
+    '${p.canonicalize(p.dirname(path))}\u0000'
+    '${p.basenameWithoutExtension(path).toLowerCase()}';
+
+/// The ids in [targetIds] plus every photo in [all] that shares a folder and
+/// basename stem with one of them — the other half of a RAW+JPEG pair. A rename
+/// must take the whole group, or it splits the pair: with *Hide JPEG pairs* on
+/// (or a Picks filter the unmarked JPEG fails) the twin isn't in the grid
+/// selection, so renaming just the RAW would leave `DSC1.JPG` behind as the
+/// RAW becomes `2026-10-05_001.RAF` (GitHub #12).
+Set<int> withStemPartners(
+  Set<int> targetIds,
+  Iterable<({int id, String path})> all,
+) {
+  final photos = all.toList();
+  final keys = {
+    for (final photo in photos)
+      if (targetIds.contains(photo.id)) _stemKey(photo.path),
+  };
+  return {
+    ...targetIds,
+    for (final photo in photos)
+      if (keys.contains(_stemKey(photo.path))) photo.id,
+  };
+}
+
 /// Pure planning core (no isolate), with an injectable [exists] predicate so
 /// tests exercise collision resolution and sidecar pairing without a disk.
 ///
@@ -162,10 +189,7 @@ List<RenameItem> planRenames(
   // Group by folder + stem, preserving first-appearance order for sequencing.
   final groups = <String, List<RenameSource>>{};
   for (final s in sources) {
-    final key =
-        '${p.canonicalize(p.dirname(s.path))}\u0000'
-        '${p.basenameWithoutExtension(s.path).toLowerCase()}';
-    (groups[key] ??= []).add(s);
+    (groups[_stemKey(s.path)] ??= []).add(s);
   }
 
   final batchSources = {for (final s in sources) p.canonicalize(s.path)};

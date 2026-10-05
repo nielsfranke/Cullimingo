@@ -94,6 +94,9 @@ Future<void> main() async {
         propagateMarksToStackSeedProvider.overrideWithValue(
           settings.propagateMarksToStack,
         ),
+        propagateMarksToPairSeedProvider.overrideWithValue(
+          settings.propagateMarksToPair,
+        ),
         autoExpandBracketsOnSelectSeedProvider.overrideWithValue(
           settings.autoExpandBracketsOnSelect,
         ),

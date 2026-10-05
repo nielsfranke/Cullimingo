@@ -162,11 +162,23 @@ mixin _CullJobs on _CullSelections {
   }
 
   /// Opens the rename dialog for the current selection (the mark targets) and,
-  /// on confirm, renames the files in place. Same target rule as copy/move.
+  /// on confirm, renames the files in place. Same target rule as copy/move,
+  /// except each target brings its same-stem twin (the JPEG of a RAW+JPEG
+  /// pair) even when a filter hides it, so a rename never splits a pair.
   Future<void> _rename() async {
-    final targets = ref.read(cullControllerProvider).markTargets;
+    final all = ref.read(photosProvider).value ?? const <Photo>[];
+    final targets = withStemPartners(
+      ref.read(cullControllerProvider).markTargets,
+      [for (final photo in all) (id: photo.id, path: photo.path)],
+    );
+    // Grid order first (it drives {seq}), then any twins the grid hides.
+    final visible = ref.read(filteredPhotosProvider);
+    final visibleIds = {for (final photo in visible) photo.id};
     final sources = [
-      for (final photo in ref.read(filteredPhotosProvider))
+      for (final photo in [
+        ...visible,
+        ...all.where((photo) => !visibleIds.contains(photo.id)),
+      ])
         if (targets.contains(photo.id))
           RenameSource(
             id: photo.id,

@@ -348,6 +348,17 @@ class AppSettings {
   Future<void> setPropagateMarksToStack(bool value) =>
       _setAll({'propagateMarksToStack': value});
 
+  /// Whether marking (rate/flag/colour/rotate) a photo also applies the mark to
+  /// the other file of its RAW+JPEG pair (default false: each file keeps its
+  /// own marks, GitHub #3).
+  bool get propagateMarksToPair =>
+      _data['propagateMarksToPair'] as bool? ?? false;
+
+  /// Sets the propagate-marks-to-pair preference.
+  // ignore: avoid_positional_boolean_parameters — simple flag setter.
+  Future<void> setPropagateMarksToPair(bool value) =>
+      _setAll({'propagateMarksToPair': value});
+
   /// Whether pulling client picks in (Find-by-list / ContactSheet) auto-expands
   /// the selection to each pick's exposure bracket (default false).
   bool get autoExpandBracketsOnSelect =>

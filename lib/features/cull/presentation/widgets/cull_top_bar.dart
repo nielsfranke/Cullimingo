@@ -44,6 +44,8 @@ class CullTopBar extends StatelessWidget {
     this.onContactSheet,
     this.propagateMarksToStack = false,
     this.onTogglePropagateMarks,
+    this.propagateMarksToPair = false,
+    this.onTogglePropagateMarksToPair,
     this.cellWidth,
     this.onCellWidth,
     this.onZoomStart,
@@ -139,6 +141,13 @@ class CullTopBar extends StatelessWidget {
 
   /// Flips [propagateMarksToStack] (null = disabled, no folder open).
   final VoidCallback? onTogglePropagateMarks;
+
+  /// Whether marking a photo also marks its RAW+JPEG twin — the live value of
+  /// the same Settings toggle, surfaced as a checkable "More" entry.
+  final bool propagateMarksToPair;
+
+  /// Flips [propagateMarksToPair] (null = hidden: no folder, or no pairs).
+  final VoidCallback? onTogglePropagateMarksToPair;
 
   /// Current grid cell width, or `null` to hide the size slider (no photos).
   final double? cellWidth;
@@ -336,6 +345,13 @@ class CullTopBar extends StatelessWidget {
             closeOnActivate: false,
             onChanged: (_) => onTogglePropagateMarks!(),
             child: const Text('Apply marks to whole bracket'),
+          ),
+        if (onTogglePropagateMarksToPair != null)
+          CheckboxMenuButton(
+            value: propagateMarksToPair,
+            closeOnActivate: false,
+            onChanged: (_) => onTogglePropagateMarksToPair!(),
+            child: const Text('Apply marks to RAW+JPEG pair'),
           ),
         if (onFindSimilar != null)
           item('Find similar photos', () => unawaited(onFindSimilar!())),

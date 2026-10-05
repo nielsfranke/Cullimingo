@@ -3,6 +3,26 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Added
+- **Marks can follow RAW+JPEG pairs:** a new setting (Settings → RAW+JPEG
+  pairs, also in the ⋮ menu when the folder has pairs) applies ratings,
+  flags, colours and rotation to both files of a pair, so `DSCF8912.RAF` and
+  `DSCF8912.JPG` can be culled as one photo. With auto-advance on, one
+  keypress moves past the twin to the next shot. Off by default, so each file
+  still keeps its own marks unless you turn it on (GitHub #12).
+- **Unflagged and Unrated filter chips:** show only photos that are neither
+  picked nor rejected, or only photos with no star rating (GitHub #12).
+  Unrated and the star threshold switch each other off. Both are saved in
+  filter presets.
+
+### Fixed
+- **Renaming no longer splits a RAW+JPEG pair:** renaming the RAW now also
+  renames its JPEG twin in the same folder, even when *Hide JPEG pairs* or
+  another filter keeps the JPEG out of the grid. Before, the JPEG kept its
+  old name and was no longer paired with the renamed RAW (GitHub #12).
+
 ## 1.4.0 — 2026-10-04
 
 ### Changed

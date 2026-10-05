@@ -4,7 +4,8 @@ import 'package:cullimingo/shared/models/cull_marks.dart';
 import 'package:path/path.dart' as p;
 
 /// A combinable filter over the cull grid (`BUILD_PLAN.md` §5): rating
-/// threshold, flag state, colour label, "has keyword" and "needs caption".
+/// threshold (or unrated only), flag state (pick, reject or unflagged), colour
+/// label, "has keyword" and "needs caption".
 /// `null`/0/false means "don't care".
 ///
 /// The "selected only" quick-filter ([selectedOnly]) can't be answered by
@@ -14,6 +15,7 @@ class PhotoFilter {
   /// Creates a filter. Defaults match everything.
   const PhotoFilter({
     this.minRating = 0,
+    this.unratedOnly = false,
     this.flag,
     this.color,
     this.hasKeyword = false,
@@ -31,6 +33,7 @@ class PhotoFilter {
   /// newer build still loads (minus the constraint it didn't understand).
   factory PhotoFilter.fromJson(Map<String, dynamic> json) => PhotoFilter(
     minRating: (json['minRating'] as num?)?.toInt() ?? 0,
+    unratedOnly: json['unratedOnly'] as bool? ?? false,
     flag: _enumByName(PickFlag.values, json['flag']),
     color: _enumByName(ColorLabel.values, json['color']),
     hasKeyword: json['hasKeyword'] as bool? ?? false,
@@ -46,7 +49,11 @@ class PhotoFilter {
   /// Minimum star rating (0 = any).
   final int minRating;
 
-  /// Required pick/reject flag (null = any).
+  /// When true, only photos with no star rating pass. Mutually exclusive with
+  /// [minRating] — [withMinRating] and [withUnratedOnly] each clear the other.
+  final bool unratedOnly;
+
+  /// Required flag (null = any; [PickFlag.none] = unflagged only).
   final PickFlag? flag;
 
   /// Required colour label (null = any).
@@ -93,6 +100,7 @@ class PhotoFilter {
   /// Whether any constraint is set.
   bool get isActive =>
       minRating > 0 ||
+      unratedOnly ||
       flag != null ||
       color != null ||
       hasKeyword ||
@@ -108,6 +116,7 @@ class PhotoFilter {
   /// on its own. Does **not** consider [selectedOnly] — see the class doc.
   bool matches(Photo photo) {
     if (photo.rating < minRating) return false;
+    if (unratedOnly && photo.rating > 0) return false;
     if (flag != null && photo.flag != flag) return false;
     if (color != null && photo.colorLabel != color) return false;
     if (hasKeyword && photo.keywords.isEmpty) return false;
@@ -132,6 +141,7 @@ class PhotoFilter {
   /// be a reusable preset (the presets layer strips it before saving too).
   Map<String, dynamic> toJson() => {
     'minRating': minRating,
+    'unratedOnly': unratedOnly,
     if (flag != null) 'flag': flag!.name,
     if (color != null) 'color': color!.name,
     'hasKeyword': hasKeyword,
@@ -142,8 +152,18 @@ class PhotoFilter {
     if (fileType != FileTypeFilter.all) 'fileType': fileType.name,
   };
 
-  /// Returns a copy with the minimum rating set (0 clears it).
-  PhotoFilter withMinRating(int rating) => _copyWith(minRating: rating);
+  /// Returns a copy with the minimum rating set (0 clears it). A threshold
+  /// clears [unratedOnly] — the two can't both hold.
+  PhotoFilter withMinRating(int rating) => _copyWith(
+    minRating: rating,
+    unratedOnly: rating > 0 ? false : null,
+  );
+
+  /// Returns a copy with the unrated-only constraint set. Turning it on clears
+  /// [minRating] — the two can't both hold.
+  // ignore: avoid_positional_boolean_parameters — mirrors the other with* setters.
+  PhotoFilter withUnratedOnly(bool value) =>
+      _copyWith(unratedOnly: value, minRating: value ? 0 : null);
 
   /// Returns a copy with the flag constraint set (null clears it).
   PhotoFilter withFlag(PickFlag? value) => _copyWith(flag: () => value);
@@ -186,6 +206,7 @@ class PhotoFilter {
   // Nullable fields use a thunk so passing null clears them (vs "absent").
   PhotoFilter _copyWith({
     int? minRating,
+    bool? unratedOnly,
     PickFlag? Function()? flag,
     ColorLabel? Function()? color,
     bool? hasKeyword,
@@ -198,6 +219,7 @@ class PhotoFilter {
     String? query,
   }) => PhotoFilter(
     minRating: minRating ?? this.minRating,
+    unratedOnly: unratedOnly ?? this.unratedOnly,
     flag: flag != null ? flag() : this.flag,
     color: color != null ? color() : this.color,
     hasKeyword: hasKeyword ?? this.hasKeyword,

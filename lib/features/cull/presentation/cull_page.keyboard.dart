@@ -297,14 +297,22 @@ mixin _CullKeyboard on _CullJobs {
   /// focus to the next one (blitting the loupe forward when it's open). Batch
   /// marks — a multi-photo selection — stay put, since the user is deliberately
   /// tagging a group. No-op unless enabled in Settings, or already on the last
-  /// photo. [index] is the just-marked photo's position in [photos].
+  /// photo. [index] is the just-marked photo's position in [photos]. When
+  /// marks follow RAW+JPEG pairs, the twin the mark just landed on is skipped
+  /// too, so one keypress moves on to the next shot, not its other file.
   void _advanceAfterMark(int index, List<Photo> photos) {
     if (!ref.read(autoAdvanceAfterMarkProvider)) return;
     if (!_loupeOpen &&
         ref.read(cullControllerProvider).markTargets.length > 1) {
       return;
     }
-    final next = index + 1;
+    final twins = ref.read(propagateMarksToPairProvider)
+        ? ref.read(rawJpegPairsProvider).groupOf(photos[index].id)
+        : const <int>{};
+    var next = index + 1;
+    while (next < photos.length && twins.contains(photos[next].id)) {
+      next++;
+    }
     if (next >= photos.length) return; // already on the last photo
     ref.read(cullControllerProvider.notifier).focus(photos[next].id);
     _ensureRowVisible(next);

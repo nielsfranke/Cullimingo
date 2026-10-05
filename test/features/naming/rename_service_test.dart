@@ -135,6 +135,33 @@ void main() {
     });
   });
 
+  group('withStemPartners', () {
+    test('adds the hidden twin of a RAW+JPEG pair in the same folder', () {
+      final ids = withStemPartners(
+        {1},
+        [
+          (id: 1, path: '/s/DSCF8912.RAF'),
+          (id: 2, path: '/s/dscf8912.JPG'),
+          (id: 3, path: '/s/DSCF8913.RAF'),
+          // Same name, other folder: planRenames wouldn't group it, so neither
+          // does this.
+          (id: 4, path: '/t/DSCF8912.JPG'),
+        ],
+      );
+      expect(ids, {1, 2});
+    });
+
+    test('works from the JPEG side and leaves lone files alone', () {
+      final all = [
+        (id: 1, path: '/s/A.ARW'),
+        (id: 2, path: '/s/A.JPG'),
+        (id: 3, path: '/s/B.JPG'),
+      ];
+      expect(withStemPartners({2}, all), {1, 2});
+      expect(withStemPartners({3}, all), {3});
+    });
+  });
+
   group('applyRenamePlan (real files)', () {
     late Directory dir;
 

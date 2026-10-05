@@ -62,6 +62,33 @@ void main() {
       expect(filter.matches(_photo(rating: 3)), isTrue);
     });
 
+    test('unrated-only passes only photos without a star rating', () {
+      const filter = PhotoFilter(unratedOnly: true);
+      expect(filter.isActive, isTrue);
+      expect(filter.matches(_photo()), isTrue);
+      expect(filter.matches(_photo(rating: 1)), isFalse);
+    });
+
+    test('unrated-only and a star threshold clear each other', () {
+      final unrated = const PhotoFilter(minRating: 3).withUnratedOnly(true);
+      expect(unrated.minRating, 0);
+      expect(unrated.unratedOnly, isTrue);
+
+      final rated = unrated.withMinRating(2);
+      expect(rated.minRating, 2);
+      expect(rated.unratedOnly, isFalse);
+      // Clearing the threshold leaves unrated-only alone.
+      expect(unrated.withMinRating(0).unratedOnly, isTrue);
+    });
+
+    test('a none flag passes only unflagged photos', () {
+      const filter = PhotoFilter(flag: PickFlag.none);
+      expect(filter.isActive, isTrue);
+      expect(filter.matches(_photo()), isTrue);
+      expect(filter.matches(_photo(flag: PickFlag.pick)), isFalse);
+      expect(filter.matches(_photo(flag: PickFlag.reject)), isFalse);
+    });
+
     test('flag and colour must match exactly', () {
       const filter = PhotoFilter(flag: PickFlag.pick, color: ColorLabel.green);
       expect(filter.matches(_photo(flag: PickFlag.pick)), isFalse);

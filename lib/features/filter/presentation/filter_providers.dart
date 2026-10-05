@@ -34,6 +34,9 @@ class PhotoFilterController extends _$PhotoFilterController {
   void toggleMinRating(int rating) =>
       state = state.withMinRating(state.minRating == rating ? 0 : rating);
 
+  /// Toggles the "unrated only" constraint (clears any star threshold).
+  void toggleUnratedOnly() => state = state.withUnratedOnly(!state.unratedOnly);
+
   /// Sets the flag constraint, toggling off if already [flag].
   void toggleFlag(PickFlag flag) =>
       state = state.withFlag(state.flag == flag ? null : flag);

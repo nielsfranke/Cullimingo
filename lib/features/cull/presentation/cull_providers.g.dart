@@ -872,6 +872,120 @@ abstract class _$PropagateMarksToStack extends $Notifier<bool> {
   }
 }
 
+/// Startup seed for [PropagateMarksToPair].
+
+@ProviderFor(propagateMarksToPairSeed)
+final propagateMarksToPairSeedProvider = PropagateMarksToPairSeedProvider._();
+
+/// Startup seed for [PropagateMarksToPair].
+
+final class PropagateMarksToPairSeedProvider
+    extends $FunctionalProvider<bool, bool, bool>
+    with $Provider<bool> {
+  /// Startup seed for [PropagateMarksToPair].
+  PropagateMarksToPairSeedProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'propagateMarksToPairSeedProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$propagateMarksToPairSeedHash();
+
+  @$internal
+  @override
+  $ProviderElement<bool> $createElement($ProviderPointer pointer) =>
+      $ProviderElement(pointer);
+
+  @override
+  bool create(Ref ref) {
+    return propagateMarksToPairSeed(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$propagateMarksToPairSeedHash() =>
+    r'0ecd0a5972bf46045e83ebf0e1b1ee0740901caa';
+
+/// Whether marking a photo also marks the other file of its RAW+JPEG pair
+/// (Settings → RAW+JPEG pairs, GitHub #12). Read by [CullController];
+/// persisted.
+
+@ProviderFor(PropagateMarksToPair)
+final propagateMarksToPairProvider = PropagateMarksToPairProvider._();
+
+/// Whether marking a photo also marks the other file of its RAW+JPEG pair
+/// (Settings → RAW+JPEG pairs, GitHub #12). Read by [CullController];
+/// persisted.
+final class PropagateMarksToPairProvider
+    extends $NotifierProvider<PropagateMarksToPair, bool> {
+  /// Whether marking a photo also marks the other file of its RAW+JPEG pair
+  /// (Settings → RAW+JPEG pairs, GitHub #12). Read by [CullController];
+  /// persisted.
+  PropagateMarksToPairProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'propagateMarksToPairProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$propagateMarksToPairHash();
+
+  @$internal
+  @override
+  PropagateMarksToPair create() => PropagateMarksToPair();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$propagateMarksToPairHash() =>
+    r'f61e149b644a543702a81719beb52a2c552653e9';
+
+/// Whether marking a photo also marks the other file of its RAW+JPEG pair
+/// (Settings → RAW+JPEG pairs, GitHub #12). Read by [CullController];
+/// persisted.
+
+abstract class _$PropagateMarksToPair extends $Notifier<bool> {
+  bool build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<bool, bool>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<bool, bool>,
+              bool,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
 /// Startup seed for [AutoExpandBracketsOnSelect].
 
 @ProviderFor(autoExpandBracketsOnSelectSeed)
@@ -2709,7 +2823,7 @@ final class CullControllerProvider
   }
 }
 
-String _$cullControllerHash() => r'0034ee6e4e45f092eb97565beeb077616d14cc43';
+String _$cullControllerHash() => r'792a7f9171b52eb1f4600a6bb0e2539c7816f427';
 
 /// Owns grid focus/selection and writes cull marks straight to the read model
 /// (the reactive `photos` stream reflects them immediately).

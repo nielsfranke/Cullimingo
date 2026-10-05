@@ -10,8 +10,8 @@ import 'package:cullimingo/shared/widgets/edge_fade_scroll.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// The quick-filter bar: All / Picks / Rejected chips with live counts, a star
-/// rating threshold, and colour-label dots (`BUILD_PLAN.md` §5/§7).
+/// The quick-filter bar: All / Picks / Rejected / Unflagged chips with live
+/// counts, a star rating threshold (or Unrated), and colour-label dots (`BUILD_PLAN.md` §5/§7).
 class FilterBar extends ConsumerWidget {
   /// Creates the filter bar.
   const FilterBar({super.key});
@@ -84,7 +84,17 @@ class FilterBar extends ConsumerWidget {
               selected: filter.flag == PickFlag.reject,
               onTap: () => controller.toggleFlag(PickFlag.reject),
             ),
+            _Chip(
+              label: 'Unflagged (${count((p) => p.flag == PickFlag.none)})',
+              selected: filter.flag == PickFlag.none,
+              onTap: () => controller.toggleFlag(PickFlag.none),
+            ),
             const _Divider(),
+            _Chip(
+              label: 'Unrated (${count((p) => p.rating == 0)})',
+              selected: filter.unratedOnly,
+              onTap: controller.toggleUnratedOnly,
+            ),
             for (var star = 1; star <= 5; star++)
               _StarToggle(
                 star: star,

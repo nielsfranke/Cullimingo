@@ -262,6 +262,15 @@ class _CullPageState extends ConsumerState<CullPage>
                               .read(propagateMarksToStackProvider.notifier)
                               .set(!ref.read(propagateMarksToStackProvider))
                         : null,
+                    propagateMarksToPair: ref.watch(
+                      propagateMarksToPairProvider,
+                    ),
+                    onTogglePropagateMarksToPair:
+                        ref.watch(rawJpegPairsProvider).pairCount > 0
+                        ? () => ref
+                              .read(propagateMarksToPairProvider.notifier)
+                              .set(!ref.read(propagateMarksToPairProvider))
+                        : null,
                     onSettings: _openSettings,
                     onShortcuts: _showShortcuts,
                     inspectorOpen: inspectorOpen,

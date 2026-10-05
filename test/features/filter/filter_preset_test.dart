@@ -25,6 +25,13 @@ void main() {
       expect(restored.hideJpegPairs, isTrue);
     });
 
+    test('round-trips the unrated and unflagged quick filters', () {
+      const filter = PhotoFilter(unratedOnly: true, flag: PickFlag.none);
+      final restored = PhotoFilter.fromJson(filter.toJson());
+      expect(restored.unratedOnly, isTrue);
+      expect(restored.flag, PickFlag.none);
+    });
+
     test('does not persist the transient selectedOnly constraint', () {
       const filter = PhotoFilter(selectedOnly: true, minRating: 2);
       expect(filter.toJson().containsKey('selectedOnly'), isFalse);
