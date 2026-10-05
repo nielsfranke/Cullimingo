@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.5.0 — 2026-10-06
 
 ### Added
 - **Marks can follow RAW+JPEG pairs:** a new setting (Settings → RAW+JPEG
@@ -19,7 +19,7 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 
 ### Fixed
 - **Renaming no longer splits a RAW+JPEG pair:** renaming the RAW now also
-  renames its JPEG twin in the same folder, even when *Hide JPEG pairs* or
+  renames its JPEG twin in the same folder, even when *Hide JPEG* or
   another filter keeps the JPEG out of the grid. Before, the JPEG kept its
   old name and was no longer paired with the renamed RAW (GitHub #12).
 
