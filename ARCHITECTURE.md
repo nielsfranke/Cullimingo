@@ -135,12 +135,14 @@ packages/
 - Local dev: macOS needs full Xcode + CocoaPods; Linux needs the GTK dev libs
   listed in the CI workflow.
 - Linux ships as the AppImage (with zsync update info) and as a Flatpak built
-  from source (`flatpak/flatpak-flutter.yml` → flatpak-flutter → Flathub; the
+  from source (`flatpak/flatpak-flutter.yml` → flatpak-flutter →
+  `tool/build_flatpak.sh`, served from a self-hosted signed repo on GitHub
+  Pages; the
   native libs are manifest modules installed into `/app/lib`, which is also
   the Flutter bundle's `lib/`). Under Flatpak, host tools (`gio trash`, `lsblk`/`udisksctl`,
   `ffmpeg`, "Send to" editors, FileManager1 reveal) run via
   `flatpak-spawn --host` (`core/files/host_command.dart`), and the in-app
-  update check is off because Flathub delivers updates. The Flatpak's ID
+  update check is off because `flatpak update` delivers updates. The Flatpak's ID
   (`io.github.nielsfranke.Cullimingo`) comes in at runtime from `FLATPAK_ID`
   (`linux/runner/my_application.cc`); other Linux builds keep the compiled-in
   `cc.nielsbox.cullimingo`, which names their data folder.

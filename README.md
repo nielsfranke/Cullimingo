@@ -56,6 +56,12 @@ Grab the latest build from the
   chmod +x Cullimingo-x86_64.AppImage
   ./Cullimingo-x86_64.AppImage
   ```
+- **Linux (Flatpak)** — install from Cullimingo's own Flatpak repository
+  (x86_64 and ARM); it updates through `flatpak update` or your software
+  centre:
+  ```sh
+  flatpak install --user https://nielsfranke.github.io/Cullimingo/io.github.nielsfranke.Cullimingo.flatpakref
+  ```
 - **macOS (Apple Silicon)** — open the `.dmg`, drag **Cullimingo** to
   **Applications**, then clear the quarantine flag once (it's unsigned):
   ```sh

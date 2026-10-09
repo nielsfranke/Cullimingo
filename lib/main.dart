@@ -133,8 +133,8 @@ Future<void> main() async {
         // Run the real GitHub update check at launch (throttled + opt-out);
         // the default provider is a null no-op so widget tests never hit the
         // network. See [availableUpdateProvider]. Skipped under Flatpak:
-        // Flathub delivers updates, and a "download the AppImage" notice
-        // there would point users at the wrong channel.
+        // `flatpak update` delivers updates, and a "download the AppImage"
+        // notice there would point users at the wrong channel.
         if (!runningInFlatpak)
           availableUpdateProvider.overrideWith(
             (ref) => checkForUpdatesOnStartup(

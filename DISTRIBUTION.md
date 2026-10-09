@@ -115,14 +115,19 @@ non-prerelease. Check a build with
 
 ## Linux (Flatpak)
 
-The Flatpak is built **entirely from source**, offline, as Flathub requires.
-`flatpak/flatpak-flutter.yml` is the hand-written input; the
+Cullimingo ships its Flatpak from its **own signed repository on GitHub
+Pages** (<https://nielsfranke.github.io/Cullimingo/>), not Flathub (see
+"Flathub" below). Installed copies update through `flatpak update` or the
+software centre, and every Release also carries `.flatpak` bundles.
+
+The Flatpak is built **entirely from source**, offline inside
+flatpak-builder's sandbox. `flatpak/flatpak-flutter.yml` is the input; the
 [flatpak-flutter](https://github.com/TheAppgineer/flatpak-flutter)
 pre-processor turns it into the real manifest
 (`io.github.nielsfranke.Cullimingo.yml`) plus `generated/` modules and
 sources: the Flutter SDK, every pub package, and the Rust toolchain + crates
-for `super_native_extensions`. Those generated files are not kept in this
-repo; they live in the Flathub repo.
+for `super_native_extensions`. Those are regenerated on every build and not
+kept in the repo.
 
 What the manifest builds, on the GNOME 51 runtime:
 
@@ -149,23 +154,47 @@ the icon all match. Outside Flatpak the compiled-in ID stays, because
 `path_provider` names the settings + database folder after it — changing it
 would strand existing AppImage users' data.
 
-### Generate and build
+### Build locally
 
 ```sh
-git clone https://github.com/TheAppgineer/flatpak-flutter ~/flatpak-flutter
-pip install -r ~/flatpak-flutter/requirements.txt
-cd flatpak
-~/flatpak-flutter/flatpak-flutter.py flatpak-flutter.yml   # needs network
-flatpak install flathub org.gnome.Platform//51 org.gnome.Sdk//51 \
-  org.freedesktop.Sdk.Extension.llvm22//26.08
-flatpak-builder --sandbox --user --install --force-clean build-dir \
-  io.github.nielsfranke.Cullimingo.yml
+tool/build_flatpak.sh "$(git rev-parse HEAD)"   # commit must be on GitHub
+flatpak install --user build/flatpak/Cullimingo-$(flatpak --default-arch).flatpak
 flatpak run io.github.nielsfranke.Cullimingo
 ```
 
-Regenerate whenever the release tag, the Flutter version or `pubspec.lock`
-changes: point the app source's `tag:` at the new release first. The input
-pins the app by tag; the generator adds the commit.
+`build_flatpak.sh` fetches flatpak-flutter at a pinned commit, pins the
+manifest's app source to the given commit, generates, installs the GNOME 51
+runtime/SDK + llvm22 if missing, builds with `flatpak-builder --sandbox`, and
+exports `build/flatpak/repo` plus a bundle. It needs network (generator +
+runtime downloads) and a Linux host with flatpak-builder — or privileged
+Docker: `ghcr.io/flathub-infra/flatpak-github-actions:gnome-51` is what CI
+uses. The app source is fetched from GitHub, so the commit must be pushed.
+
+### Releases and the repo
+
+`release.yml` runs it on every `v*` tag:
+
+1. `build-flatpak` builds natively on `ubuntu-24.04` (x86_64) and
+   `ubuntu-24.04-arm` (aarch64) in the image above, signing each exported
+   commit.
+2. `release` attaches `Cullimingo-x86_64.flatpak` and
+   `Cullimingo-aarch64.flatpak` to the GitHub Release. A bundle install also
+   adds the Pages repo as the app's origin, so it updates like a repo install.
+3. `publish-flatpak` (stable tags only — not `-rc` pre-releases) runs
+   `tool/publish_flatpak_repo.sh`: a fresh repo holding just the new app +
+   Locale commits for both arches (no history, no Debug extension, so Pages
+   stays small; clients update from any older commit), a signed summary, the
+   `cullimingo.flatpakrepo` / `.flatpakref` files and an install page. It's
+   deployed with `actions/deploy-pages`; the `github-pages` environment allows
+   `v*` tags.
+
+**Signing key:** RSA 4096, "Cullimingo Flatpak repository", fingerprint
+`430D C906 4406 D37A DED9  A827 627F BB55 9766 1E4E`. The public key is
+`flatpak/cullimingo-repo.gpg` (embedded in the `.flatpakrepo`, `.flatpakref`
+and bundles); the private key is the `FLATPAK_GPG_PRIVATE_KEY` Actions secret,
+with no passphrase so CI can use it. **Keep an offline backup** of the private
+key: installed copies trust exactly this key, so losing it means every user
+has to re-add the repo.
 
 ### Sandbox
 
@@ -180,7 +209,7 @@ pins the app by tag; the generator adds the commit.
   the FileManager1 reveal via `flatpak-spawn --host`. `xdg-open` stays in the
   sandbox and goes through the OpenURI portal.
 - **Updates:** the in-app update check and its setting are hidden under
-  Flatpak (`runningInFlatpak`); Flathub delivers updates.
+  Flatpak (`runningInFlatpak`); `flatpak update` delivers updates.
 - **Data** lives in `~/.var/app/io.github.nielsfranke.Cullimingo/`, so a
   Flatpak install starts with fresh settings and cache, separate from an
   AppImage install.

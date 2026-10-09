@@ -136,9 +136,9 @@ static void my_application_class_init(MyApplicationClass* klass) {
 static void my_application_init(MyApplication* self) {}
 
 // The application ID: the compiled-in APPLICATION_ID, except under Flatpak,
-// which sets FLATPAK_ID in every sandbox. The Flathub build
-// (io.github.nielsfranke.Cullimingo) repackages the same prebuilt bundle as
-// the AppImage, so its ID can only come in at runtime; it has to match the
+// which sets FLATPAK_ID in every sandbox. The Flatpak
+// (io.github.nielsfranke.Cullimingo) builds this same runner with the same
+// APPLICATION_ID, so its ID comes in at runtime; it has to match the
 // Flatpak's .desktop file for the Wayland app_id / dock icon. Everywhere else
 // the compiled-in ID stays, because path_provider names the settings + database
 // folder after it.

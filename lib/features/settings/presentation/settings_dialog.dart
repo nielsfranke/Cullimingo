@@ -567,7 +567,7 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
         onChanged: (v) => setState(() => _reopenLastFolders = v ?? false),
         label: 'Reopen last folders on startup',
       ),
-      // Flatpak builds are updated by Flathub; there is no check to toggle.
+      // Flatpak builds update via `flatpak update`; no check to toggle.
       if (!runningInFlatpak)
         DialogCheckbox(
           value: _checkForUpdates,

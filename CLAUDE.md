@@ -22,7 +22,7 @@ flutter analyze
 
 Native deps for RAW/thumbnail decode: LibRaw and libvips (`brew install libraw vips`, or distro `-dev` packages). macOS also needs full Xcode + CocoaPods.
 
-Release bundling: `flutter build macos --release` + `tool/bundle_macos.sh` + `tool/build_dmg.sh` (macOS), `tool/build_appimage.sh` (Linux). See `DISTRIBUTION.md`.
+Release bundling: `flutter build macos --release` + `tool/bundle_macos.sh` + `tool/build_dmg.sh` (macOS), `tool/build_appimage.sh` (Linux AppImage), `tool/build_flatpak.sh` + `tool/publish_flatpak_repo.sh` (Flatpak, self-hosted signed repo on GitHub Pages — not Flathub). See `DISTRIBUTION.md`.
 
 ## Codegen
 

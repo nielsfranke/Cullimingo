@@ -1,5 +1,7 @@
-# Builds the Linux AppImage + macOS .dmg and publishes them on a GitHub Release
-# whenever a version tag is pushed.
+# Builds the Linux AppImage, the Flatpak (x86_64 + aarch64) and the macOS .dmg,
+# and publishes them on a GitHub Release whenever a version tag is pushed. A
+# non-prerelease tag also redeploys the self-hosted Flatpak repo on GitHub
+# Pages (GitHub #13), which is where installed Flatpaks get their updates.
 #
 # Why a Release (not just a tag): the app's startup update check reads
 # `api.github.com/repos/nielsfranke/Cullimingo/releases/latest`, and that
@@ -11,8 +13,9 @@
 # suffix (`v1.1.0-rc.1`) and are flagged as pre-releases so `/releases/latest`
 # skips them.
 #
-# `workflow_dispatch` builds both artifacts and leaves them as run artifacts
-# (no Release) so the build pipeline can be exercised without cutting a tag.
+# `workflow_dispatch` builds all artifacts and leaves them as run artifacts
+# (no Release, no Pages deploy) so the build pipeline can be exercised without
+# cutting a tag.
 name: Release
 
 on:
@@ -92,8 +95,56 @@ jobs:
           path: build/macos/Cullimingo-arm64.dmg
           if-no-files-found: error
 
+  build-flatpak:
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    # GNOME 51 runtime + SDK preinstalled; flatpak-builder needs --privileged
+    # for its build sandbox.
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Import the repo signing key
+        env:
+          FLATPAK_GPG_PRIVATE_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -p -m 700 "$GNUPGHOME"
+          printf '%s\n' "$FLATPAK_GPG_PRIVATE_KEY" | gpg --batch --import
+          key=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/{print $10; exit}')
+          echo "FLATPAK_GPG_HOMEDIR=$GNUPGHOME" >> "$GITHUB_ENV"
+          echo "FLATPAK_GPG_KEY=$key" >> "$GITHUB_ENV"
+
+      - name: Build the Flatpak from source
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          tool/build_flatpak.sh "$GITHUB_SHA" build/flatpak
+          # Artifacts drop permissions; ship the OSTree repo as a tarball.
+          tar -C build/flatpak -cf build/flatpak/repo-${{ matrix.arch }}.tar repo
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flatpak-bundle-${{ matrix.arch }}
+          path: build/flatpak/Cullimingo-${{ matrix.arch }}.flatpak
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flatpak-repo-${{ matrix.arch }}
+          path: build/flatpak/repo-${{ matrix.arch }}.tar
+          if-no-files-found: error
+
   release:
-    needs: [build-linux, build-macos]
+    needs: [build-linux, build-macos, build-flatpak]
     if: startsWith(github.ref, 'refs/tags/') # only tag pushes publish a Release
     runs-on: ubuntu-latest
     permissions:
@@ -105,10 +156,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7 # for CHANGELOG.md
 
+      # Everything but the Flatpak repo tarballs (those go to Pages) lands
+      # flat in dist/.
       - uses: actions/download-artifact@v8
         with:
+          pattern: '{appimage,dmg,flatpak-bundle-*}'
           path: dist
-          merge-multiple: true # both artifacts land flat in dist/
+          merge-multiple: true
 
       - name: Publish the Release with artifacts
         run: |
@@ -140,6 +194,16 @@ jobs:
           ```
           To update in place, use AppImageUpdate or Gear Lever — only the
           changed parts are downloaded.
+
+          ### Linux (Flatpak)
+          Install from Cullimingo's own Flatpak repository; updates then come
+          through `flatpak update` or your software centre:
+          ```
+          flatpak install --user https://nielsfranke.github.io/Cullimingo/io.github.nielsfranke.Cullimingo.flatpakref
+          ```
+          Or download `Cullimingo-x86_64.flatpak` (or `-aarch64`) and run
+          `flatpak install --user Cullimingo-x86_64.flatpak`. It subscribes to
+          the same repository for updates.
 
           ### macOS (Apple Silicon)
           1. Open `Cullimingo-arm64.dmg` and drag **Cullimingo** to **Applications**.
@@ -177,3 +241,57 @@ jobs:
               $prerelease_flag \
               dist/*
           fi
+
+  # Rebuilds the self-hosted Flatpak repo from this release's two arch repos,
+  # signs it, and deploys it to GitHub Pages (tool/publish_flatpak_repo.sh).
+  # Skipped for pre-releases, so installed Flatpaks only see stable versions.
+  publish-flatpak:
+    needs: [build-flatpak, release]
+    if: startsWith(github.ref, 'refs/tags/') && !contains(github.ref_name, '-')
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      options: --privileged
+    permissions:
+      contents: read
+      pages: write # deploy-pages
+      id-token: write # deploy-pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: flatpak-repo-*
+          path: repos
+          merge-multiple: true
+
+      - name: Import the repo signing key
+        env:
+          FLATPAK_GPG_PRIVATE_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -p -m 700 "$GNUPGHOME"
+          printf '%s\n' "$FLATPAK_GPG_PRIVATE_KEY" | gpg --batch --import
+          key=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/{print $10; exit}')
+          echo "FLATPAK_GPG_HOMEDIR=$GNUPGHOME" >> "$GITHUB_ENV"
+          echo "FLATPAK_GPG_KEY=$key" >> "$GITHUB_ENV"
+
+      - name: Assemble the signed repo site
+        run: |
+          set -euo pipefail
+          for t in repos/repo-*.tar; do
+            arch=$(basename "$t" .tar); arch=${arch#repo-}
+            mkdir -p "repos/$arch" && tar -C "repos/$arch" -xf "$t"
+          done
+          tool/publish_flatpak_repo.sh site repos/*/repo
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v5

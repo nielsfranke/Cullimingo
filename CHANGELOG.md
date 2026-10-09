@@ -3,6 +3,15 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Added
+- **Flatpak with automatic updates (GitHub #13):** Cullimingo now has its own
+  signed Flatpak repository for x86_64 and ARM Linux. Install it with
+  `flatpak install --user https://nielsfranke.github.io/Cullimingo/io.github.nielsfranke.Cullimingo.flatpakref`;
+  updates arrive through `flatpak update` or your software centre. Each
+  release also carries `.flatpak` files.
+
 ## 1.6.1 — 2026-10-09
 
 ### Changed
