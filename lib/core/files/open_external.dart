@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cullimingo/core/files/host_command.dart';
 import 'package:path/path.dart' as p;
 
 /// Opens [path] in the platform's default application — used for videos, which
@@ -18,17 +19,15 @@ Future<void> openExternally(String path) async {
 /// "Edit with" / the "Send to" menu. On macOS [appPath] is an `.app` bundle
 /// launched via `open -a` (all files land in one instance); elsewhere it's an
 /// executable invoked with the file paths as arguments, detached so it outlives
-/// this process.
+/// this process (via the host under Flatpak — the editor lives outside the
+/// sandbox).
 Future<void> openInApp(String appPath, List<String> paths) async {
   if (paths.isEmpty) return;
   if (Platform.isMacOS) {
     await Process.run('open', ['-a', appPath, ...paths]);
   } else {
-    await Process.start(
-      appPath,
-      paths,
-      mode: ProcessStartMode.detached,
-    );
+    final (exe, args) = hostCommand(appPath, paths);
+    await Process.start(exe, args, mode: ProcessStartMode.detached);
   }
 }
 
@@ -63,7 +62,7 @@ Future<void> revealInFileManager(String path) async {
 Future<bool> _linuxShowItem(String path) async {
   final uri = Uri.file(path).toString();
   try {
-    final result = await Process.run('dbus-send', [
+    final (exe, args) = hostCommand('dbus-send', [
       '--session',
       '--dest=org.freedesktop.FileManager1',
       '--type=method_call',
@@ -72,6 +71,7 @@ Future<bool> _linuxShowItem(String path) async {
       'array:string:$uri',
       'string:',
     ]);
+    final result = await Process.run(exe, args);
     return result.exitCode == 0;
   } on ProcessException {
     return false;

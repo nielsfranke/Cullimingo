@@ -135,14 +135,31 @@ static void my_application_class_init(MyApplicationClass* klass) {
 
 static void my_application_init(MyApplication* self) {}
 
+// The application ID: the compiled-in APPLICATION_ID, except under Flatpak,
+// which sets FLATPAK_ID in every sandbox. The Flathub build
+// (io.github.nielsfranke.Cullimingo) repackages the same prebuilt bundle as
+// the AppImage, so its ID can only come in at runtime; it has to match the
+// Flatpak's .desktop file for the Wayland app_id / dock icon. Everywhere else
+// the compiled-in ID stays, because path_provider names the settings + database
+// folder after it.
+static const gchar* application_id() {
+  const gchar* flatpak_id = g_getenv("FLATPAK_ID");
+  if (flatpak_id != nullptr && g_application_id_is_valid(flatpak_id)) {
+    return flatpak_id;
+  }
+  return APPLICATION_ID;
+}
+
 MyApplication* my_application_new() {
+  const gchar* app_id = application_id();
+
   // Set the program name to the application ID, which helps various systems
   // like GTK and desktop environments map this running application to its
   // corresponding .desktop file. This ensures better integration by allowing
   // the application to be recognized beyond its binary name.
-  g_set_prgname(APPLICATION_ID);
+  g_set_prgname(app_id);
 
   return MY_APPLICATION(g_object_new(my_application_get_type(),
-                                     "application-id", APPLICATION_ID, "flags",
+                                     "application-id", app_id, "flags",
                                      G_APPLICATION_NON_UNIQUE, nullptr));
 }

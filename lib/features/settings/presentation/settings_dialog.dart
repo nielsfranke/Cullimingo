@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cullimingo/app/theme/tokens.dart';
 import 'package:cullimingo/core/cache/memory_budget.dart';
 import 'package:cullimingo/core/files/directory_picker.dart';
+import 'package:cullimingo/core/files/host_command.dart';
 import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/secrets/secret_store.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
@@ -566,11 +567,13 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
         onChanged: (v) => setState(() => _reopenLastFolders = v ?? false),
         label: 'Reopen last folders on startup',
       ),
-      DialogCheckbox(
-        value: _checkForUpdates,
-        onChanged: (v) => setState(() => _checkForUpdates = v ?? true),
-        label: 'Check for updates on startup',
-      ),
+      // Flatpak builds are updated by Flathub; there is no check to toggle.
+      if (!runningInFlatpak)
+        DialogCheckbox(
+          value: _checkForUpdates,
+          onChanged: (v) => setState(() => _checkForUpdates = v ?? true),
+          label: 'Check for updates on startup',
+        ),
       const SizedBox(height: AppSpacing.lg),
       const DialogSection('Cache'),
       Align(

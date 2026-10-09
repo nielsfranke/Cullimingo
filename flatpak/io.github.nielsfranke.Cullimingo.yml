@@ -1,0 +1,60 @@
+# Flatpak manifest for Cullimingo (GitHub #13).
+#
+# Repackages the same self-contained Linux bundle the AppImage ships
+# (`flutter build linux --release` + `tool/bundle_linux.sh`: LibRaw, libvips and
+# the libheif plugins are inside it). This copy builds from the local bundle —
+# see DISTRIBUTION.md "Linux (Flatpak)". The Flathub copy swaps the `dir`/`file`
+# sources for the Release's `Cullimingo-linux-x86_64.tar.gz` and this repo at
+# the release tag (url + sha256).
+#
+# The binary's compiled-in GTK ID is cc.nielsbox.cullimingo; the runner swaps
+# in FLATPAK_ID at startup (linux/runner/my_application.cc), so the window
+# matches this app-id's desktop file.
+app-id: io.github.nielsfranke.Cullimingo
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+command: cullimingo
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # FTP/SFTP delivery and handoff uploads.
+  - --share=network
+  # Photos are culled where they live, and XMP sidecars are written next to
+  # each file — a per-file portal grant can't cover the sibling sidecar.
+  - --filesystem=home
+  # Memory cards and external drives (volume_detector.dart scans these).
+  - --filesystem=/media
+  - --filesystem=/run/media
+  - --filesystem=/mnt
+  # flatpak-spawn --host (core/files/host_command.dart): `gio trash` into the
+  # real trash, lsblk/udisksctl card auto-mount, ffmpeg video posters and the
+  # user's own "Send to" editors (darktable, RawTherapee, …) run on the host.
+  - --talk-name=org.freedesktop.Flatpak
+  # Delivery-server passwords (flutter_secure_storage → libsecret).
+  - --talk-name=org.freedesktop.secrets
+modules:
+  - name: cullimingo
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/lib/cullimingo /app/bin
+      - cp -a bundle/. /app/lib/cullimingo/
+      - ln -s /app/lib/cullimingo/cullimingo /app/bin/cullimingo
+      - install -Dm644 io.github.nielsfranke.Cullimingo.desktop -t /app/share/applications
+      - install -Dm644 io.github.nielsfranke.Cullimingo.metainfo.xml -t /app/share/metainfo
+      - install -Dm644 cullimingo_icon_256.png /app/share/icons/hicolor/256x256/apps/io.github.nielsfranke.Cullimingo.png
+      - install -Dm644 cullimingo_icon_512.png /app/share/icons/hicolor/512x512/apps/io.github.nielsfranke.Cullimingo.png
+    sources:
+      - type: dir
+        path: ../build/linux/x64/release/bundle
+        dest: bundle
+      - type: file
+        path: io.github.nielsfranke.Cullimingo.desktop
+      - type: file
+        path: io.github.nielsfranke.Cullimingo.metainfo.xml
+      - type: file
+        path: ../assets/branding/cullimingo_icon_256.png
+      - type: file
+        path: ../assets/branding/cullimingo_icon_512.png

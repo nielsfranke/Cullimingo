@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.nielsfranke.Cullimingo</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-only</project_license>
+  <name>Cullimingo</name>
+  <summary>Fast, keyboard-first photo culling</summary>
+  <developer id="io.github.nielsfranke">
+    <name>Niels Franke</name>
+  </developer>
+  <description>
+    <p>
+      Cullimingo gets you from a full memory card to a short list of keepers as
+      fast as possible: ingest, cull, filter, export and hand off to your RAW
+      developer.
+    </p>
+    <ul>
+      <li>Instant grid and zoomable full-screen loupe for RAW, JPEG and HEIC/HIF files</li>
+      <li>Ratings, colour labels and pick/reject that round-trip with Capture One and Lightroom through XMP sidecars</li>
+      <li>2-up and n-up compare, find similar shots, exposure brackets collapsed to one cell</li>
+      <li>Verified card ingest with rename templates and a read-back backup to a second drive</li>
+      <li>Full IPTC Core editor with templates, code tables and offline reverse geocoding</li>
+      <li>Background export and delivery to folders or FTP, FTPS and SFTP servers</li>
+      <li>RAW+JPEG pairs can be culled as one photo</li>
+    </ul>
+    <p>
+      Cullimingo works on your files where they are; it is not a catalog and not
+      a RAW developer.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.nielsfranke.Cullimingo.desktop</launchable>
+  <url type="homepage">https://github.com/nielsfranke/Cullimingo</url>
+  <url type="bugtracker">https://github.com/nielsfranke/Cullimingo/issues</url>
+  <url type="help">https://github.com/nielsfranke/Cullimingo/wiki</url>
+  <url type="vcs-browser">https://github.com/nielsfranke/Cullimingo</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Culling grid</caption>
+      <image>https://raw.githubusercontent.com/nielsfranke/Cullimingo/main/docs/screenshots/01-cull-grid.jpg</image>
+    </screenshot>
+    <screenshot>
+      <caption>Loupe</caption>
+      <image>https://raw.githubusercontent.com/nielsfranke/Cullimingo/main/docs/screenshots/02-loupe.jpg</image>
+    </screenshot>
+    <screenshot>
+      <caption>Compare</caption>
+      <image>https://raw.githubusercontent.com/nielsfranke/Cullimingo/main/docs/screenshots/03-compare.jpg</image>
+    </screenshot>
+    <screenshot>
+      <caption>Card ingest</caption>
+      <image>https://raw.githubusercontent.com/nielsfranke/Cullimingo/main/docs/screenshots/08-ingest.jpg</image>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <requires>
+    <display_length compare="ge">1024</display_length>
+  </requires>
+  <branding>
+    <color type="primary" scheme_preference="light">#f4b6c8</color>
+    <color type="primary" scheme_preference="dark">#6b1f35</color>
+  </branding>
+  <releases>
+    <release version="1.6.0" date="2026-10-09">
+      <description>
+        <p>First Flatpak release. The AppImage can now update itself in place with AppImageUpdate or Gear Lever.</p>
+      </description>
+    </release>
+    <release version="1.5.0" date="2026-10-06">
+      <description>
+        <p>Cull RAW+JPEG pairs as one photo: an opt-in setting applies ratings, flags, colours and rotation to both files of a pair, and auto-advance steps past the twin. Renaming always keeps a pair together. New Unflagged and Unrated filter chips.</p>
+      </description>
+    </release>
+  </releases>
+</component>

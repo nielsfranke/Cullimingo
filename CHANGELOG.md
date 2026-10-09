@@ -3,6 +3,15 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## 1.6.0 — 2026-10-09
+
+### Added
+- **Easier Linux updates (GitHub #13):** the AppImage now carries update
+  info, so AppImageUpdate or Gear Lever can update it in place and download
+  only what changed. A Flatpak manifest (`flatpak/`) is in the repo, ready for
+  Flathub; inside the Flatpak, Move to Trash, card auto-mount, video posters,
+  "Send to" editors and Show in File Manager reach the host system.
+
 ## 1.5.0 — 2026-10-06
 
 ### Added

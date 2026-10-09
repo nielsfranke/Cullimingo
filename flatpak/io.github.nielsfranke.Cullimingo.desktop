@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Cullimingo
+GenericName=Photo Culler
+Comment=Fast, keyboard-first photo culling
+Exec=cullimingo
+Icon=io.github.nielsfranke.Cullimingo
+StartupWMClass=io.github.nielsfranke.Cullimingo
+Categories=Graphics;Photography;
+Keywords=photo;cull;raw;rating;xmp;ingest;
+Terminal=false

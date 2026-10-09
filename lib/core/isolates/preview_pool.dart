@@ -5,6 +5,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:cullimingo/core/cache/vips.dart';
+import 'package:cullimingo/core/files/host_command.dart';
 import 'package:cullimingo/core/files/supported_files.dart';
 import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/raw/jpeg_resize.dart';
@@ -495,7 +496,9 @@ Uint8List? _videoPosterMacOS(String path, int longEdge, Vips? vips) {
 Uint8List? _videoPosterLinux(String path, int longEdge, Vips? vips) {
   Directory? tmp;
   try {
-    tmp = Directory.systemTemp.createTempSync('cm_thumb');
+    // Host-visible: under Flatpak the tools run on the host (see
+    // [_runToBytes]) and can't see the sandbox's private /tmp.
+    tmp = hostVisibleTempDir().createTempSync('cm_thumb');
     final pngOut = '${tmp.path}/poster.png';
     var bytes = _runToBytes('ffmpegthumbnailer', [
       '-i',
@@ -548,7 +551,8 @@ Uint8List? _runToBytes(
   String outputPath,
 ) {
   try {
-    final result = Process.runSync(executable, args);
+    final (exe, hostArgs) = hostCommand(executable, args);
+    final result = Process.runSync(exe, hostArgs);
     if (result.exitCode != 0) return null;
   } on Object {
     return null; // binary not installed

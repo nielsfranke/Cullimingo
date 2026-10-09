@@ -31,6 +31,9 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+.flatpak-builder/
+/flatpak/build-dir/
+/flatpak/repo/
 /coverage/
 
 # Symbolication related

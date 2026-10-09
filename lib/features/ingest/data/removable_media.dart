@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cullimingo/core/files/host_command.dart';
+
 /// A hot-pluggable partition (SD card, USB stick, external drive) that could be
 /// an ingest source. Discovered from `lsblk` on Linux (`BUILD_PLAN.md` §5).
 class RemovablePartition {
@@ -104,8 +106,12 @@ String? parseUdisksMountPoint(String output) {
 typedef RunProcess =
     Future<ProcessResult> Function(String executable, List<String> arguments);
 
-Future<ProcessResult> _defaultRun(String exe, List<String> args) =>
-    Process.run(exe, args);
+/// The real runner. Goes through the host under Flatpak: the sandbox has
+/// neither `lsblk` nor access to udisks.
+Future<ProcessResult> _defaultRun(String exe, List<String> args) {
+  final (hostExe, hostArgs) = hostCommand(exe, args);
+  return Process.run(hostExe, hostArgs);
+}
 
 /// Lists hot-pluggable partitions via `lsblk`. Linux only; returns `[]` on
 /// other platforms or when `lsblk` is missing/unparseable. Never throws.

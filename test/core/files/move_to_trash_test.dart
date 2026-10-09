@@ -43,6 +43,24 @@ void main() {
     expect(calls.single.$2, ['trash', '--', a, b]);
   });
 
+  test('linux under Flatpak runs gio trash on the host', () async {
+    final a = makeFile('a.jpg');
+    final calls = <(String, List<String>)>[];
+
+    await moveToTrash(
+      [a],
+      os: 'linux',
+      sandboxed: true,
+      runProcess: (exe, args) async {
+        calls.add((exe, args));
+        return ok();
+      },
+    );
+
+    expect(calls.single.$1, 'flatpak-spawn');
+    expect(calls.single.$2, ['--host', 'gio', 'trash', '--', a]);
+  });
+
   test('macos sends one Finder delete per chunk with escaped paths', () async {
     final a = makeFile('with "quote".jpg');
     final calls = <(String, List<String>)>[];

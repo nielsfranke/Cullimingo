@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:cullimingo/core/files/host_command.dart';
+
 /// Runs an external process — injectable so tests fake the OS trash tools.
 typedef TrashRunner =
     Future<ProcessResult> Function(String executable, List<String> arguments);
@@ -31,10 +33,13 @@ class TrashResult {
 /// counted as done. Batched [chunkSize] paths per process; when a chunk fails,
 /// each of its files is retried alone so one stubborn file doesn't take the
 /// rest of the chunk down with it. [onProgress] ticks after each chunk.
+/// [os] and [sandboxed] (Flatpak, see [hostCommand]) default to the real
+/// environment; tests override them.
 Future<TrashResult> moveToTrash(
   List<String> paths, {
   TrashRunner? runProcess,
   String? os,
+  bool? sandboxed,
   void Function(int processed, int total)? onProgress,
   int chunkSize = 50,
 }) async {
@@ -57,8 +62,10 @@ Future<TrashResult> moveToTrash(
     if (await File(path).exists()) pending.add(path);
   }
 
+  // Under Flatpak, `gio trash` must run on the host: the sandbox's
+  // XDG_DATA_HOME is remapped, so an in-sandbox trash would be app-private.
   (String, List<String>) command(List<String> chunk) => platform == 'linux'
-      ? ('gio', ['trash', '--', ...chunk])
+      ? hostCommand('gio', ['trash', '--', ...chunk], sandboxed: sandboxed)
       : ('osascript', ['-e', _finderDeleteScript(chunk)]);
 
   final failed = <String>[];

@@ -134,3 +134,12 @@ packages/
   Releases: `.github/workflows/release.yml` on a `v*` tag.
 - Local dev: macOS needs full Xcode + CocoaPods; Linux needs the GTK dev libs
   listed in the CI workflow.
+- Linux ships three ways from one bundle: the AppImage (with zsync update
+  info), a plain tarball, and a Flatpak (`flatpak/`) that repackages the
+  tarball. Under Flatpak, host tools (`gio trash`, `lsblk`/`udisksctl`,
+  `ffmpeg`, "Send to" editors, FileManager1 reveal) run via
+  `flatpak-spawn --host` (`core/files/host_command.dart`), and the in-app
+  update check is off because Flathub delivers updates. The Flatpak's ID
+  (`io.github.nielsfranke.Cullimingo`) comes in at runtime from `FLATPAK_ID`
+  (`linux/runner/my_application.cc`); other Linux builds keep the compiled-in
+  `cc.nielsbox.cullimingo`, which names their data folder.

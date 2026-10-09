@@ -56,11 +56,18 @@ jobs:
           flutter build linux --release
           tool/bundle_linux.sh
           tool/build_appimage.sh
+          # The same self-contained bundle as a plain tarball: the Flatpak
+          # (flatpak/io.github.nielsfranke.Cullimingo.yml) repackages it.
+          tar -C build/linux/x64/release/bundle -czf \
+            build/linux/Cullimingo-linux-x86_64.tar.gz .
 
       - uses: actions/upload-artifact@v7
         with:
           name: appimage
-          path: build/linux/Cullimingo-x86_64.AppImage
+          path: |
+            build/linux/Cullimingo-x86_64.AppImage
+            build/linux/Cullimingo-x86_64.AppImage.zsync
+            build/linux/Cullimingo-linux-x86_64.tar.gz
           if-no-files-found: error
 
   build-macos:
@@ -136,6 +143,8 @@ jobs:
           chmod +x Cullimingo-x86_64.AppImage
           ./Cullimingo-x86_64.AppImage
           ```
+          To update in place, use AppImageUpdate or Gear Lever — only the
+          changed parts are downloaded.
 
           ### macOS (Apple Silicon)
           1. Open `Cullimingo-arm64.dmg` and drag **Cullimingo** to **Applications**.

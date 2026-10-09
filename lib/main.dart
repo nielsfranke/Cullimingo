@@ -4,6 +4,7 @@ import 'package:cullimingo/app/app.dart';
 import 'package:cullimingo/app/theme/tokens.dart';
 import 'package:cullimingo/core/cache/memory_budget.dart';
 import 'package:cullimingo/core/cache/vips.dart';
+import 'package:cullimingo/core/files/host_command.dart';
 import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/logging/provider_diagnostics.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
@@ -131,13 +132,16 @@ Future<void> main() async {
         previewRetryEnabledProvider.overrideWithValue(true),
         // Run the real GitHub update check at launch (throttled + opt-out);
         // the default provider is a null no-op so widget tests never hit the
-        // network. See [availableUpdateProvider].
-        availableUpdateProvider.overrideWith(
-          (ref) => checkForUpdatesOnStartup(
-            settings: settings,
-            currentVersion: kAppVersion,
+        // network. See [availableUpdateProvider]. Skipped under Flatpak:
+        // Flathub delivers updates, and a "download the AppImage" notice
+        // there would point users at the wrong channel.
+        if (!runningInFlatpak)
+          availableUpdateProvider.overrideWith(
+            (ref) => checkForUpdatesOnStartup(
+              settings: settings,
+              currentVersion: kAppVersion,
+            ),
           ),
-        ),
         if (settings.gridCellWidth != null)
           gridCellWidthSeedProvider.overrideWithValue(settings.gridCellWidth!),
       ],

@@ -103,6 +103,69 @@ chmod +x Cullimingo-x86_64.AppImage
   sit outside `RUNPATH`, and the app dlopens the host's copy before libvips,
   taking ours only when the host has none (`core/native/bundled_libs.dart`).
 
+### In-place updates
+
+`build_appimage.sh` embeds update info
+(`gh-releases-zsync|nielsfranke|Cullimingo|latest|Cullimingo-x86_64.AppImage.zsync`)
+and writes `Cullimingo-x86_64.AppImage.zsync` next to the AppImage; the
+Release publishes both. AppImageUpdate, Gear Lever and AppImageLauncher read
+the embedded info and fetch only the changed blocks of the newest
+non-prerelease. Check a build with
+`./Cullimingo-x86_64.AppImage --appimage-updateinformation`.
+
+## Linux (Flatpak)
+
+`flatpak/io.github.nielsfranke.Cullimingo.yml` repackages the bundled Linux
+build — the same one the AppImage wraps — on the GNOME runtime, with the
+desktop file, metainfo and icons from `flatpak/` and `assets/branding/`.
+
+The Flatpak app ID (`io.github.nielsfranke.Cullimingo`) differs from the
+compiled-in GTK application ID (`cc.nielsbox.cullimingo`, `linux/CMakeLists.txt`).
+The runner (`linux/runner/my_application.cc`) takes the ID from `FLATPAK_ID`
+when it's set, so inside the sandbox the Wayland app_id, the desktop file and
+the icon all match. Outside Flatpak the compiled-in ID stays, because
+`path_provider` names the settings + database folder after it — changing it
+would strand existing AppImage users' data.
+
+### Build and run locally
+
+```sh
+flutter build linux --release
+tool/bundle_linux.sh
+flatpak install flathub org.gnome.Platform//51 org.gnome.Sdk//51
+flatpak-builder --user --install --force-clean flatpak/build-dir \
+  flatpak/io.github.nielsfranke.Cullimingo.yml
+flatpak run io.github.nielsfranke.Cullimingo
+```
+
+### Sandbox
+
+- **Files:** `--filesystem=home` plus `/media`, `/run/media` and `/mnt`.
+  Cullimingo works on photos in place and writes XMP sidecars next to them,
+  which the per-file document portal can't grant.
+- **Host tools:** `--talk-name=org.freedesktop.Flatpak`, so
+  `core/files/host_command.dart` can run `gio trash` (the sandbox's own trash
+  would be app-private), `lsblk`/`udisksctl` (card auto-mount), `ffmpeg` /
+  `ffmpegthumbnailer` (video posters, via a temp dir under the app's cache
+  dir, since the sandbox `/tmp` is private), the user's "Send to" editors and
+  the FileManager1 reveal via `flatpak-spawn --host`. `xdg-open` stays in the
+  sandbox and goes through the OpenURI portal.
+- **Updates:** the in-app update check and its setting are hidden under
+  Flatpak (`runningInFlatpak`); Flathub delivers updates.
+- **Data** lives in `~/.var/app/io.github.nielsfranke.Cullimingo/`, so a
+  Flatpak install starts with fresh settings and cache, separate from an
+  AppImage install.
+
+### Flathub
+
+The Flathub repo holds its own copy of the manifest with the local `dir`/`file`
+sources replaced by URLs + `sha256`: the Release's
+`Cullimingo-linux-x86_64.tar.gz` (published by `release.yml`) as `bundle`,
+and the files from `flatpak/` and `assets/branding/` at the release tag. Each
+release needs a bump there (url, sha256, and a `<release>` entry in the
+metainfo). The `io.github.<user>` ID is verified through the GitHub account
+that owns the repo — no website file needed.
+
 ## Releases (automated)
 
 `.github/workflows/release.yml` builds both artifacts and attaches them to a

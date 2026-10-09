@@ -7,7 +7,11 @@
 #
 # Usage:
 #   tool/build_appimage.sh [path/to/bundle]
-# Defaults to the release bundle. Produces build/linux/Cullimingo-x86_64.AppImage.
+# Defaults to the release bundle. Produces build/linux/Cullimingo-x86_64.AppImage
+# plus its .zsync delta file (GitHub #13): the AppImage embeds update info
+# pointing at the latest GitHub Release, so AppImageUpdate / Gear Lever /
+# AppImageLauncher can update it in place, downloading only changed blocks.
+# The .zsync must be published on the Release next to the AppImage.
 #
 # We hand-write AppRun (no linuxdeploy) to stay consistent with bundle_linux.sh:
 # native codecs are bundled, but glibc/GTK/X11/GL core is left to the host — so
@@ -23,6 +27,9 @@ APP=cullimingo
 NAME=Cullimingo
 ICON_SRC=assets/branding/cullimingo_icon_256.png
 OUT=build/linux/${NAME}-x86_64.AppImage
+# gh-releases-zsync|<owner>|<repo>|<tag>|<zsync file>: "latest" skips
+# pre-releases, matching the in-app update check.
+UPDATE_INFO="gh-releases-zsync|nielsfranke|Cullimingo|latest|${NAME}-x86_64.AppImage.zsync"
 
 if [[ ! -x "$BUNDLE/$APP" ]]; then
   echo "error: bundle not found at $BUNDLE/$APP" >&2
@@ -79,8 +86,15 @@ fi
 
 echo "==> Building $OUT"
 # --appimage-extract-and-run: build without FUSE (CI / headless hosts).
-ARCH=x86_64 "$TOOL" --appimage-extract-and-run "$APPDIR" "$OUT"
+# -u embeds the update info and writes $OUT.zsync next to the AppImage.
+ARCH=x86_64 "$TOOL" --appimage-extract-and-run -u "$UPDATE_INFO" \
+  "$APPDIR" "$OUT"
+
+if [[ ! -s "$OUT.zsync" ]]; then
+  echo "error: appimagetool did not write $OUT.zsync" >&2
+  exit 1
+fi
 
 size=$(du -h "$OUT" | cut -f1)
-echo "==> Done: $OUT ($size)"
+echo "==> Done: $OUT ($size) + $(basename "$OUT").zsync"
 echo "    Run it directly, or with --appimage-extract-and-run if FUSE is absent."
