@@ -168,6 +168,14 @@ const Map<String, List<String>> _candidates = {
   ],
 };
 
+/// Sonames for [_candidates]' Linux entries, for the loader's own search when
+/// none of the fixed paths exists.
+const Map<String, String> _linuxSonames = {
+  'vips': 'libvips.so.42',
+  'glib': 'libglib-2.0.so.0',
+  'gobject': 'libgobject-2.0.so.0',
+};
+
 /// Fast native JPEG thumbnailing via libvips (shrink-on-load + EXIF
 /// auto-rotate). Replaces the slow pure-Dart resize for the preview pipeline
 /// (`BUILD_PLAN.md` §2/§6.1). Load once per isolate via [tryLoad].
@@ -560,6 +568,8 @@ class Vips {
     for (final path in _candidates[key]!) {
       if (File(path).existsSync()) return path;
     }
-    return null;
+    // Any other layout (aarch64 multiarch, the Flatpak runtime): let the
+    // dynamic loader search by soname.
+    return Platform.isLinux ? _linuxSonames[key] : null;
   }
 }

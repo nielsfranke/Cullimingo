@@ -3,6 +3,19 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Changed
+- **Flatpak built from source (GitHub #13):** the Flatpak manifest now builds
+  Cullimingo and its native libraries (LibRaw, libvips, libheif with HEVC,
+  SQLite) from source, as Flathub requires — ready for submission. It
+  replaces the manifest that repackaged the release build, and the Release
+  no longer carries the Linux tarball that manifest needed.
+
+### Fixed
+- libvips now loads on Linux setups where glib isn't at the usual x86_64
+  paths (aarch64, Flatpak): it falls back to the loader's own search.
+
 ## 1.6.0 — 2026-10-09
 
 ### Added

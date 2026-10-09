@@ -1,0 +1,198 @@
+# Input for flatpak-flutter (https://github.com/TheAppgineer/flatpak-flutter),
+# which turns it into the offline, build-from-source manifest Flathub needs:
+# io.github.nielsfranke.Cullimingo.yml plus the generated/ modules and
+# sources (Flutter SDK, pub packages, Rust crates for super_native_extensions).
+# foreign.json replaces flatpak-flutter's sqlite3 recipe (a prebuilt download)
+# with the SQLite amalgamation built from source.
+# Regenerate after a Flutter upgrade, a pubspec.lock change or a new release
+# commit — see DISTRIBUTION.md "Linux (Flatpak)".
+#
+# The binary's compiled-in GTK ID is cc.nielsbox.cullimingo; the runner swaps
+# in FLATPAK_ID at startup (linux/runner/my_application.cc), so the window
+# matches this app's desktop file.
+id: io.github.nielsfranke.Cullimingo
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.llvm22
+command: cullimingo
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # FTP/SFTP delivery and handoff uploads.
+  - --share=network
+  # Photos are culled where they live, and XMP sidecars are written next to
+  # each file — a per-file portal grant can't cover the sibling sidecar.
+  - --filesystem=home
+  # Memory cards and external drives (volume_detector.dart scans these).
+  - --filesystem=/media
+  - --filesystem=/run/media
+  - --filesystem=/mnt
+  # flatpak-spawn --host (core/files/host_command.dart): `gio trash` into the
+  # real trash, lsblk/udisksctl card auto-mount, ffmpeg video posters and the
+  # user's own "Send to" editors (darktable, RawTherapee, …) run on the host.
+  - --talk-name=org.freedesktop.Flatpak
+  # Delivery-server passwords (flutter_secure_storage → libsecret).
+  - --talk-name=org.freedesktop.secrets
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - /share/doc
+  - /share/man
+  - /share/thumbnailers
+  - '*.a'
+  - '*.la'
+modules:
+  # Build-time only: flutter_secure_storage_linux's CMake needs it.
+  - name: jsoncpp
+    buildsystem: meson
+    config-opts:
+      - -Dtests=false
+    cleanup:
+      - '*'
+    sources:
+      - type: archive
+        url: https://github.com/open-source-parsers/jsoncpp/archive/refs/tags/1.9.8.tar.gz
+        sha256: 51828cf3574281d2b79ec2a1c56a9e4c20cc1103711321ea96384cffb8d2d904
+
+  # Embedded-preview extraction and RAW decode; 0.22 is needed for Nikon
+  # HE/HE* NEFs.
+  - name: libraw
+    config-opts:
+      - --disable-static
+      - --disable-examples
+    cleanup:
+      - /bin
+      - /share
+    sources:
+      - type: archive
+        url: https://www.libraw.org/data/LibRaw-0.22.2.tar.gz
+        sha256: de86b035655accff8d4010f1a221fdf50d353cb7b1422ba26f14a0db92612cfa
+
+  # HEVC decoder for HEIC/HIF (GitHub #10); not in the runtime.
+  - name: libde265
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DENABLE_SDL=OFF
+      - -DENABLE_DECODER=OFF
+      - -DENABLE_ENCODER=OFF
+    sources:
+      - type: archive
+        url: https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz
+        sha256: 554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905
+
+  # Our own libheif with the codecs linked in (no plugin dir to point at):
+  # libde265 for HEIC/HIF, the runtime's aom (AVIF export) and dav1d.
+  - name: libheif
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DENABLE_PLUGIN_LOADING=OFF
+      - -DWITH_EXAMPLES=OFF
+      - -DBUILD_DOCUMENTATION=OFF
+      - -DBUILD_TESTING=OFF
+      - -DWITH_GDK_PIXBUF=OFF
+      - -DWITH_LIBDE265=ON
+      - -DWITH_AOM_ENCODER=ON
+      - -DWITH_AOM_DECODER=ON
+      - -DWITH_DAV1D=ON
+      - -DWITH_X265=OFF
+      - -DWITH_RAV1E=OFF
+      - -DWITH_SvtEnc=OFF
+      - -DWITH_KVAZAAR=OFF
+      - -DWITH_FFMPEG_DECODER=OFF
+      - -DWITH_OpenJPEG_DECODER=OFF
+      - -DWITH_OpenJPEG_ENCODER=OFF
+      - -DWITH_JPEG_DECODER=OFF
+      - -DWITH_JPEG_ENCODER=OFF
+      - -DWITH_UNCOMPRESSED_CODEC=OFF
+    cleanup:
+      - /bin
+    sources:
+      - type: archive
+        url: https://github.com/strukturag/libheif/releases/download/v1.23.6/libheif-1.23.6.tar.gz
+        sha256: 4484346dc5995319dbc11e3a1c35d0a2ec46511ce370900869337fd2c7033125
+
+  # Thumbnails, previews and export. HEIF support is linked in
+  # (modules=disabled), so nothing depends on VIPSHOME. RAW stays with our
+  # own LibRaw FFI, so vips' libraw loader is off.
+  - name: libvips
+    buildsystem: meson
+    config-opts:
+      - -Dmodules=disabled
+      - -Dintrospection=disabled
+      - -Dcplusplus=false
+      - -Ddeprecated=false
+      - -Dexamples=false
+      - -Ddocs=false
+      - -Draw=disabled
+      - -Dmagick=disabled
+      - -Dpoppler=disabled
+      - -Dpdfium=disabled
+      - -Dopenslide=disabled
+      - -Dmatio=disabled
+      - -Dcfitsio=disabled
+      - -Dnifti=disabled
+      - -Dopenexr=disabled
+      - -Dfftw=disabled
+      - -Dquantizr=disabled
+      - -Dimagequant=disabled
+      - -Dcgif=disabled
+      - -Dorc=disabled
+    cleanup:
+      - /bin
+    sources:
+      - type: archive
+        url: https://github.com/libvips/libvips/releases/download/v8.18.7/vips-8.18.7.tar.xz
+        sha256: 5baaead3b0bb20ffdb9e9ff09aa9fda08620923df77b63b436654cb5e0b3bf94
+
+  # The app. The Flutter bundle goes straight into /app, so its lib/ is
+  # /app/lib — where the modules above install — and the app's bundled-lib
+  # lookup (core/native/bundled_libs.dart) finds libvips and LibRaw there.
+  - name: Cullimingo
+    buildsystem: simple
+    build-options:
+      arch:
+        x86_64:
+          env:
+            BUNDLE_PATH: build/linux/x64/release/bundle
+        aarch64:
+          env:
+            BUNDLE_PATH: build/linux/arm64/release/bundle
+      append-path: /usr/lib/sdk/llvm22/bin:/run/build/Cullimingo/flutter/bin
+      prepend-ld-library-path: /usr/lib/sdk/llvm22/lib
+      env:
+        PUB_CACHE: /run/build/Cullimingo/.pub-cache
+    build-commands:
+      # Compile SQLite from the amalgamation (foreign.json) instead of the
+      # sqlite3 package's default prebuilt download — no network here, and
+      # Flathub wants it built from source. Flatpak-only, hence appended
+      # here rather than kept in pubspec.yaml.
+      - |
+        cat >> pubspec.yaml <<'EOF'
+        hooks:
+          user_defines:
+            sqlite3:
+              source: source
+              path: third_party/sqlite3/sqlite3.c
+        EOF
+      - flutter build linux --release --no-pub
+      - cp -a $BUNDLE_PATH/. /app/
+      - mkdir -p /app/bin && ln -s /app/cullimingo /app/bin/cullimingo
+      - install -Dm644 flatpak/$FLATPAK_ID.desktop -t /app/share/applications
+      - install -Dm644 flatpak/$FLATPAK_ID.metainfo.xml -t /app/share/metainfo
+      - install -Dm644 assets/branding/cullimingo_icon_256.png /app/share/icons/hicolor/256x256/apps/$FLATPAK_ID.png
+      - install -Dm644 assets/branding/cullimingo_icon_512.png /app/share/icons/hicolor/512x512/apps/$FLATPAK_ID.png
+    sources:
+      - type: git
+        url: https://github.com/nielsfranke/Cullimingo.git
+        tag: v1.6.0
+      - type: git
+        url: https://github.com/flutter/flutter.git
+        tag: 3.44.4
+        dest: flutter

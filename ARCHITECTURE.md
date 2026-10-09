@@ -134,9 +134,10 @@ packages/
   Releases: `.github/workflows/release.yml` on a `v*` tag.
 - Local dev: macOS needs full Xcode + CocoaPods; Linux needs the GTK dev libs
   listed in the CI workflow.
-- Linux ships three ways from one bundle: the AppImage (with zsync update
-  info), a plain tarball, and a Flatpak (`flatpak/`) that repackages the
-  tarball. Under Flatpak, host tools (`gio trash`, `lsblk`/`udisksctl`,
+- Linux ships as the AppImage (with zsync update info) and as a Flatpak built
+  from source (`flatpak/flatpak-flutter.yml` → flatpak-flutter → Flathub; the
+  native libs are manifest modules installed into `/app/lib`, which is also
+  the Flutter bundle's `lib/`). Under Flatpak, host tools (`gio trash`, `lsblk`/`udisksctl`,
   `ffmpeg`, "Send to" editors, FileManager1 reveal) run via
   `flatpak-spawn --host` (`core/files/host_command.dart`), and the in-app
   update check is off because Flathub delivers updates. The Flatpak's ID

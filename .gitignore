@@ -34,6 +34,9 @@ migrate_working_dir/
 .flatpak-builder/
 /flatpak/build-dir/
 /flatpak/repo/
+/flatpak/generated/
+/flatpak/.flatpak-flutter/
+/flatpak/io.github.nielsfranke.Cullimingo.yml
 /coverage/
 
 # Symbolication related

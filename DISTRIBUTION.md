@@ -115,9 +115,31 @@ non-prerelease. Check a build with
 
 ## Linux (Flatpak)
 
-`flatpak/io.github.nielsfranke.Cullimingo.yml` repackages the bundled Linux
-build — the same one the AppImage wraps — on the GNOME runtime, with the
-desktop file, metainfo and icons from `flatpak/` and `assets/branding/`.
+The Flatpak is built **entirely from source**, offline, as Flathub requires.
+`flatpak/flatpak-flutter.yml` is the hand-written input; the
+[flatpak-flutter](https://github.com/TheAppgineer/flatpak-flutter)
+pre-processor turns it into the real manifest
+(`io.github.nielsfranke.Cullimingo.yml`) plus `generated/` modules and
+sources: the Flutter SDK, every pub package, and the Rust toolchain + crates
+for `super_native_extensions`. Those generated files are not kept in this
+repo; they live in the Flathub repo.
+
+What the manifest builds, on the GNOME 51 runtime:
+
+- **LibRaw 0.22**, **libvips** (HEIF linked in, no modules) and our own
+  **libheif** with **libde265** (HEIC/HIF), plus the runtime's aom (AVIF
+  export) and dav1d. The runtime already has JPEG, PNG, WebP, TIFF, lcms2,
+  libexif and librsvg.
+- **SQLite** from the amalgamation, via the `sqlite3` package's `source`
+  hook mode (`flatpak/foreign.json` + a `user_defines` block the manifest
+  appends to `pubspec.yaml`), instead of the package's default prebuilt
+  download.
+- **jsoncpp**, build-time only (flutter_secure_storage_linux's CMake).
+- **The app**, from the git tag. The Flutter bundle goes straight into
+  `/app`, so its `lib/` is `/app/lib`, where the modules above install — the
+  bundled-lib lookup (`core/native/bundled_libs.dart`) finds libvips and
+  LibRaw there unchanged. glib/gobject resolve by soname
+  (`core/cache/vips.dart`), which also covers aarch64.
 
 The Flatpak app ID (`io.github.nielsfranke.Cullimingo`) differs from the
 compiled-in GTK application ID (`cc.nielsbox.cullimingo`, `linux/CMakeLists.txt`).
@@ -127,16 +149,23 @@ the icon all match. Outside Flatpak the compiled-in ID stays, because
 `path_provider` names the settings + database folder after it — changing it
 would strand existing AppImage users' data.
 
-### Build and run locally
+### Generate and build
 
 ```sh
-flutter build linux --release
-tool/bundle_linux.sh
-flatpak install flathub org.gnome.Platform//51 org.gnome.Sdk//51
-flatpak-builder --user --install --force-clean flatpak/build-dir \
-  flatpak/io.github.nielsfranke.Cullimingo.yml
+git clone https://github.com/TheAppgineer/flatpak-flutter ~/flatpak-flutter
+pip install -r ~/flatpak-flutter/requirements.txt
+cd flatpak
+~/flatpak-flutter/flatpak-flutter.py flatpak-flutter.yml   # needs network
+flatpak install flathub org.gnome.Platform//51 org.gnome.Sdk//51 \
+  org.freedesktop.Sdk.Extension.llvm22//26.08
+flatpak-builder --sandbox --user --install --force-clean build-dir \
+  io.github.nielsfranke.Cullimingo.yml
 flatpak run io.github.nielsfranke.Cullimingo
 ```
+
+Regenerate whenever the release tag, the Flutter version or `pubspec.lock`
+changes: point the app source's `tag:` at the new release first. The input
+pins the app by tag; the generator adds the commit.
 
 ### Sandbox
 
@@ -158,19 +187,13 @@ flatpak run io.github.nielsfranke.Cullimingo
 
 ### Flathub
 
-Not submitted yet. Flathub requires source-available apps to be built
-**entirely from source** inside flatpak-builder (no network during the build),
-so this manifest — which repackages the prebuilt bundle — would be rejected.
-A Flathub manifest needs:
-
-- the Flutter SDK and every pub package as offline sources (the
-  `flatpak-flutter` generator handles this for other Flutter apps on
-  Flathub);
-- LibRaw, libvips and libheif (with its HEVC decoder and AVIF encoder) as
-  source-built modules, unless the runtime already ships them;
-- a case for the static permissions: Flathub wants portals wherever one fits,
-  so expect questions about `--filesystem=home` and especially
-  `--talk-name=org.freedesktop.Flatpak`.
+Submitted from the generated manifest (see above) as a PR against the
+`new-pr` branch of `flathub/flathub`; after acceptance, updates are PRs to
+`flathub/io.github.nielsfranke.Cullimingo` with the regenerated files and a
+new `<release>` in the metainfo. Expect review questions about the static
+permissions — Flathub wants portals wherever one fits — especially
+`--filesystem=home` and `--talk-name=org.freedesktop.Flatpak` (see Sandbox for
+why each is needed).
 
 The `io.github.nielsfranke.Cullimingo` ID is verified through the GitHub
 account that owns the repo — no website file needed.
