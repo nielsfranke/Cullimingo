@@ -158,13 +158,22 @@ flatpak run io.github.nielsfranke.Cullimingo
 
 ### Flathub
 
-The Flathub repo holds its own copy of the manifest with the local `dir`/`file`
-sources replaced by URLs + `sha256`: the Release's
-`Cullimingo-linux-x86_64.tar.gz` (published by `release.yml`) as `bundle`,
-and the files from `flatpak/` and `assets/branding/` at the release tag. Each
-release needs a bump there (url, sha256, and a `<release>` entry in the
-metainfo). The `io.github.<user>` ID is verified through the GitHub account
-that owns the repo — no website file needed.
+Not submitted yet. Flathub requires source-available apps to be built
+**entirely from source** inside flatpak-builder (no network during the build),
+so this manifest — which repackages the prebuilt bundle — would be rejected.
+A Flathub manifest needs:
+
+- the Flutter SDK and every pub package as offline sources (the
+  `flatpak-flutter` generator handles this for other Flutter apps on
+  Flathub);
+- LibRaw, libvips and libheif (with its HEVC decoder and AVIF encoder) as
+  source-built modules, unless the runtime already ships them;
+- a case for the static permissions: Flathub wants portals wherever one fits,
+  so expect questions about `--filesystem=home` and especially
+  `--talk-name=org.freedesktop.Flatpak`.
+
+The `io.github.nielsfranke.Cullimingo` ID is verified through the GitHub
+account that owns the repo — no website file needed.
 
 ## Releases (automated)
 
