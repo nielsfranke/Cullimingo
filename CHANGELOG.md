@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.7.0 — 2026-10-09
 
 ### Added
 - **Flatpak with automatic updates (GitHub #13):** Cullimingo now has its own
