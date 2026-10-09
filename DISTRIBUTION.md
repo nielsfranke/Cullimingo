@@ -187,13 +187,22 @@ pins the app by tag; the generator adds the commit.
 
 ### Flathub
 
-Submitted from the generated manifest (see above) as a PR against the
-`new-pr` branch of `flathub/flathub`; after acceptance, updates are PRs to
-`flathub/io.github.nielsfranke.Cullimingo` with the regenerated files and a
-new `<release>` in the metainfo. Expect review questions about the static
-permissions — Flathub wants portals wherever one fits — especially
-`--filesystem=home` and `--talk-name=org.freedesktop.Flatpak` (see Sandbox for
-why each is needed).
+**Not submitted, and this manifest can't be submitted as is.** Flathub's
+[generative AI policy](https://docs.flathub.org/docs/for-app-authors/requirements#generative-ai-policy)
+says manifests "must not contain AI-generated or AI-assisted content", and
+disclosure doesn't exempt them. The manifest in `flatpak/` was written with an
+AI agent. The policy also forbids AI tools from opening the submission PR or
+writing its description, commits or review replies, and it requires
+disclosing AI-generated material in the app itself. Reviewers decide case by
+case whether that material is acceptable.
+
+A Flathub submission therefore needs a manifest written by a human. The
+findings recorded above are facts about the build: what the GNOME 51 runtime
+already ships, the sqlite3 `source` hook mode, the `/app` layout, and the
+soname fallback. The submitter opens the PR personally against `new-pr` and
+fills in the template, including a demo video and the AI disclosure. Expect
+review questions about `--filesystem=home` and
+`--talk-name=org.freedesktop.Flatpak` (see Sandbox for why each is needed).
 
 The `io.github.nielsfranke.Cullimingo` ID is verified through the GitHub
 account that owns the repo — no website file needed.

@@ -1,3 +1,7 @@
+# Not for Flathub submission as is: written with an AI agent, which Flathub's
+# generative AI policy doesn't allow in manifests (see DISTRIBUTION.md
+# "Flathub"). Fine for local and self-hosted Flatpak builds.
+#
 # Input for flatpak-flutter (https://github.com/TheAppgineer/flatpak-flutter),
 # which turns it into the offline, build-from-source manifest Flathub needs:
 # io.github.nielsfranke.Cullimingo.yml plus the generated/ modules and
