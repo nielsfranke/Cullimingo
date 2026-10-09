@@ -86,9 +86,14 @@ fi
 
 echo "==> Building $OUT"
 # --appimage-extract-and-run: build without FUSE (CI / headless hosts).
-# -u embeds the update info and writes $OUT.zsync next to the AppImage.
+# -u embeds the update info and writes the .zsync — into the *current*
+# directory, not next to $OUT, so move it there.
 ARCH=x86_64 "$TOOL" --appimage-extract-and-run -u "$UPDATE_INFO" \
   "$APPDIR" "$OUT"
+ZSYNC_TMP="$(basename "$OUT").zsync"
+if [[ -f "$ZSYNC_TMP" && "$ZSYNC_TMP" != "$OUT.zsync" ]]; then
+  mv "$ZSYNC_TMP" "$OUT.zsync"
+fi
 
 if [[ ! -s "$OUT.zsync" ]]; then
   echo "error: appimagetool did not write $OUT.zsync" >&2
