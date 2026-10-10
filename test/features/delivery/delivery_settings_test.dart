@@ -92,7 +92,10 @@ void main() {
   /// returns the settings file's content.
   Future<Map<String, dynamic>> drainApplyPersist(WidgetTester tester) async {
     const required = {'hotCodes', 'showTooltips'};
-    for (var i = 0; i < 400; i++) {
+    // A wall-clock budget, not an iteration count: on a loaded CI runner
+    // 400 × 2 ms wasn't always enough for the writes to land.
+    final deadline = DateTime.now().add(const Duration(seconds: 20));
+    while (DateTime.now().isBefore(deadline)) {
       var queueIdle = false;
       unawaited(AppSettings.pendingWrites.whenComplete(() => queueIdle = true));
       await tester.pump();
@@ -111,7 +114,7 @@ void main() {
       );
       await tester.pump();
     }
-    throw StateError('settings persist never completed');
+    throw StateError('settings persist never completed within 20 s');
   }
 
   Finder fieldWithHint(String hint) => find.byWidgetPredicate(
