@@ -130,4 +130,23 @@ void main() {
     expect(result.deleted, 0);
     expect(result.error, isNull);
   });
+
+  test('a trash fallback drops the handled rows only (#14)', () async {
+    // Files that are already gone count as handled; nothing touches /shoot.
+    final result = await applyTrashFallback(
+      db: db,
+      importId: importId,
+      paths: const ['/shoot/DSC_0001.ARW'],
+      fallback: TrashFallback.deletePermanently,
+    );
+
+    expect(result.deleted, 1);
+    expect(result.failedPaths, isEmpty);
+    final remaining = await db.watchPhotosForImport(importId).first;
+    expect(remaining.map((p) => p.path), [
+      '/shoot/DSC_0002.ARW',
+      '/shoot/DSC_0003.ARW',
+      '/shoot/DSC_0004.ARW',
+    ]);
+  });
 }

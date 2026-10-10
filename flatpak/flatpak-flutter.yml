@@ -35,6 +35,11 @@ finish-args:
   - --filesystem=/media
   - --filesystem=/run/media
   - --filesystem=/mnt
+  # Network shares the desktop mounts through gvfs (smb://, sftp://, …). Without
+  # it the folder picker hands out a document-portal path instead
+  # (/run/user/<uid>/doc/…), which host tools — the file manager behind "Show
+  # in File Manager", `gio` — can't resolve (GitHub #14).
+  - --filesystem=xdg-run/gvfs
   # flatpak-spawn --host (core/files/host_command.dart): `gio trash` into the
   # real trash, lsblk/udisksctl card auto-mount, ffmpeg video posters and the
   # user's own "Send to" editors (darktable, RawTherapee, …) run on the host.

@@ -227,7 +227,10 @@ has to re-add the repo.
 
 - **Files:** `--filesystem=home` plus `/media`, `/run/media` and `/mnt`.
   Cullimingo works on photos in place and writes XMP sidecars next to them,
-  which the per-file document portal can't grant.
+  which the per-file document portal can't grant. `xdg-run/gvfs` covers
+  network shares the desktop mounts through gvfs: without it the folder
+  picker returns a document-portal path (`/run/user/<uid>/doc/…`) that host
+  tools such as the file manager can't resolve (GitHub #14).
 - **Host tools:** `--talk-name=org.freedesktop.Flatpak`, so
   `core/files/host_command.dart` can run `gio trash` (the sandbox's own trash
   would be app-private), `lsblk`/`udisksctl` (card auto-mount), `ffmpeg` /

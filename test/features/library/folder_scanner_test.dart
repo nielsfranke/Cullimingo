@@ -36,6 +36,19 @@ void main() {
     expect(await names(files), {'p1.jpg', 'p2.arw', 'v1.mp4', 'v2.mov'});
   });
 
+  test('a _Rejected folder is skipped, unless it is the root (#14)', () async {
+    final rejected = Directory(p.join(tmp.path, '_Rejected'))..createSync();
+    File(p.join(rejected.path, 'gone.jpg')).writeAsStringSync('x');
+    File(p.join(tmp.path, 'sub', 'keep_Rejected.jpg')).writeAsStringSync('x');
+
+    expect(await names(await scanFolderFast(tmp.path)), {
+      'p1.jpg',
+      'p2.arw',
+      'keep_Rejected.jpg',
+    });
+    expect(await names(await scanFolderFast(rejected.path)), {'gone.jpg'});
+  });
+
   test('recursive: false stays at the top level', () async {
     final files = await scanFolderFast(tmp.path, recursive: false);
     expect(await names(files), {'p1.jpg'});

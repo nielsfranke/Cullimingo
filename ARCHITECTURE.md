@@ -33,6 +33,12 @@ packages/
   updates but never deletes. The ingest scan reports the same unreadable
   entries in the plan and the summary, and always reads EXIF for capture
   dates (mtime is only the fallback).
+- **Delete = OS Trash** (`core/files/move_to_trash.dart`), never a silent hard
+  delete. Where the trash refuses (network shares have none, GitHub #14) the
+  user picks a fallback per run (`core/files/trash_fallback.dart`): a
+  same-volume rename into a `_Rejected` folder beside the photos (the folder
+  scan skips it below the root), or a permanent delete behind a second
+  confirmation. Decided on the real refusal, not by guessing the filesystem.
 - **Sidecar naming** (`core/files/sidecar_path.dart`): RAW uses the LR/C1
   shared-stem `DSC1.xmp`. The non-RAW half of a RAW+JPEG pair uses a per-file
   `DSC1.JPG.xmp` (darktable style) so both keep independent marks; a lone

@@ -45,8 +45,7 @@ mixin _CullJobs on _CullSelections {
   /// Moves every rejected (X-flagged) photo of the open folder — filtered away
   /// or not — to the OS trash together with its `.xmp` sidecar, after
   /// confirmation, and drops the rows from the grid. Files land in the Trash
-  /// (restorable), never hard-deleted; a photo the OS refuses to trash keeps
-  /// its row and marks.
+  /// (restorable); see [_trashPhotos] for photos the OS refuses to trash.
   Future<void> _deleteRejects() async {
     final importId = ref.read(currentImportProvider);
     if (importId == null) return;
@@ -67,40 +66,7 @@ mixin _CullJobs on _CullSelections {
     _gridFocus.requestFocus();
     if (confirmed != true) return;
 
-    final result = await deleteRejectedPhotos(
-      db: ref.read(appDatabaseProvider),
-      importId: importId,
-      rejects: rejects,
-    );
-    if (!mounted) return;
-
-    final failed = result.failedPaths.toSet();
-    final deletedIds = {
-      for (final photo in rejects)
-        if (!failed.contains(photo.path)) photo.id,
-    };
-    // The rows are gone: prune them out of focus/selection and forget the
-    // undo history, so a stale entry can't "restore" marks onto reused ids.
-    ref.read(cullControllerProvider.notifier)
-      ..pruneMissing(deletedIds)
-      ..clearHistory();
-    final cache = ref.read(previewCacheProvider);
-    for (final photo in rejects) {
-      cache.evict(photo.path);
-    }
-
-    if (result.error != null) {
-      _notify(result.error!, kind: NoticeKind.warning);
-      return;
-    }
-    final noun = result.deleted == 1 ? 'photo' : 'photos';
-    _notify(
-      [
-        'Moved ${result.deleted} $noun to the Trash',
-        if (failed.isNotEmpty) '${failed.length} failed',
-      ].join(' · '),
-      kind: failed.isEmpty ? NoticeKind.success : NoticeKind.warning,
-    );
+    await _trashPhotos(importId, rejects);
   }
 
   /// Moves the current selection (the mark targets) to the OS trash, after
@@ -125,36 +91,81 @@ mixin _CullJobs on _CullSelections {
     _gridFocus.requestFocus();
     if (confirmed != true) return;
 
-    final result = await deleteRejectedPhotos(
-      db: ref.read(appDatabaseProvider),
+    await _trashPhotos(importId, photos);
+  }
+
+  /// Moves confirmed [photos] to the OS trash and drops their rows from the
+  /// grid. Photos the trash refuses — a network share has none (GitHub #14) —
+  /// get a second chance: a restorable `_Rejected` folder beside them, or a
+  /// permanent delete, as the user picks. Whatever is left keeps its row and
+  /// marks.
+  Future<void> _trashPhotos(int importId, List<Photo> photos) async {
+    final db = ref.read(appDatabaseProvider);
+    final trashed = await deleteRejectedPhotos(
+      db: db,
       importId: importId,
       rejects: photos,
     );
     if (!mounted) return;
 
-    final failed = result.failedPaths.toSet();
-    final deletedIds = {
+    var failed = trashed.failedPaths;
+    var error = trashed.error;
+    TrashFallback? fallback;
+    var fellBack = 0;
+    if (failed.isNotEmpty) {
+      fallback = await showTrashUnavailableDialog(
+        context,
+        count: failed.length,
+        reason: error,
+      );
+      if (!mounted) return;
+      _gridFocus.requestFocus();
+      if (fallback != null) {
+        final result = await applyTrashFallback(
+          db: db,
+          importId: importId,
+          paths: failed,
+          fallback: fallback,
+        );
+        if (!mounted) return;
+        fellBack = result.deleted;
+        failed = result.failedPaths;
+        // The fallback ran, so a missing trash tool no longer explains it.
+        error = null;
+      }
+    }
+
+    final kept = failed.toSet();
+    final removedIds = {
       for (final photo in photos)
-        if (!failed.contains(photo.path)) photo.id,
+        if (!kept.contains(photo.path)) photo.id,
     };
     // The rows are gone: prune them out of focus/selection and forget the
     // undo history, so a stale entry can't "restore" marks onto reused ids.
     ref.read(cullControllerProvider.notifier)
-      ..pruneMissing(deletedIds)
+      ..pruneMissing(removedIds)
       ..clearHistory();
     final cache = ref.read(previewCacheProvider);
     for (final photo in photos) {
       cache.evict(photo.path);
     }
 
-    if (result.error != null) {
-      _notify(result.error!, kind: NoticeKind.warning);
+    if (error != null) {
+      _notify(error, kind: NoticeKind.warning);
       return;
     }
-    final noun = result.deleted == 1 ? 'photo' : 'photos';
+    String count(int n) => '$n ${n == 1 ? 'photo' : 'photos'}';
     _notify(
       [
-        'Moved ${result.deleted} $noun to the Trash',
+        if (trashed.deleted > 0 || fellBack == 0)
+          'Moved ${count(trashed.deleted)} to the Trash',
+        if (fellBack > 0)
+          switch (fallback!) {
+            TrashFallback.rejectedFolder =>
+              'Moved ${count(fellBack)} to $kRejectedFolderName',
+            TrashFallback.deletePermanently =>
+              'Deleted ${count(fellBack)} permanently',
+          },
         if (failed.isNotEmpty) '${failed.length} failed',
       ].join(' · '),
       kind: failed.isEmpty ? NoticeKind.success : NoticeKind.warning,

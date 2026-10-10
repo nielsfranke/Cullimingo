@@ -9,6 +9,7 @@ import 'package:cullimingo/core/files/verified_copy.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
 import 'package:cullimingo/core/secrets/secret_store.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
+import 'package:cullimingo/features/cull/data/moved_photos.dart';
 import 'package:cullimingo/features/cull/data/phash_compute.dart';
 import 'package:cullimingo/features/cull/domain/perceptual_hash.dart';
 import 'package:cullimingo/features/cull/domain/similarity_sensitivity.dart';
@@ -73,6 +74,10 @@ class CullJobRunner {
 
   // Cancels the in-flight copy/move stream.
   StreamSubscription<TransferProgress>? _transferSub;
+
+  // Drops the in-flight move's already-moved photos from the grid; run once
+  // when the move finishes, is cancelled or is replaced by the next transfer.
+  Future<void> Function()? _forgetMoved;
 
   // Cancel token for the in-flight ContactSheet send/pull, polled between
   // ticks/batches.
@@ -363,7 +368,9 @@ class CullJobRunner {
   /// optionally opens the destination folder.
   Future<void> runTransferJob(TransferRequest request) async {
     unawaited(_transferSub?.cancel());
+    _flushForgetMoved();
     final isMove = request.mode == TransferMode.move;
+    final importId = _ref.read(currentImportProvider);
     final plan = await buildTransferPlan(
       request.sources,
       includeSidecars: request.includeSidecars,
@@ -400,6 +407,10 @@ class CullJobRunner {
       return;
     }
     final results = <CopyResult>[];
+    if (isMove && importId != null) {
+      final sources = [for (final item in plan) item.source];
+      _forgetMoved = () => _forgetMovedPhotos(importId, sources);
+    }
     _jobs.startTransfer(isMove ? 'Moving' : 'Copying', plan.length);
     // Kept in _transferSub and cancelled in cancelTransfer/_shutdown.
     _transferSub =
@@ -415,6 +426,7 @@ class CullJobRunner {
           },
           onDone: () {
             _jobs.clearTransfer();
+            _flushForgetMoved();
             final summary = TransferSummary(results);
             final parts = [
               '${isMove ? 'Moved' : 'Copied'} ${summary.transferred} photo(s)',
@@ -444,8 +456,38 @@ class CullJobRunner {
   void cancelTransfer() {
     unawaited(_transferSub?.cancel());
     _transferSub = null;
+    _flushForgetMoved();
     _jobs.clearTransfer();
     _notify('Transfer cancelled');
+  }
+
+  void _flushForgetMoved() {
+    final forget = _forgetMoved;
+    _forgetMoved = null;
+    if (forget != null) unawaited(forget());
+  }
+
+  /// Drops the moved-away photos of [importId] from the read model (see
+  /// [forgetMovedPhotos]) and, like a delete, out of focus/selection, the undo
+  /// history and the preview cache.
+  Future<void> _forgetMovedPhotos(int importId, List<String> sources) async {
+    final photos = _ref.read(photosProvider).value ?? const <Photo>[];
+    final gone = await forgetMovedPhotos(
+      db: _ref.read(appDatabaseProvider),
+      importId: importId,
+      sources: sources,
+    );
+    if (gone.isEmpty) return;
+    final goneSet = gone.toSet();
+    if (_ref.read(currentImportProvider) == importId) {
+      _ref.read(cullControllerProvider.notifier)
+        ..pruneMissing({
+          for (final photo in photos)
+            if (goneSet.contains(photo.path)) photo.id,
+        })
+        ..clearHistory();
+    }
+    gone.forEach(_ref.read(previewCacheProvider).evict);
   }
 
   /// Renders [request]'s sources to a temp folder via the export pipeline,

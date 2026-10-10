@@ -5,6 +5,7 @@ import 'dart:isolate';
 
 import 'package:cullimingo/core/files/exif_reader.dart';
 import 'package:cullimingo/core/files/supported_files.dart';
+import 'package:cullimingo/core/files/trash_fallback.dart';
 import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/raw/libraw_metadata.dart';
 import 'package:cullimingo/core/raw/libraw_preview_extractor.dart';
@@ -208,9 +209,13 @@ Future<FolderScan> walkFolder(
   // isn't a photo, a card's `.Trashes` holds deleted ones, the copy
   // pipeline's part files are hidden, and a macOS-protected `.Trashes` or
   // `.Spotlight-V100` failing to list is no reason to warn that the card
-  // couldn't be read.
-  bool hidden(String path) =>
-      p.split(p.relative(path, from: root)).any((s) => s.startsWith('.'));
+  // couldn't be read. A `_Rejected` folder below [root] is Cullimingo's
+  // stand-in for a missing Trash (trash_fallback.dart) — skipped the same way,
+  // so its photos don't come back on a refresh; opened as [root] itself, it
+  // lists normally.
+  bool hidden(String path) => p
+      .split(p.relative(path, from: root))
+      .any((s) => s.startsWith('.') || s == kRejectedFolderName);
   final entities = <FileSystemEntity>[];
   final listing =
       lister?.call(dir) ?? dir.list(recursive: recursive, followLinks: false);

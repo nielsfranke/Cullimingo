@@ -7,6 +7,7 @@ import 'package:cullimingo/core/db/database.dart';
 import 'package:cullimingo/core/files/filename_match.dart';
 import 'package:cullimingo/core/files/open_external.dart';
 import 'package:cullimingo/core/files/supported_files.dart';
+import 'package:cullimingo/core/files/trash_fallback.dart';
 import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
 import 'package:cullimingo/core/secrets/secret_store.dart';

@@ -1,6 +1,7 @@
 import 'package:cullimingo/core/db/database.dart';
 import 'package:cullimingo/core/files/move_to_trash.dart';
 import 'package:cullimingo/core/files/sidecar_path.dart';
+import 'package:cullimingo/core/files/trash_fallback.dart';
 
 /// The trash step, injectable so tests run without touching the OS trash.
 typedef Trasher =
@@ -69,4 +70,45 @@ Future<RejectDeleteResult> deleteRejectedPhotos({
     failedPaths: kept,
     error: result.error,
   );
+}
+
+/// What to do with photos the OS refused to trash (GitHub #14), chosen by the
+/// user in the "Trash not available" dialog.
+enum TrashFallback {
+  /// Move them into a [kRejectedFolderName] folder beside them — restorable.
+  rejectedFolder,
+
+  /// Delete them for good, after a second confirmation.
+  deletePermanently,
+}
+
+/// Applies [fallback] to the photos at [paths] (the trash refusals of a
+/// [deleteRejectedPhotos] run) together with their sidecars, then removes the
+/// handled photos' rows from [importId]'s read model. A photo that couldn't be
+/// handled keeps its row and marks, as with a refusal.
+Future<RejectDeleteResult> applyTrashFallback({
+  required AppDatabase db,
+  required int importId,
+  required List<String> paths,
+  required TrashFallback fallback,
+}) async {
+  if (paths.isEmpty) {
+    return const RejectDeleteResult(deleted: 0, failedPaths: []);
+  }
+  final resolver = SidecarResolver();
+  final items = <PhotoFiles>[
+    for (final path in paths)
+      (photo: path, sidecar: await resolver.resolve(path)),
+  ];
+  final failed = switch (fallback) {
+    TrashFallback.rejectedFolder => await moveIntoRejectedFolder(items),
+    TrashFallback.deletePermanently => await deletePermanently(items),
+  };
+  final kept = failed.toSet();
+  final handled = [
+    for (final path in paths)
+      if (!kept.contains(path)) path,
+  ];
+  await db.deletePhotosByPaths(importId, handled);
+  return RejectDeleteResult(deleted: handled.length, failedPaths: failed);
 }
