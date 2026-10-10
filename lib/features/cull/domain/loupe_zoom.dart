@@ -25,10 +25,18 @@ enum LoupeZoomMode {
 class LoupeZoom {
   /// Creates zoom math for an image of [intrinsic] native pixels shown in a
   /// [viewport] of logical pixels.
-  const LoupeZoom({required this.intrinsic, required this.viewport});
+  const LoupeZoom({
+    required this.intrinsic,
+    required this.viewport,
+    this.quarterTurns = 0,
+  });
 
   /// Native pixel size of the decoded preview, or `null` before it resolves.
   final Size? intrinsic;
+
+  /// The user's extra quarter-turns: an odd count lays the image on its side,
+  /// so it fits the viewport with width and height swapped.
+  final int quarterTurns;
 
   /// The loupe image-area size in logical pixels.
   final Size viewport;
@@ -39,10 +47,16 @@ class LoupeZoom {
 
   /// The image's fitted (Fit, `BoxFit.contain`) size in logical pixels.
   Size? get fitted {
-    final i = intrinsic;
+    final i = _upright;
     if (i == null || i.isEmpty || viewport == Size.zero) return null;
     final s = math.min(viewport.width / i.width, viewport.height / i.height);
     return Size(i.width * s, i.height * s);
+  }
+
+  // [intrinsic] as laid out on screen, after the user's rotation.
+  Size? get _upright {
+    final i = intrinsic;
+    return (i != null && quarterTurns.isOdd) ? i.flipped : i;
   }
 
   /// Scale (relative to Fit) that renders 1 image-pixel per logical pixel, or
@@ -50,7 +64,7 @@ class LoupeZoom {
   /// native (a big window on a small image); above when Fit downscales.
   double? get hundredScale {
     final f = fitted;
-    final i = intrinsic;
+    final i = _upright;
     if (f == null || i == null || f.width == 0) return null;
     return i.width / f.width;
   }
@@ -86,4 +100,36 @@ class LoupeZoom {
         LoupeZoomMode.hundred => hundredScale,
         LoupeZoomMode.custom => custom,
       };
+
+  /// The pan offset that keeps the content inside the viewport at [scale]:
+  /// no black gap opens past the image area's edges while magnified, and a
+  /// view shrunk below Fit stays within the viewport.
+  ///
+  /// The loupe transform is always a uniform scale plus a translation, so the
+  /// content spans `translation` to `translation + viewport * scale`.
+  Offset clampTranslation(Offset translation, double scale) {
+    double clampAxis(double t, double extent) {
+      final slack = extent - extent * scale;
+      return t.clamp(math.min(0, slack), math.max(0, slack));
+    }
+
+    return Offset(
+      clampAxis(translation.dx, viewport.width),
+      clampAxis(translation.dy, viewport.height),
+    );
+  }
+
+  /// The translation for zooming from [scale]/[translation] to [target] while
+  /// the content under [focal] (a viewport position) stays put, as the mouse
+  /// pointer does in Photo Mechanic's zoom. Clamped like [clampTranslation],
+  /// so zooming near an edge pulls the view inside rather than off the image.
+  Offset translationForZoom({
+    required double scale,
+    required Offset translation,
+    required double target,
+    required Offset focal,
+  }) {
+    final scene = (focal - translation) / scale;
+    return clampTranslation(focal - scene * target, target);
+  }
 }

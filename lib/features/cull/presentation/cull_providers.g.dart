@@ -2088,6 +2088,72 @@ abstract class _$LoupeMarkFlash extends $Notifier<LoupeMarkSignal?> {
   }
 }
 
+/// Asks the open loupe to toggle between Fit and 100% (the zoom-toggle key).
+/// The keyboard is owned by the cull page, so it bumps this counter and the
+/// loupe — which knows the pointer and the image size — does the zooming.
+
+@ProviderFor(LoupeZoomToggle)
+final loupeZoomToggleProvider = LoupeZoomToggleProvider._();
+
+/// Asks the open loupe to toggle between Fit and 100% (the zoom-toggle key).
+/// The keyboard is owned by the cull page, so it bumps this counter and the
+/// loupe — which knows the pointer and the image size — does the zooming.
+final class LoupeZoomToggleProvider
+    extends $NotifierProvider<LoupeZoomToggle, int> {
+  /// Asks the open loupe to toggle between Fit and 100% (the zoom-toggle key).
+  /// The keyboard is owned by the cull page, so it bumps this counter and the
+  /// loupe — which knows the pointer and the image size — does the zooming.
+  LoupeZoomToggleProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'loupeZoomToggleProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$loupeZoomToggleHash();
+
+  @$internal
+  @override
+  LoupeZoomToggle create() => LoupeZoomToggle();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(int value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<int>(value),
+    );
+  }
+}
+
+String _$loupeZoomToggleHash() => r'e4406b3f788218f0f4f5deba194c40f00a3511c5';
+
+/// Asks the open loupe to toggle between Fit and 100% (the zoom-toggle key).
+/// The keyboard is owned by the cull page, so it bumps this counter and the
+/// loupe — which knows the pointer and the image size — does the zooming.
+
+abstract class _$LoupeZoomToggle extends $Notifier<int> {
+  int build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<int, int>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<int, int>,
+              int,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
 /// Startup seed for [CullShortcuts] — persisted overrides from last session,
 /// overridden in `main()` (empty = all defaults, on first run / tests).
 

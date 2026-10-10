@@ -158,6 +158,10 @@ mixin _CullKeyboard on _CullJobs {
         setState(() => _loupeOpen = false);
         return KeyEventResult.handled;
       }
+      if (action == CullAction.zoomToggle) {
+        ref.read(loupeZoomToggleProvider.notifier).toggle();
+        return KeyEventResult.handled;
+      }
       final step = loupeStepFor(key);
       if (step != null) {
         final next = (index + step).clamp(0, photos.length - 1);

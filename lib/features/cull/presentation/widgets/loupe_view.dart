@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:cullimingo/app/theme/tokens.dart';
@@ -28,6 +27,7 @@ import 'package:cullimingo/features/metadata/presentation/keyword_dialog.dart';
 import 'package:cullimingo/shared/models/cull_marks.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
@@ -37,8 +37,10 @@ import 'package:path/path.dart' as p;
 /// `[`/`]` blit between photos.
 ///
 /// Zoomable: `Fit` (the whole frame) and `100%` (1 image-pixel : 1 logical-px,
-/// for checking focus) presets plus a slider; drag to pan when magnified. Zoom
-/// resets on each photo change.
+/// for checking focus) presets plus a slider, and the zoom-toggle key (`Z`)
+/// flips Fit ↔ 100% at the mouse pointer. Drag, trackpad or the mouse wheel
+/// (Shift = sideways) pan when magnified; ⌘/Ctrl+wheel and pinch zoom. Zoom and
+/// pan carry over when blitting to the next photo.
 ///
 /// Keyboard is owned by the cull page (one focus node, no fighting) — this is
 /// a pure visual overlay driven by the focused photo over the filtered set.
@@ -95,6 +97,30 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
 
   /// Native pixel size of the decoded preview, once resolved.
   Size? _intrinsic;
+
+  /// The shown photo's extra quarter-turns, so the zoom math fits it on its
+  /// side when rotated.
+  int _quarterTurns = 0;
+
+  /// Mouse position over the image area (viewport coordinates), or null when
+  /// the pointer is elsewhere — where the zoom-toggle key zooms in.
+  Offset? _pointer;
+
+  /// The user asked for 100% (toggle key, preset, or restored on open) and
+  /// hasn't zoomed away since: re-snap to true 1:1 whenever the native size
+  /// changes — the full-res source replacing the preview, or a blit to a
+  /// differently sized frame. Panning keeps it; slider/pinch/wheel zoom and
+  /// Fit clear it.
+  bool _holdHundred = false;
+
+  /// Where the held 100% was asked for (viewport coordinates; null = centre),
+  /// so a re-snap keeps that spot under the pointer.
+  Offset? _hundredFocal;
+
+  /// Set while the inner wheel listener is undoing the InteractiveViewer's
+  /// built-in wheel zoom (see [_onWheel]), so that transient change is neither
+  /// persisted nor taken as the user zooming away from 100%.
+  bool _wheelPending = false;
 
   /// Bytes whose [_intrinsic] we resolved, to skip redundant decodes.
   Uint8List? _resolvedBytes;
@@ -229,6 +255,7 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
   // persist the *mode* (Fit / 100% / custom) so it carries to the next loupe
   // session — a raw scale wouldn't mean 100% on the next photo.
   void _onTransform() {
+    if (_wheelPending) return;
     final scale = _scale;
     setState(() {
       // Past a modest zoom-in, pull the full-resolution source so 100% renders
@@ -237,28 +264,114 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
     });
     ref
         .read(loupeZoomLevelProvider.notifier)
-        .set(_zoom.modeForScale(scale), scale);
+        .set(
+          _holdHundred ? LoupeZoomMode.hundred : _zoom.modeForScale(scale),
+          scale,
+        );
   }
 
   double get _scale => _tc.value.getMaxScaleOnAxis();
 
-  LoupeZoom get _zoom => LoupeZoom(intrinsic: _intrinsic, viewport: _viewport);
+  Offset get _translation {
+    final t = _tc.value.getTranslation();
+    return Offset(t.x, t.y);
+  }
 
-  // Sets an absolute zoom [target] (relative to Fit), centred in the viewport.
-  // Drives the Fit/100% presets and the slider.
-  void _applyScale(double target) {
-    final clamped = target.clamp(_zoom.minScale, _zoom.maxScale);
-    final cx = _viewport.width / 2;
-    final cy = _viewport.height / 2;
+  LoupeZoom get _zoom => LoupeZoom(
+    intrinsic: _intrinsic,
+    viewport: _viewport,
+    quarterTurns: _quarterTurns,
+  );
+
+  // Sets an absolute zoom [target] (relative to Fit), keeping the content
+  // under [focal] (default: the viewport centre) in place. Drives the presets,
+  // the slider, the zoom-toggle key and ⌘/Ctrl+wheel.
+  void _zoomTo(double target, {Offset? focal}) {
+    final zoom = _zoom;
+    final scale = target.clamp(zoom.minScale, zoom.maxScale);
+    final t = zoom.translationForZoom(
+      scale: _scale,
+      translation: _translation,
+      target: scale,
+      focal: focal ?? _viewport.center(Offset.zero),
+    );
     _tc.value = Matrix4.identity()
-      ..translateByDouble(cx, cy, 0, 1)
-      ..scaleByDouble(clamped, clamped, clamped, 1)
-      ..translateByDouble(-cx, -cy, 0, 1);
+      ..translateByDouble(t.dx, t.dy, 0, 1)
+      ..scaleByDouble(scale, scale, scale, 1);
+  }
+
+  // A zoom the user dialled in (slider, Fit, pinch, ⌘/Ctrl+wheel): no longer
+  // holding 100%.
+  void _zoomFreely(double target, {Offset? focal}) {
+    _holdHundred = false;
+    _zoomTo(target, focal: focal);
+  }
+
+  // 100%: fetch the full-resolution source right away and hold 1:1, so the
+  // zoom re-snaps to the original's pixels once it lands (until then the
+  // preview's own 100% stands in).
+  void _zoomToHundred({Offset? focal}) {
+    final hundred = _zoom.hundredScale;
+    if (hundred == null) return;
+    setState(() {
+      _wantFull = true;
+      _holdHundred = true;
+    });
+    _hundredFocal = focal;
+    _zoomTo(hundred, focal: focal);
+  }
+
+  // The zoom-toggle key: Fit ↔ 100%, zooming in where the mouse points.
+  void _toggleZoom() {
+    if (_viewport == Size.zero) return;
+    if (_holdHundred || _zoom.modeForScale(_scale) != LoupeZoomMode.fit) {
+      _zoomFreely(1);
+    } else {
+      _zoomToHundred(focal: _pointer);
+    }
+  }
+
+  // Mouse wheel: pan (Shift = sideways), or zoom at the pointer with ⌘/Ctrl.
+  // The InteractiveViewer always zooms on a wheel and has no switch for that,
+  // so this listener sits inside it — it sees the event first — snapshots the
+  // transform, and, once the viewer has applied its zoom, puts the snapshot
+  // back and acts instead. Trackpad scrolls are left to the viewer, which
+  // already pans with them.
+  void _onWheel(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent ||
+        event.kind == PointerDeviceKind.trackpad) {
+      return;
+    }
+    final before = _tc.value.clone();
+    // The event's position is in the transformed child's coordinates.
+    final focal = MatrixUtils.transformPoint(before, event.localPosition);
+    _wheelPending = true;
+    GestureBinding.instance.pointerSignalResolver.register(event, (e) {
+      _wheelPending = false;
+      _tc.value = before;
+      final delta = (e as PointerScrollEvent).scrollDelta;
+      final keys = HardwareKeyboard.instance;
+      if (keys.isMetaPressed || keys.isControlPressed) {
+        if (delta.dy == 0) return;
+        _zoomFreely(_scale * math.exp(-delta.dy / 200), focal: focal);
+        return;
+      }
+      // Shift turns a plain vertical wheel sideways (macOS already does this
+      // itself and reports dx).
+      final pan = keys.isShiftPressed && delta.dx == 0
+          ? Offset(delta.dy, 0)
+          : delta;
+      final scale = _scale;
+      final t = _zoom.clampTranslation(_translation - pan, scale);
+      _tc.value = Matrix4.identity()
+        ..translateByDouble(t.dx, t.dy, 0, 1)
+        ..scaleByDouble(scale, scale, scale, 1);
+    });
   }
 
   // Resolve the decoded preview's native size (for the 100% preset). Reuses the
   // image cache, so this rides along with the Image.memory decode.
-  void _resolveIntrinsic(Uint8List bytes) {
+  void _resolveIntrinsic(Uint8List bytes, {required bool isFull}) {
     _resolvedBytes = bytes;
     final stream = MemoryImage(bytes).resolve(ImageConfiguration.empty);
     late final ImageStreamListener listener;
@@ -269,7 +382,15 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
           info.image.height.toDouble(),
         );
         stream.removeListener(listener);
-        if (mounted && _intrinsic != size) setState(() => _intrinsic = size);
+        if (!mounted || _intrinsic == size) return;
+        setState(() => _intrinsic = size);
+        // Holding 100%: snap to the new size's 1:1. A preview standing in
+        // while the full-res source loads would only zoom out and back in
+        // again, so that one waits.
+        final hundred = _zoom.hundredScale;
+        if (_holdHundred && (isFull || !_wantFull) && hundred != null) {
+          _zoomTo(hundred, focal: _hundredFocal);
+        }
       },
       // Corrupt/undecodable bytes: drop the listener quietly (the image area
       // shows a broken-file placeholder via errorBuilder) rather than letting
@@ -463,10 +584,13 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
     // carry over seamlessly — no jump, and you can compare the same crop across
     // frames (focus checking). We keep the previous native size until the loupe
     // bytes resolve, so the slider range and 100% button don't flicker.
+    _quarterTurns = photo.userRotation;
     if (photo.id != _photoId) {
       _photoId = photo.id;
       _resolvedBytes = null;
-      _wantFull = false; // a blit starts on the fast preview again
+      // Zoomed in, the next frame needs its full-resolution source too (a
+      // focus check across a burst); at Fit a blit stays on the fast preview.
+      _wantFull = _holdHundred || _scale > _fullZoomTrigger;
       // A blit's analysis is the new photo's, not a rescale of the old one —
       // drop it so `_scheduleAnalysis` recomputes instead of skipping (its
       // dedup only keys off the byte reference, not the photo id).
@@ -490,7 +614,12 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
       if (target != null) {
         _restored = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _applyScale(target);
+          if (!mounted) return;
+          if (saved.mode == LoupeZoomMode.hundred) {
+            _zoomToHundred();
+          } else {
+            _zoomTo(target);
+          }
         });
       }
     }
@@ -516,7 +645,7 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
     // the original once it loads. The thumb is a wrong-size placeholder.
     final source = full ?? loupe;
     if (source != null && !identical(source, _resolvedBytes)) {
-      _resolveIntrinsic(source);
+      _resolveIntrinsic(source, isFull: full != null);
     }
     // Analyse the screen-res preview when it's there: histogram/clipping/
     // peaking don't gain from full-res pixels (the decode is capped anyway),
@@ -532,7 +661,9 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
     );
 
     // Flash an ephemeral confirmation when a mark is applied in the loupe.
-    ref.listen(loupeMarkFlashProvider, (_, signal) => _onMarkSignal(signal));
+    ref
+      ..listen(loupeMarkFlashProvider, (_, signal) => _onMarkSignal(signal))
+      ..listen(loupeZoomToggleProvider, (_, _) => _toggleZoom());
 
     // ExcludeFocus: the on-screen controls stay clickable but never steal
     // keyboard focus from the grid, so `[`/`]` and cull keys keep working.
@@ -554,6 +685,8 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
                           // Listener (not GestureDetector) so the right-click
                           // wins over the InteractiveViewer's pan/zoom arena;
                           // primary presses fall through to pan as before.
+                          // It also tracks the pointer as the zoom-toggle
+                          // key's anchor (local = viewport coordinates).
                           child: Listener(
                             behavior: HitTestBehavior.opaque,
                             onPointerDown: (e) {
@@ -561,11 +694,18 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
                                 unawaited(_showLoupeMenu(photo, e.position));
                               }
                             },
-                            child: _imageArea(
-                              photo,
-                              bytes,
-                              clippingImage: clippingOn ? _clippingImage : null,
-                              peakingImage: peakingOn ? _peakingImage : null,
+                            onPointerHover: (e) => _pointer = e.localPosition,
+                            onPointerMove: (e) => _pointer = e.localPosition,
+                            child: MouseRegion(
+                              onExit: (_) => _pointer = null,
+                              child: _imageArea(
+                                photo,
+                                bytes,
+                                clippingImage: clippingOn
+                                    ? _clippingImage
+                                    : null,
+                                peakingImage: peakingOn ? _peakingImage : null,
+                              ),
                             ),
                           ),
                         ),
@@ -678,8 +818,9 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
               peakingOpen: peakingOn,
               onTogglePeaking: () =>
                   ref.read(loupeFocusPeakingVisibleProvider.notifier).toggle(),
-              onZoom: _applyScale,
-              onFit: () => _applyScale(1),
+              onZoom: _zoomFreely,
+              onFit: () => _zoomFreely(1),
+              onHundred: _zoomToHundred,
               onRating: (r) {
                 ref.read(loupeMarkFlashProvider.notifier).rating(r);
                 unawaited(controller.markRating(photo.id, r));
@@ -727,49 +868,56 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
           transformationController: _tc,
           minScale: _zoom.minScale,
           maxScale: _zoom.maxScale,
+          // A pinch is the user zooming away from a held 100%.
+          onInteractionUpdate: (d) {
+            if (d.scale != 1 && !_wheelPending) _holdHundred = false;
+          },
           // The preview is upright per the file's EXIF; apply only the user's
           // extra quarter-turns (§ rotate). The crop outline and analysis
           // overlays are siblings of the image inside the same RotatedBox, so
           // they track zoom, pan and rotation with the photo.
-          child: RotatedBox(
-            quarterTurns: photo.userRotation,
-            child: Stack(
-              fit: StackFit.passthrough,
-              children: [
-                Image.memory(
-                  bytes,
-                  fit: BoxFit.contain,
-                  gaplessPlayback: true,
-                  errorBuilder: (context, error, stack) => _brokenImage(),
-                ),
-                if (clippingImage != null)
-                  Positioned.fill(
-                    child: CustomPaint(
-                      painter: _AnalysisOverlayPainter(
-                        image: clippingImage,
-                        imageAspect: _intrinsic,
+          child: Listener(
+            onPointerSignal: _onWheel,
+            child: RotatedBox(
+              quarterTurns: photo.userRotation,
+              child: Stack(
+                fit: StackFit.passthrough,
+                children: [
+                  Image.memory(
+                    bytes,
+                    fit: BoxFit.contain,
+                    gaplessPlayback: true,
+                    errorBuilder: (context, error, stack) => _brokenImage(),
+                  ),
+                  if (clippingImage != null)
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: _AnalysisOverlayPainter(
+                          image: clippingImage,
+                          imageAspect: _intrinsic,
+                        ),
                       ),
                     ),
-                  ),
-                if (peakingImage != null)
-                  Positioned.fill(
-                    child: CustomPaint(
-                      painter: _AnalysisOverlayPainter(
-                        image: peakingImage,
-                        imageAspect: _intrinsic,
+                  if (peakingImage != null)
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: _AnalysisOverlayPainter(
+                          image: peakingImage,
+                          imageAspect: _intrinsic,
+                        ),
                       ),
                     ),
-                  ),
-                if (crop != null)
-                  Positioned.fill(
-                    child: CustomPaint(
-                      painter: _CropOverlayPainter(
-                        crop: crop,
-                        imageAspect: _intrinsic,
+                  if (crop != null)
+                    Positioned.fill(
+                      child: CustomPaint(
+                        painter: _CropOverlayPainter(
+                          crop: crop,
+                          imageAspect: _intrinsic,
+                        ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         );
@@ -853,6 +1001,7 @@ class _LoupeToolbar extends StatelessWidget {
     required this.onTogglePeaking,
     required this.onZoom,
     required this.onFit,
+    required this.onHundred,
     required this.onRating,
     required this.onFlag,
     required this.onColor,
@@ -902,6 +1051,7 @@ class _LoupeToolbar extends StatelessWidget {
 
   final ValueChanged<double> onZoom;
   final VoidCallback onFit;
+  final VoidCallback onHundred;
   final ValueChanged<int> onRating;
   final ValueChanged<PickFlag> onFlag;
   final ValueChanged<ColorLabel> onColor;
@@ -932,6 +1082,7 @@ class _LoupeToolbar extends StatelessWidget {
             hundredScale: hundredScale,
             onZoom: onZoom,
             onFit: onFit,
+            onHundred: onHundred,
           ),
           Expanded(
             child: Column(
@@ -1079,6 +1230,7 @@ class _ZoomControls extends StatelessWidget {
     required this.hundredScale,
     required this.onZoom,
     required this.onFit,
+    required this.onHundred,
   });
 
   final double scale;
@@ -1087,6 +1239,7 @@ class _ZoomControls extends StatelessWidget {
   final double? hundredScale;
   final ValueChanged<double> onZoom;
   final VoidCallback onFit;
+  final VoidCallback onHundred;
 
   @override
   Widget build(BuildContext context) {
@@ -1116,7 +1269,7 @@ class _ZoomControls extends StatelessWidget {
         _PresetButton(
           label: '100%',
           active: hundred != null && (scale - hundred).abs() < 0.01,
-          onTap: hundred == null ? null : () => onZoom(hundred),
+          onTap: hundred == null ? null : onHundred,
         ),
         const SizedBox(width: AppSpacing.sm),
         SizedBox(

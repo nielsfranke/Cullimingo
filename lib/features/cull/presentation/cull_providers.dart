@@ -518,6 +518,18 @@ class LoupeMarkFlash extends _$LoupeMarkFlash {
       state = LoupeMarkSignal(seq: ++_seq, color: value);
 }
 
+/// Asks the open loupe to toggle between Fit and 100% (the zoom-toggle key).
+/// The keyboard is owned by the cull page, so it bumps this counter and the
+/// loupe — which knows the pointer and the image size — does the zooming.
+@Riverpod(keepAlive: true)
+class LoupeZoomToggle extends _$LoupeZoomToggle {
+  @override
+  int build() => 0;
+
+  /// Requests one Fit ↔ 100% toggle.
+  void toggle() => state++;
+}
+
 /// Startup seed for [CullShortcuts] — persisted overrides from last session,
 /// overridden in `main()` (empty = all defaults, on first run / tests).
 @Riverpod(keepAlive: true)

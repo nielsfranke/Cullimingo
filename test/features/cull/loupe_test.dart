@@ -135,6 +135,32 @@ void main() {
     expect(rows!.first.rating, 4);
   });
 
+  testWidgets('Z asks the loupe for a Fit / 100% toggle', (tester) async {
+    await pumpPage(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter); // focus first
+    await tester.pump();
+
+    // In the grid Z does nothing (no loupe to zoom).
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+    await tester.pump();
+    expect(container.read(loupeZoomToggleProvider), 0);
+    expect(find.byType(LoupeView), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter); // open loupe
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+    await tester.pump();
+    expect(container.read(loupeZoomToggleProvider), 1);
+    expect(find.byType(LoupeView), findsOneWidget); // stays open
+
+    // ⌘/Ctrl+Z is still undo, not a zoom toggle.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(container.read(loupeZoomToggleProvider), 1);
+  });
+
   testWidgets('loupe rating buttons set the rating with a click', (
     tester,
   ) async {

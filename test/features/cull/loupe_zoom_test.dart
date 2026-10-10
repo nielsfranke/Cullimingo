@@ -94,4 +94,106 @@ void main() {
       expect(unknown.modeForScale(1), LoupeZoomMode.fit);
     });
   });
+
+  group('rotation', () {
+    test('a quarter-turn fits the image on its side', () {
+      // 3000×1000 turned 90° lays out as 1000×3000: contained in 1000×1000 at
+      // 333×1000, so 100% is 3× of the on-screen width (1000 px) — not the 1×
+      // the unturned fit would give.
+      const z = LoupeZoom(
+        intrinsic: Size(3000, 1000),
+        viewport: Size(1000, 1000),
+        quarterTurns: 1,
+      );
+      expect(z.fitted, const Size(1000 / 3, 1000));
+      expect(z.hundredScale, closeTo(3, 1e-9)); // 1000 / (1000 / 3)
+    });
+
+    test('a half-turn changes nothing', () {
+      const z = LoupeZoom(
+        intrinsic: Size(3000, 1000),
+        viewport: Size(1000, 1000),
+        quarterTurns: 2,
+      );
+      expect(z.fitted, const Size(1000, 1000 / 3));
+      expect(z.hundredScale, 3);
+    });
+  });
+
+  group('pan and focal zoom', () {
+    const z = LoupeZoom(
+      intrinsic: Size(4000, 2000),
+      viewport: Size(1000, 800),
+    );
+
+    test('clampTranslation keeps a magnified view on the content', () {
+      // At 2× the content is 2000×1600: translation may run 0 … -1000/-800.
+      expect(z.clampTranslation(const Offset(50, 50), 2), Offset.zero);
+      expect(
+        z.clampTranslation(const Offset(-5000, -5000), 2),
+        const Offset(-1000, -800),
+      );
+      expect(
+        z.clampTranslation(const Offset(-300, -200), 2),
+        const Offset(-300, -200),
+      );
+    });
+
+    test('clampTranslation pins Fit to the origin', () {
+      expect(z.clampTranslation(const Offset(-40, 30), 1), Offset.zero);
+    });
+
+    test('clampTranslation keeps a shrunk view inside the viewport', () {
+      // At 0.5× the content is 500×400: it may sit anywhere 0 … 500/400.
+      expect(
+        z.clampTranslation(const Offset(-10, 900), 0.5),
+        const Offset(0, 400),
+      );
+    });
+
+    test('zooming keeps the content under the focal point in place', () {
+      // From Fit, zoom 4× about (200, 300): that scene point stays put.
+      final t = z.translationForZoom(
+        scale: 1,
+        translation: Offset.zero,
+        target: 4,
+        focal: const Offset(200, 300),
+      );
+      expect(t, const Offset(200 - 200 * 4, 300 - 300 * 4));
+    });
+
+    test('zooming about a panned view keeps its focal point too', () {
+      // At 2× panned to (-400, -300), viewport (500, 400) shows scene
+      // (450, 350). Zooming to 4× about it keeps it there.
+      final t = z.translationForZoom(
+        scale: 2,
+        translation: const Offset(-400, -300),
+        target: 4,
+        focal: const Offset(500, 400),
+      );
+      expect(t, const Offset(500 - 450 * 4, 400 - 350 * 4));
+    });
+
+    test('zooming in at an edge stays on the content', () {
+      // A focal point at the very corner would leave nothing to pull from;
+      // the clamp keeps the view on the image.
+      final t = z.translationForZoom(
+        scale: 1,
+        translation: Offset.zero,
+        target: 4,
+        focal: const Offset(1000, 800),
+      );
+      expect(t, const Offset(-3000, -2400));
+      // Zooming back to Fit always lands at the origin.
+      expect(
+        z.translationForZoom(
+          scale: 4,
+          translation: t,
+          target: 1,
+          focal: const Offset(123, 456),
+        ),
+        Offset.zero,
+      );
+    });
+  });
 }

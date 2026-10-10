@@ -38,6 +38,7 @@ const List<({String title, List<CullAction> actions})> kShortcutActionGroups = [
     actions: [
       CullAction.select,
       CullAction.loupe,
+      CullAction.zoomToggle,
       CullAction.compare,
       CullAction.compareBurst,
       CullAction.expandBrackets,

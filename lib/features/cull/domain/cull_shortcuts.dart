@@ -90,7 +90,14 @@ enum CullAction {
   /// Grow the selection to include every frame of each selected photo's
   /// exposure bracket (its ±EV siblings). `G` for group — free across the
   /// keymap. Rebindable.
-  expandBrackets('Expand selection to bracket', LogicalKeyboardKey.keyG);
+  expandBrackets('Expand selection to bracket', LogicalKeyboardKey.keyG),
+
+  /// Toggle the loupe between Fit and 100% at the mouse pointer — Photo
+  /// Mechanic's `Z`, for a quick focus check. Plain Z is free (⌘/Ctrl+Z is
+  /// undo, checked before the cull keys). Last in the enum on purpose: a key
+  /// lookup takes the first match, so someone who already rebound another
+  /// action to Z keeps it.
+  zoomToggle('Loupe zoom: Fit / 100%', LogicalKeyboardKey.keyZ);
 
   const CullAction(this.label, this.defaultKey);
 
