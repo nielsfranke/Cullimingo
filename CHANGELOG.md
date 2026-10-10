@@ -3,6 +3,41 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## 1.8.0 — 2026-10-10
+
+### Added
+- **Fit / 100% zoom key (GitHub #16):** `Z` in the loupe flips between Fit
+  and 100% at the mouse pointer, like Photo Mechanic, for a quick focus check.
+  100% now loads the full-resolution file straight away and stays true 1:1
+  when it arrives and as you step through the shoot with `[`/`]`. Rebindable
+  under *Keyboard shortcuts*.
+
+### Changed
+- **Mouse wheel pans the zoomed loupe:** the wheel scrolls up and down, Shift
+  + wheel sideways; ⌘/Ctrl + wheel zooms at the pointer (it used to zoom
+  without a modifier). Trackpad pan and pinch work as before.
+
+### Fixed
+- **Zoom on rotated photos:** 100% on a photo rotated by a quarter-turn now
+  really is 1:1.
+- **Shortcut hints on Linux (GitHub #15):** menus, tooltips and the shortcut
+  list now show `Ctrl+R`, `Ctrl+Backspace`, … instead of the Mac `⌘` symbols;
+  macOS keeps `⌘R`, `⌘⌫`.
+- **Deleting on network shares (GitHub #14):** network shares have no
+  Trash, so deleting photos there used to just fail. Cullimingo now asks what
+  to do instead: move them into a `_Rejected` folder next to the photos
+  (nothing is deleted, and Cullimingo ignores that folder), or delete them
+  permanently after a second confirmation.
+- **Flatpak and network shares (GitHub #14):** the Flatpak can now see shares
+  your desktop mounts through gvfs (e.g. `smb://`) under their real path
+  instead of a sandbox-only one, which *Show in File Manager* needs to find
+  the folder.
+- **Moved photos leave the grid (GitHub #14):** after *Move to folder…* a
+  moved photo stayed in the grid at its old location, and deleting it then
+  reported "Moved 1 photo to the Trash" although nothing was deleted. Moved
+  photos are now dropped from the folder view as soon as the move finishes
+  or is cancelled.
+
 ## 1.7.1 — 2026-10-10
 
 ### Added

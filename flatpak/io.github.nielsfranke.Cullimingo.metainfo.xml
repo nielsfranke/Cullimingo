@@ -64,6 +64,11 @@
     <color type="primary" scheme_preference="dark">#6b1f35</color>
   </branding>
   <releases>
+    <release version="1.8.0" date="2026-10-10">
+      <description>
+        <p>Z in the loupe flips between Fit and 100% at the mouse pointer, and the mouse wheel pans the zoomed photo. Deleting photos on a network share, which has no Trash, now offers a _Rejected folder next to the photos or a confirmed permanent delete. Network shares mounted by the desktop are visible in the Flatpak under their real path. Shortcut hints show Ctrl instead of Mac symbols, and photos moved to another folder leave the grid.</p>
+      </description>
+    </release>
     <release version="1.7.1" date="2026-10-10">
       <description>
         <p>Adds a build for Intel Macs. No changes on Linux.</p>
