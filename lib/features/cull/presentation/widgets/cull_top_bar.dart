@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cullimingo/app/theme/tokens.dart';
 import 'package:cullimingo/core/db/database.dart';
+import 'package:cullimingo/core/format/shortcut_labels.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/grid_zoom_slider.dart';
 import 'package:cullimingo/features/filter/domain/photo_sort.dart';
@@ -226,7 +227,7 @@ class CullTopBar extends StatelessWidget {
                     if (onFind != null)
                       IconButton(
                         onPressed: onFind,
-                        tooltip: 'Find by filename (⌘F)',
+                        tooltip: 'Find by filename (${modShortcut('F')})',
                         icon: const Icon(Icons.search, size: 18),
                       ),
                     if (onToggleInspector != null)
@@ -276,7 +277,7 @@ class CullTopBar extends StatelessWidget {
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Tooltip(
-                    message: 'Open folder (⌘/Ctrl O)',
+                    message: 'Open folder (${modShortcut('O')})',
                     child: FilledButton.icon(
                       onPressed: onOpenFolder,
                       icon: const Icon(Icons.folder_open, size: 18),
@@ -373,14 +374,20 @@ class CullTopBar extends StatelessWidget {
       ],
       [
         if (onRefresh != null)
-          item('Refresh folder (⌘R)', () => unawaited(onRefresh!())),
+          item(
+            'Refresh folder (${modShortcut('R')})',
+            () => unawaited(onRefresh!()),
+          ),
         if (onResync != null)
           item('Re-sync sidecars from disk', () => unawaited(onResync!())),
       ],
       // Destructive, so it sits alone behind a divider.
       [
         if (onDeleteRejects != null)
-          item('Delete rejected photos… (⌘⌫)', onDeleteRejects!),
+          item(
+            'Delete rejected photos… (${modShortcut('Backspace')})',
+            onDeleteRejects!,
+          ),
       ],
     ];
     final children = <Widget>[];

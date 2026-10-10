@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cullimingo/app/theme/tokens.dart';
 import 'package:cullimingo/core/db/database.dart';
 import 'package:cullimingo/core/format/dates.dart';
+import 'package:cullimingo/core/format/shortcut_labels.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
 import 'package:cullimingo/features/filter/presentation/filter_providers.dart';
@@ -796,14 +797,17 @@ class _IptcEditorDialogState extends State<IptcEditorDialog> {
             const DialogActionsRule(),
             DialogUtilityButton(
               label: 'Copy',
-              tooltip: 'Copy all IPTC fields (⌘/Ctrl+Shift+C)',
+              tooltip:
+                  'Copy all IPTC fields (${modShortcut('C', shift: true)})',
               onPressed: _copy,
             ),
             ValueListenableBuilder<Map<IptcField, String>?>(
               valueListenable: iptcClipboard,
               builder: (_, clip, _) => DialogUtilityButton(
                 label: 'Paste',
-                tooltip: 'Paste copied IPTC fields (⌘/Ctrl+Shift+V)',
+                tooltip:
+                    'Paste copied IPTC fields '
+                    '(${modShortcut('V', shift: true)})',
                 onPressed: clip == null ? null : _paste,
               ),
             ),
@@ -1218,12 +1222,15 @@ class _SerialHeader extends StatelessWidget {
           onPressed: onPrev,
           tooltip:
               'Previous photo — saves edits '
-              '(⌘/Ctrl+PgUp or ⌘/Ctrl+Shift+Enter)',
+              '(${modShortcut('PgUp')} or '
+              '${modShortcut('Enter', shift: true)})',
           icon: const Icon(Icons.chevron_left, size: 20),
         ),
         IconButton(
           onPressed: onNext,
-          tooltip: 'Next photo — saves edits (⌘/Ctrl+PgDn or ⌘/Ctrl+Enter)',
+          tooltip:
+              'Next photo — saves edits '
+              '(${modShortcut('PgDn')} or ${modShortcut('Enter')})',
           icon: const Icon(Icons.chevron_right, size: 20),
         ),
       ],

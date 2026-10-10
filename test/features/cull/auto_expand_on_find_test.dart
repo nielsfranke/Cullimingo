@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:cullimingo/core/cache/preview_cache.dart';
 import 'package:cullimingo/core/db/database.dart';
+import 'package:cullimingo/core/format/shortcut_labels.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
 import 'package:cullimingo/features/cull/presentation/cull_page.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
@@ -117,7 +118,7 @@ void main() {
   ) async {
     final ids = await pumpPage(tester);
 
-    await tester.tap(find.byTooltip('Find by filename (⌘F)'));
+    await tester.tap(find.byTooltip('Find by filename (${modShortcut('F')})'));
     await tester.pumpAndSettle();
     // The client only sent back the normal exposure's filename.
     await tester.enterText(

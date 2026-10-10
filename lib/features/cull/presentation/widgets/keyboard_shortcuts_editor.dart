@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cullimingo/app/theme/tokens.dart';
+import 'package:cullimingo/core/format/shortcut_labels.dart';
 import 'package:cullimingo/features/cull/domain/cull_shortcuts.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/keyboard_shortcuts_dialog.dart';
@@ -99,7 +100,7 @@ class _ShortcutEditorState extends ConsumerState<_ShortcutEditorDialog> {
                   _armed != null
                       ? 'Press a key for “${_armed!.label}” (Esc to cancel)'
                       : 'Click a key to rebind it. Arrows, Esc, Enter and the '
-                            '⌘/Ctrl combos stay fixed.',
+                            '$modKeyName combos stay fixed.',
                   style: TextStyle(
                     color: _armed != null
                         ? AppColors.accent

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cullimingo/app/theme/tokens.dart';
+import 'package:cullimingo/core/format/shortcut_labels.dart';
 import 'package:cullimingo/features/cull/domain/cull_shortcuts.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/keyboard_shortcuts_editor.dart';
@@ -47,25 +48,29 @@ const List<({String title, List<CullAction> actions})> kShortcutActionGroups = [
   ),
 ];
 
-/// Fixed (non-rebindable) keys shown for reference.
-const List<({String keys, String does})> kFixedShortcuts = [
+/// Fixed (non-rebindable) keys shown for reference. A getter, not a const:
+/// the ⌘/Ctrl labels follow the platform (see [modShortcut]).
+List<({String keys, String does})> get kFixedShortcuts => [
   (keys: '← ↑ → ↓', does: 'Move focus'),
   (keys: 'Double-click', does: 'Open loupe / play video'),
   (keys: 'Enter', does: 'Loupe (also opens it)'),
   (keys: '[  ]', does: 'Previous / next photo in loupe'),
   (keys: 'Esc', does: 'Close loupe / compare'),
-  (keys: '⌘/Ctrl + O', does: 'Open folder'),
-  (keys: '⌘/Ctrl + T', does: 'New tab'),
-  (keys: '⌘/Ctrl + W', does: 'Close tab'),
-  (keys: '⌘/Ctrl + A', does: 'Select all (filtered)'),
-  (keys: '⌘/Ctrl + R', does: 'Refresh folder'),
-  (keys: '⌘/Ctrl + F', does: 'Find by filename'),
-  (keys: '⌘/Ctrl + S', does: 'Export'),
-  (keys: '⌘/Ctrl + Z', does: 'Undo mark change'),
-  (keys: '⌘/Ctrl + Shift + Z', does: 'Redo mark change'),
-  (keys: '⌘/Ctrl + Backspace', does: 'Delete rejected photos…'),
-  (keys: '⌘/Ctrl + Enter', does: 'Metadata editor: save & next photo'),
-  (keys: '⌘/Ctrl + Shift + Enter', does: 'Metadata editor: previous photo'),
+  (keys: modShortcut('O'), does: 'Open folder'),
+  (keys: modShortcut('T'), does: 'New tab'),
+  (keys: modShortcut('W'), does: 'Close tab'),
+  (keys: modShortcut('A'), does: 'Select all (filtered)'),
+  (keys: modShortcut('R'), does: 'Refresh folder'),
+  (keys: modShortcut('F'), does: 'Find by filename'),
+  (keys: modShortcut('S'), does: 'Export'),
+  (keys: modShortcut('Z'), does: 'Undo mark change'),
+  (keys: modShortcut('Z', shift: true), does: 'Redo mark change'),
+  (keys: modShortcut('Backspace'), does: 'Delete rejected photos…'),
+  (keys: modShortcut('Enter'), does: 'Metadata editor: save & next photo'),
+  (
+    keys: modShortcut('Enter', shift: true),
+    does: 'Metadata editor: previous photo',
+  ),
   (keys: '?', does: 'Show this list'),
 ];
 
@@ -112,7 +117,7 @@ class _KeyboardShortcutsDialog extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: AppSpacing.xl),
-                    // Right: fixed navigation/app keys (long ⌘/Ctrl combos).
+                    // Right: fixed navigation/app keys (long modifier combos).
                     Expanded(
                       child: _shortcutColumn(
                         shortcuts,

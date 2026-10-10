@@ -1,5 +1,6 @@
 import 'package:cullimingo/core/cache/preview_cache.dart';
 import 'package:cullimingo/core/db/database.dart';
+import 'package:cullimingo/core/format/shortcut_labels.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
 import 'package:cullimingo/features/cull/presentation/cull_page.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
@@ -99,7 +100,7 @@ void main() {
     );
     final ids = photos!.map((p) => p.id).toList();
 
-    await tester.tap(find.byTooltip('Find by filename (⌘F)'));
+    await tester.tap(find.byTooltip('Find by filename (${modShortcut('F')})'));
     await tester.pumpAndSettle();
 
     // Bare names, no extension — must still match the .ARW files. Listed in

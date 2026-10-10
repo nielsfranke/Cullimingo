@@ -4,6 +4,7 @@ import 'package:cullimingo/app/theme/tokens.dart';
 import 'package:cullimingo/core/cache/memory_budget.dart';
 import 'package:cullimingo/core/files/directory_picker.dart';
 import 'package:cullimingo/core/files/host_command.dart';
+import 'package:cullimingo/core/format/shortcut_labels.dart';
 import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/secrets/secret_store.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
@@ -700,10 +701,10 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
     ),
     const SizedBox(height: AppSpacing.lg),
     const DialogSection('Send to editors'),
-    const Text(
+    Text(
       'Hand the selected photos to another app from the right-click '
-      'menu; the first editor is ⌘E.',
-      style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
+      'menu; the first editor is ${modShortcut('E')}.',
+      style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
     ),
     const SizedBox(height: AppSpacing.sm),
     for (final editor in _editors)

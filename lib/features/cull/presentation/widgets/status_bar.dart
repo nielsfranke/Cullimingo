@@ -1,4 +1,5 @@
 import 'package:cullimingo/app/theme/tokens.dart';
+import 'package:cullimingo/core/format/shortcut_labels.dart';
 import 'package:flutter/material.dart';
 
 /// Slim bottom status bar (`BUILD_PLAN.md` §7): photo / selection counts on
@@ -67,7 +68,7 @@ class StatusBar extends StatelessWidget {
             ),
           ),
           Tooltip(
-            message: 'Export (⌘/Ctrl S)',
+            message: 'Export (${modShortcut('S')})',
             child: FilledButton.icon(
               onPressed: onExport,
               style: FilledButton.styleFrom(
