@@ -3,6 +3,14 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Added
+- **Intel Macs:** a `Cullimingo-x86_64.dmg` for Intel Macs (macOS 12 or
+  later). The Apple Silicon build started on Intel Macs, but couldn't decode
+  RAW files there — they stayed grey placeholders while JPEGs showed. Each
+  `.dmg` now holds one architecture, so a Mac refuses the wrong one up front.
+
 ## 1.7.0 — 2026-10-09
 
 ### Added

@@ -54,7 +54,7 @@ A working pro photographer (you) who currently pays for commercial culling softw
 - Ratings/labels/keywords round-trip to Capture One and Lightroom via XMP sidecars (with documented exceptions — see §6.3).
 - Export 300 selects to 2048px / Q85 JPEG in the background without freezing the UI.
 - Drag a thumbnail into Photoshop and into a Finder folder. "Send to Capture One" works on macOS.
-- One codebase builds and runs on macOS (Apple Silicon) and Linux.
+- One codebase builds and runs on macOS (Apple Silicon and Intel) and Linux.
 
 ---
 

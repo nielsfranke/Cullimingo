@@ -16,14 +16,20 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 APP="${1:-build/macos/Build/Products/Release/Cullimingo.app}"
 NAME=Cullimingo
-ARCH="$(uname -m)" # arm64 on Apple Silicon
-OUT="build/macos/${NAME}-${ARCH}.dmg"
 
 if [[ ! -d "$APP" ]]; then
   echo "error: app not found: $APP" >&2
   echo "build + bundle it first: flutter build macos --release && tool/bundle_macos.sh" >&2
   exit 1
 fi
+
+# Named after the one arch tool/bundle_macos.sh thinned the app to.
+ARCH="$(lipo -archs "$APP/Contents/MacOS/$NAME")"
+if [[ "$ARCH" == *" "* ]]; then
+  echo "error: $APP is universal ($ARCH) — run tool/bundle_macos.sh first" >&2
+  exit 1
+fi
+OUT="build/macos/${NAME}-${ARCH}.dmg"
 
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT

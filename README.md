@@ -42,9 +42,8 @@ get through thousands of frames and keep the keepers, fast.
 Photography software keeps drifting behind subscriptions and the cloud, while
 the open-source side stays thin — capable, but rarely polished for a real
 culling session. I wanted a fast, keyboard-first culling app I owned outright,
-so I built one for my own photo workflow and shared it.
-[Bug reports and feedback](https://github.com/nielsfranke/Cullimingo/issues) are
-very welcome.
+so I built one for my own photo workflow and shared it. Bug reports and
+feedback are very welcome — see [Bug reports & feedback](#bug-reports--feedback).
 
 ## Download
 
@@ -62,8 +61,10 @@ Grab the latest build from the
   ```sh
   flatpak install --user https://nielsfranke.github.io/Cullimingo/io.github.nielsfranke.Cullimingo.flatpakref
   ```
-- **macOS (Apple Silicon)** — open the `.dmg`, drag **Cullimingo** to
-  **Applications**, then clear the quarantine flag once (it's unsigned):
+- **macOS** — download `Cullimingo-arm64.dmg` for Apple Silicon (M1 and
+  later) or `Cullimingo-x86_64.dmg` for Intel Macs (macOS 12 or later). Open
+  it, drag **Cullimingo** to **Applications**, then clear the quarantine flag
+  once (it's unsigned):
   ```sh
   xattr -cr /Applications/Cullimingo.app
   ```
@@ -174,6 +175,16 @@ macOS needs Xcode + CocoaPods; both platforms need LibRaw and libvips for
 RAW/thumbnail decode (`brew install libraw vips`, or the distro `-dev` packages).
 Full setup and the pre-commit checks are in
 [**Development**](https://github.com/nielsfranke/Cullimingo/wiki/Development).
+
+## Bug reports & feedback
+
+Please [**open a GitHub issue**](https://github.com/nielsfranke/Cullimingo/issues/new)
+for bugs, questions and feature ideas — rather than email. Issues keep the
+details, screenshots and follow-ups in one place, other users with the same
+problem can find them, and you get notified when a fix ships. A useful bug
+report says which Cullimingo version you run (Settings → About), your OS and
+Mac model or Linux distro, and — for files that don't display — the camera
+model and file type (e.g. Sony `.ARW`).
 
 ## Support
 

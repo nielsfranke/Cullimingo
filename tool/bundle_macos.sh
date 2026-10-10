@@ -7,9 +7,21 @@
 # dependency into Contents/libs and relink it to @executable_path/../libs. The
 # Dart loaders (core/native/bundled_libs.dart) prefer that bundle over Homebrew.
 #
+# The .app is thinned to ONE architecture, the one the bundled dylibs are built
+# for: a universal app with arm64-only dylibs starts on an Intel Mac but can't
+# load LibRaw there, so every RAW stays a grey placeholder. Thinned, the wrong
+# build is refused by macOS up front.
+#
 # Usage:
 #   tool/bundle_macos.sh [path/to/Cullimingo.app]
 # Defaults to the release build. Re-run after every `flutter build macos`.
+#
+# Environment:
+#   CULLIMINGO_MACOS_ARCH  arm64 | x86_64 (default: this Mac's arch)
+#   CULLIMINGO_DEPS_LIB    lib dir holding libvips/libraw for that arch
+#                          (default: Homebrew's). The Intel build uses
+#                          tool/build_macos_deps.sh's prefix, e.g.
+#                          build/macos-deps/x86_64/prefix/lib.
 #
 # The result is UNSIGNED (ad-hoc). See DISTRIBUTION.md for how end users open it.
 
@@ -27,8 +39,18 @@ if ! command -v dylibbundler >/dev/null 2>&1; then
   exit 1
 fi
 
-BREW_LIB="$(brew --prefix 2>/dev/null || echo /opt/homebrew)/lib"
+ARCH="${CULLIMINGO_MACOS_ARCH:-$(uname -m)}"
+DEPS_LIB="${CULLIMINGO_DEPS_LIB:-$(brew --prefix 2>/dev/null || echo /opt/homebrew)/lib}"
 LIBS_DIR="$APP/Contents/libs"
+
+# ditto --arch drops the other slice from every universal Mach-O (runner,
+# Flutter engine, plugins). Their signatures are redone at the end.
+echo "==> Thinning the app to $ARCH"
+thin="$(mktemp -d)"
+ditto --arch "$ARCH" "$APP" "$thin/app"
+rm -rf "$APP"
+mv "$thin/app" "$APP"
+rmdir "$thin"
 
 # Roots we dlopen directly; dylibbundler pulls in the rest of the tree.
 ROOTS=(libvips.42.dylib libraw.dylib)
@@ -39,9 +61,10 @@ mkdir -p "$LIBS_DIR"
 
 fix_args=()
 for root in "${ROOTS[@]}"; do
-  src="$BREW_LIB/$root"
+  src="$DEPS_LIB/$root"
   if [[ ! -e "$src" ]]; then
-    echo "error: $src missing — 'brew install vips libraw'" >&2
+    echo "error: $src missing — 'brew install vips libraw' (arm64) or" \
+      "tool/build_macos_deps.sh (x86_64)" >&2
     exit 1
   fi
   cp -L "$src" "$LIBS_DIR/$root"
@@ -54,7 +77,7 @@ done
 # At runtime VipsEncoder points VIPSHOME at Contents/vipshome, whose lib/
 # symlink makes vips find $VIPSHOME/lib/vips-modules-<ver>/. Missing module
 # is fine — the app then simply doesn't offer AVIF (probe in VipsEncoder).
-for moddir in "$BREW_LIB"/vips-modules-*; do
+for moddir in "$DEPS_LIB"/vips-modules-*; do
   [[ -e "$moddir/vips-heif.dylib" ]] || continue
   modname="$(basename "$moddir")"
   mkdir -p "$LIBS_DIR/$modname"
@@ -67,6 +90,7 @@ done
 
 dylibbundler -of -b \
   "${fix_args[@]}" \
+  -s "$DEPS_LIB" \
   -d "$LIBS_DIR/" \
   -p "@executable_path/../libs/"
 
@@ -95,6 +119,18 @@ done < <(find "$LIBS_DIR" -name '*.dylib')
 # recurses into Frameworks/PlugIns — so those stay "code or signature have been
 # modified" and dyld SIGKILLs the app with "Code Signature Invalid" the moment
 # it loads one (e.g. the OpenEXR/de265 tree on the first HEIF/AVIF encode).
+# Every bundled dylib must carry the app's architecture — one that doesn't
+# fails to load at runtime, silently (RAWs just stay placeholders).
+echo "==> Checking bundled dylibs are $ARCH"
+wrong=0
+while IFS= read -r f; do
+  if ! lipo "$f" -verify_arch "$ARCH" 2>/dev/null; then
+    echo "error: $f lacks $ARCH ($(lipo -archs "$f"))" >&2
+    wrong=1
+  fi
+done < <(find "$LIBS_DIR" -name '*.dylib')
+[[ $wrong == 0 ]] || exit 1
+
 # Re-sign every bundled dylib ad-hoc before sealing the app.
 echo "==> Ad-hoc re-signing bundled dylibs"
 find "$LIBS_DIR" -name '*.dylib' -print0 | xargs -0 codesign --force --sign -
@@ -105,6 +141,6 @@ codesign --force --deep --sign - "$APP"
 
 count=$(find "$LIBS_DIR" -name '*.dylib' | wc -l | tr -d ' ')
 size=$(du -sh "$LIBS_DIR" | cut -f1)
-echo "==> Done: $count dylibs ($size) in Contents/libs"
+echo "==> Done: $ARCH app, $count dylibs ($size) in Contents/libs"
 echo "    The .app is now self-contained (no Homebrew needed) but UNSIGNED."
 echo "    See DISTRIBUTION.md for opening it on another Mac."

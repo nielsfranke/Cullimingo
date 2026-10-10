@@ -15,12 +15,38 @@ tool/bundle_macos.sh            # bundles the native dylibs into the .app
 ```
 
 This produces a self-contained but **ad-hoc-signed (unsigned)**
-`build/macos/Build/Products/Release/Cullimingo.app`. Package it as a
-drag-to-install `.dmg` (what the GitHub Release ships):
+`build/macos/Build/Products/Release/Cullimingo.app`, thinned to this Mac's
+architecture. Package it as a drag-to-install `.dmg` (what the GitHub Release
+ships):
 
 ```sh
 tool/build_dmg.sh               # → build/macos/Cullimingo-arm64.dmg
 ```
+
+#### Intel (x86_64) build
+
+Homebrew no longer ships Intel bottles, so the Intel build bundles a native
+stack cross-compiled from source on Apple Silicon (`brew install meson ninja
+nasm cmake pkg-config dylibbundler`; Rosetta runs glib's build helpers):
+
+```sh
+tool/build_macos_deps.sh x86_64   # → build/macos-deps/x86_64/prefix (~20 min once)
+flutter build macos --release
+CULLIMINGO_MACOS_ARCH=x86_64 \
+CULLIMINGO_DEPS_LIB=$PWD/build/macos-deps/x86_64/prefix/lib \
+  tool/bundle_macos.sh
+tool/build_dmg.sh                 # → build/macos/Cullimingo-x86_64.dmg
+```
+
+`build_macos_deps.sh` builds LibRaw, libvips and their tree (glib, libjpeg-turbo,
+libpng, lcms2, libexif, libwebp, libheif + libde265/dav1d/aom) with the same
+feature set as the Flatpak, for macOS 12+. The result runs on Apple Silicon
+too, under Rosetta — handy for checking the Intel build without an Intel Mac.
+
+Why thin at all: Flutter builds a universal app, and a universal app with
+arm64-only dylibs *starts* on an Intel Mac but can't load LibRaw — every RAW
+stays a grey placeholder while JPEGs (decoded in Dart) look fine. Thinned, a
+Mac refuses the wrong build up front.
 
 Or just zip the `.app` to share it directly:
 
@@ -29,7 +55,7 @@ ditto -c -k --keepParent \
   build/macos/Build/Products/Release/Cullimingo.app Cullimingo.zip
 ```
 
-### Opening it on another Mac (Apple Silicon)
+### Opening it on another Mac
 
 Because the app isn't notarized, a freshly downloaded copy is quarantined and
 Gatekeeper blocks it. Pick **one**:
@@ -52,7 +78,8 @@ quarantine flag on an un-notarized app — option **B** clears it.
 
 ### Notes
 
-- **Apple Silicon only** for now (the bundled dylibs are arm64).
+- Two builds: `Cullimingo-arm64.dmg` (Apple Silicon) and
+  `Cullimingo-x86_64.dmg` (Intel, macOS 12+). Each is single-architecture.
 - The first launch may still prompt for access to network/removable volumes —
   that's the normal macOS file-access prompt, click **Allow**.
 - A proper signed + notarized build (no warnings) needs the paid Apple Developer
@@ -239,8 +266,10 @@ account that owns the repo — no website file needed.
 ## Releases (automated)
 
 `.github/workflows/release.yml` builds both artifacts and attaches them to a
-GitHub Release on every `v*` tag push: the AppImage on `ubuntu-24.04` and the
-`.dmg` on `macos-14` (arm64), each running the same `tool/` scripts above. The
+GitHub Release on every `v*` tag push: the AppImage on `ubuntu-24.04` and both
+`.dmg`s on `macos-14` (arm64 — the x86_64 one cross-compiled, its native stack
+cached per `build_macos_deps.sh` revision), each running the same `tool/`
+scripts above. The
 Release notes carry the install steps (chmod for Linux; drag + `xattr -cr` for
 macOS). Run it without cutting a tag via the **workflow_dispatch** trigger — it
 builds both and leaves them as downloadable run artifacts (no Release). The
