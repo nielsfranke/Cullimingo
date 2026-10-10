@@ -64,6 +64,11 @@
     <color type="primary" scheme_preference="dark">#6b1f35</color>
   </branding>
   <releases>
+    <release version="1.7.1" date="2026-10-10">
+      <description>
+        <p>Adds a build for Intel Macs. No changes on Linux.</p>
+      </description>
+    </release>
     <release version="1.7.0" date="2026-10-09">
       <description>
         <p>Cullimingo now has its own signed Flatpak repository for x86_64 and ARM, with updates through flatpak update or your software centre.</p>

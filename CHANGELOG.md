@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.7.1 — 2026-10-10
 
 ### Added
 - **Intel Macs:** a `Cullimingo-x86_64.dmg` for Intel Macs (macOS 12 or
