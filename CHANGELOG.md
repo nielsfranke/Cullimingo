@@ -3,6 +3,13 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Changed
+- **Picks in the loupe filmstrip (GitHub #18):** the filmstrip under the
+  loupe now shows the same green pick and red reject badges as the grid,
+  top left. It used to mark only rejects.
+
 ## 1.8.1 — 2026-10-12
 
 ### Fixed

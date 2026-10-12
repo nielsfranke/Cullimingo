@@ -5,6 +5,7 @@ import 'package:cullimingo/core/db/database.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
 import 'package:cullimingo/features/filter/presentation/filter_providers.dart';
 import 'package:cullimingo/shared/models/cull_marks.dart';
+import 'package:cullimingo/shared/widgets/flag_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -169,15 +170,13 @@ class _FilmstripCell extends ConsumerWidget {
                     bottom: 0,
                     child: Container(height: 3, color: swatch),
                   ),
-                if (rejected)
-                  const Positioned(
-                    top: 2,
-                    right: 2,
-                    child: Icon(
-                      Icons.block,
-                      size: 12,
-                      color: AppColors.labelRed,
-                    ),
+                // Pick and reject alike, with the grid's badge (GitHub #18):
+                // the strip used to mark only rejects.
+                if (photo.flag != PickFlag.none)
+                  Positioned(
+                    top: 3,
+                    left: 3,
+                    child: FlagBadge(flag: photo.flag, size: 13),
                   ),
               ],
             ),

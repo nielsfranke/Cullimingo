@@ -4,11 +4,13 @@ import 'package:cullimingo/core/files/open_external.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
 import 'package:cullimingo/features/cull/presentation/cull_page.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
+import 'package:cullimingo/features/cull/presentation/widgets/loupe_filmstrip.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/loupe_view.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/photo_cell.dart';
 import 'package:cullimingo/features/filter/presentation/filter_providers.dart';
 import 'package:cullimingo/features/metadata/data/metadata_repository.dart';
 import 'package:cullimingo/shared/models/cull_marks.dart';
+import 'package:cullimingo/shared/widgets/flag_badge.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/gestures.dart';
@@ -370,5 +372,29 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     expect(container.read(cullControllerProvider).focusedId, ids[0]);
     expect(find.text('1 / 1'), findsOneWidget);
+  });
+
+  testWidgets('the filmstrip badges picks as well as rejects (#18)', (
+    tester,
+  ) async {
+    await pumpPage(tester, flag: PickFlag.pick);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter); // focus first
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyX); // reject it
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter); // open loupe
+    await tester.pump();
+    container.read(filmstripVisibleProvider.notifier).set(true);
+    await tester.pump();
+
+    final strip = find.byType(LoupeFilmstrip);
+    Finder badges(PickFlag flag) => find.descendant(
+      of: strip,
+      matching: find.byWidgetPredicate(
+        (w) => w is FlagBadge && w.flag == flag,
+      ),
+    );
+    expect(badges(PickFlag.reject), findsOneWidget);
+    expect(badges(PickFlag.pick), findsNWidgets(2));
   });
 }
