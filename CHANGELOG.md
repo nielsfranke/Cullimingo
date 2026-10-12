@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.8.1 — 2026-10-12
 
 ### Fixed
 - **Show in File Manager on network shares (GitHub #14):** for photos on an
