@@ -3,6 +3,14 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **Show in File Manager on network shares (GitHub #14):** for photos on an
+  SMB share mounted by the desktop (gvfs), the file manager opened the home
+  folder instead of the photo's folder. The share's path contains commas,
+  which split the request in two on its way to the file manager.
+
 ## 1.8.0 — 2026-10-10
 
 ### Added

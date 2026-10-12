@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:cullimingo/core/files/host_command.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 /// Opens [path] in the platform's default application — used for videos, which
@@ -56,11 +57,21 @@ Future<void> revealInFileManager(String path) async {
   }
 }
 
+/// The `file://` URI for [path] as `dbus-send` must receive it inside an
+/// `array:string:` argument. `dbus-send` splits array elements on every comma
+/// and has no escape, and gvfs mounts SMB shares under names full of them
+/// (`smb-share:server=nas.local,share=photos`): the one URI arrived as two
+/// broken ones and the file manager fell back to the home folder (GitHub #14).
+/// A percent-encoded comma means the same path to every URI parser.
+@visibleForTesting
+String showItemsUri(String path) =>
+    Uri.file(path).toString().replaceAll(',', '%2C');
+
 /// Asks the freedesktop FileManager1 service to reveal [path] with it selected.
 /// Returns false (so the caller can fall back) when `dbus-send` is missing or
 /// the service isn't running / errors.
 Future<bool> _linuxShowItem(String path) async {
-  final uri = Uri.file(path).toString();
+  final uri = showItemsUri(path);
   try {
     final (exe, args) = hostCommand('dbus-send', [
       '--session',
