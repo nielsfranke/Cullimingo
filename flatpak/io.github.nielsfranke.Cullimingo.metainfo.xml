@@ -64,6 +64,11 @@
     <color type="primary" scheme_preference="dark">#6b1f35</color>
   </branding>
   <releases>
+    <release version="1.8.2" date="2026-10-13">
+      <description>
+        <p>The filmstrip under the loupe now shows pick badges as well as reject badges, like the grid.</p>
+      </description>
+    </release>
     <release version="1.8.1" date="2026-10-12">
       <description>
         <p>Show in File Manager now opens the right folder for photos on network shares mounted by the desktop, instead of the home folder.</p>
