@@ -3,6 +3,22 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Added
+- **Filmstrip beside the photo (GitHub #19):** *Settings → General →
+  Interface → Loupe filmstrip position* puts the loupe filmstrip on the left
+  or right of the photo instead of along the bottom. On a wide screen that
+  uses the empty space at the sides and leaves the photo its full height.
+  On the right it sits between the photo and the Info panel. Bottom stays
+  the default.
+
+### Changed
+- **Histogram in the Info panel:** with the Info panel open, the loupe
+  histogram sits at the top of the panel instead of over the bottom-left
+  corner of the photo. With the panel closed it floats over the photo as
+  before.
+
 ## 1.8.2 — 2026-10-13
 
 ### Changed

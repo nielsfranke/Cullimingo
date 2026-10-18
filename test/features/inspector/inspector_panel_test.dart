@@ -19,6 +19,24 @@ void main() {
     expect(find.text('No photo selected'), findsOneWidget);
   });
 
+  testWidgets('pins the top widget above the metadata (#19)', (tester) async {
+    const pinned = Key('pinned');
+    await tester.pumpWidget(
+      host(
+        InspectorPanelBody(
+          data: null,
+          onClose: () {},
+          top: const SizedBox(key: pinned, height: 84),
+        ),
+      ),
+    );
+    expect(find.byKey(pinned), findsOneWidget);
+    expect(
+      tester.getRect(find.byKey(pinned)).bottom,
+      lessThan(tester.getRect(find.text('No photo selected')).top),
+    );
+  });
+
   testWidgets('renders marks and formatted EXIF for the focused photo', (
     tester,
   ) async {

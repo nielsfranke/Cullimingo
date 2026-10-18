@@ -8,6 +8,7 @@ import 'package:cullimingo/core/format/shortcut_labels.dart';
 import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/secrets/secret_store.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
+import 'package:cullimingo/core/settings/filmstrip_position.dart';
 import 'package:cullimingo/core/settings/performance_preset.dart';
 import 'package:cullimingo/core/version/app_version.g.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
@@ -144,6 +145,9 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
   late bool _propagateMarksToPair = ref.read(propagateMarksToPairProvider);
   late bool _autoExpandBrackets = ref.read(autoExpandBracketsOnSelectProvider);
   late bool _markConfirmation = ref.read(markConfirmationEnabledProvider);
+  late FilmstripPosition _filmstripPosition = ref.read(
+    filmstripPositionSettingProvider,
+  );
   late bool _autoOpenImportOnCard = ref.read(
     autoOpenImportOnCardInsertProvider,
   );
@@ -187,6 +191,7 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
         .read(autoExpandBracketsOnSelectProvider.notifier)
         .set(_autoExpandBrackets);
     ref.read(markConfirmationEnabledProvider.notifier).set(_markConfirmation);
+    ref.read(filmstripPositionSettingProvider.notifier).set(_filmstripPosition);
     ref
         .read(autoOpenImportOnCardInsertProvider.notifier)
         .set(_autoOpenImportOnCard);
@@ -532,6 +537,32 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
         value: _markConfirmation,
         onChanged: (v) => setState(() => _markConfirmation = v ?? true),
         label: 'Flash a confirmation over the loupe when you mark a photo',
+      ),
+      const SizedBox(height: AppSpacing.sm),
+      Row(
+        children: [
+          const Text(
+            'Loupe filmstrip position',
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          // Flexible so a narrow dialog shrinks the dropdown, not overflows.
+          Flexible(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 160),
+              child: DialogDropdown<FilmstripPosition>(
+                value: _filmstripPosition,
+                items: [
+                  for (final p in FilmstripPosition.values)
+                    DropdownMenuItem(value: p, child: Text(p.label)),
+                ],
+                onChanged: (p) {
+                  if (p != null) setState(() => _filmstripPosition = p);
+                },
+              ),
+            ),
+          ),
+        ],
       ),
       const SizedBox(height: AppSpacing.lg),
       const DialogSection('RAW+JPEG pairs'),

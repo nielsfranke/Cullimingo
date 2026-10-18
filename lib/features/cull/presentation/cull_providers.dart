@@ -10,6 +10,7 @@ import 'package:cullimingo/core/raw/jpeg_orientation_writer.dart';
 import 'package:cullimingo/core/raw/orientation_math.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
+import 'package:cullimingo/core/settings/filmstrip_position.dart';
 import 'package:cullimingo/core/settings/performance_preset.dart';
 import 'package:cullimingo/features/cull/domain/cull_shortcuts.dart';
 import 'package:cullimingo/features/cull/domain/loupe_zoom.dart';
@@ -353,6 +354,25 @@ class FilmstripVisible extends _$FilmstripVisible {
   void set(bool value) {
     state = value;
     unawaited(updateSettings((s) => s.setFilmstripVisible(value)));
+  }
+}
+
+/// Startup seed for [FilmstripPositionSetting] — the persisted choice,
+/// overridden in `main()` (bottom on first run / in tests).
+@Riverpod(keepAlive: true)
+FilmstripPosition filmstripPositionSeed(Ref ref) => FilmstripPosition.bottom;
+
+/// Where the loupe docks its filmstrip (GitHub #19). Chosen in Settings;
+/// persisted.
+@Riverpod(keepAlive: true)
+class FilmstripPositionSetting extends _$FilmstripPositionSetting {
+  @override
+  FilmstripPosition build() => ref.watch(filmstripPositionSeedProvider);
+
+  /// Moves the filmstrip and remembers the choice.
+  void set(FilmstripPosition value) {
+    state = value;
+    unawaited(updateSettings((s) => s.setFilmstripPosition(value)));
   }
 }
 

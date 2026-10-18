@@ -8,6 +8,7 @@ import 'package:cullimingo/core/db/database.dart';
 import 'package:cullimingo/core/files/open_external.dart';
 import 'package:cullimingo/core/files/supported_files.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
+import 'package:cullimingo/core/settings/filmstrip_position.dart';
 import 'package:cullimingo/features/cull/domain/loupe_analysis.dart';
 import 'package:cullimingo/features/cull/domain/loupe_zoom.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
@@ -632,6 +633,12 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
     final histogramOn = ref.watch(loupeHistogramVisibleProvider);
     final clippingOn = ref.watch(loupeClippingVisibleProvider);
     final peakingOn = ref.watch(loupeFocusPeakingVisibleProvider);
+    final filmstripAt = ref.watch(filmstripPositionSettingProvider);
+    // With the inspector open the histogram docks at its top instead of
+    // floating over the photo (GitHub #19): one info column, nothing over the
+    // corner of the frame.
+    final histogram = histogramOn ? _histogram : null;
+    final histogramDocked = inspectorOpen && histogram != null;
     final loupe = ref.watch(loupePreviewProvider(photo.path)).value;
     final thumb = ref.watch(thumbnailProvider(photo.path)).value;
     // Once zoomed in, prefer the full-resolution source (loaded lazily); it
@@ -678,6 +685,8 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
             Expanded(
               child: Row(
                 children: [
+                  if (filmstripOpen && filmstripAt == FilmstripPosition.left)
+                    const LoupeFilmstrip(position: FilmstripPosition.left),
                   Expanded(
                     child: Stack(
                       children: [
@@ -709,12 +718,12 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
                             ),
                           ),
                         ),
-                        if (histogramOn && _histogram != null)
+                        if (histogram != null && !histogramDocked)
                           Positioned(
                             left: AppSpacing.md,
                             bottom: AppSpacing.md,
                             child: IgnorePointer(
-                              child: _HistogramPanel(histogram: _histogram!),
+                              child: _HistogramPanel(histogram: histogram),
                             ),
                           ),
                         // Videos never decode into the loupe (only a poster
@@ -790,7 +799,16 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
                       ],
                     ),
                   ),
-                  if (inspectorOpen) const InspectorPanel(),
+                  // Between the photo and the inspector, so the info column
+                  // stays at the window edge.
+                  if (filmstripOpen && filmstripAt == FilmstripPosition.right)
+                    const LoupeFilmstrip(position: FilmstripPosition.right),
+                  if (inspectorOpen)
+                    InspectorPanel(
+                      top: histogramDocked
+                          ? _HistogramPanel(histogram: histogram, docked: true)
+                          : null,
+                    ),
                 ],
               ),
             ),
@@ -838,7 +856,8 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
               onRotateRight: () => unawaited(controller.rotate(photo.id, 1)),
               onEditMetadata: () => unawaited(showIptcEditor(context, ref)),
             ),
-            if (filmstripOpen) const LoupeFilmstrip(),
+            if (filmstripOpen && filmstripAt == FilmstripPosition.bottom)
+              const LoupeFilmstrip(),
           ],
         ),
       ),
@@ -1572,12 +1591,30 @@ class _AnalysisOverlayPainter extends CustomPainter {
 /// Fixed over the image (not part of the zoom/pan transform) since it
 /// describes the whole photo's tonal distribution, not the current viewport.
 class _HistogramPanel extends StatelessWidget {
-  const _HistogramPanel({required this.histogram});
+  const _HistogramPanel({required this.histogram, this.docked = false});
 
   final RgbHistogram histogram;
 
+  /// Drawn at the top of the inspector rather than over the photo: no
+  /// translucent backing, and as wide as the inspector's content column.
+  final bool docked;
+
   @override
   Widget build(BuildContext context) {
+    if (docked) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.lg,
+          AppSpacing.md,
+        ),
+        child: SizedBox(
+          height: 84,
+          child: CustomPaint(painter: _HistogramPainter(histogram: histogram)),
+        ),
+      );
+    }
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.55),

@@ -2,6 +2,7 @@ import 'package:cullimingo/core/cache/preview_cache.dart';
 import 'package:cullimingo/core/db/database.dart';
 import 'package:cullimingo/core/files/open_external.dart';
 import 'package:cullimingo/core/raw/preview_extractor.dart';
+import 'package:cullimingo/core/settings/filmstrip_position.dart';
 import 'package:cullimingo/features/cull/presentation/cull_page.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/loupe_filmstrip.dart';
@@ -397,4 +398,42 @@ void main() {
     expect(badges(PickFlag.reject), findsOneWidget);
     expect(badges(PickFlag.pick), findsNWidgets(2));
   });
+
+  for (final position in FilmstripPosition.values) {
+    testWidgets('the filmstrip docks at the ${position.name} (#19)', (
+      tester,
+    ) async {
+      await pumpPage(tester);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter); // focus first
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter); // open loupe
+      await tester.pump();
+      container.read(filmstripVisibleProvider.notifier).set(true);
+      container.read(filmstripPositionSettingProvider.notifier).set(position);
+      await tester.pump();
+
+      final strip = find.byType(LoupeFilmstrip);
+      expect(strip, findsOneWidget);
+      expect(tester.widget<LoupeFilmstrip>(strip).position, position);
+      final stripRect = tester.getRect(strip);
+      final list = tester.widget<ListView>(
+        find.descendant(of: strip, matching: find.byType(ListView)),
+      );
+      final loupe = tester.getRect(find.byType(LoupeView));
+      switch (position) {
+        case FilmstripPosition.bottom:
+          expect(list.scrollDirection, Axis.horizontal);
+          expect(stripRect.bottom, loupe.bottom);
+          expect(stripRect.height, LoupeFilmstrip.height);
+        case FilmstripPosition.left:
+          expect(list.scrollDirection, Axis.vertical);
+          expect(stripRect.left, loupe.left);
+          expect(stripRect.width, LoupeFilmstrip.width);
+        case FilmstripPosition.right:
+          expect(list.scrollDirection, Axis.vertical);
+          expect(stripRect.right, loupe.right);
+          expect(stripRect.width, LoupeFilmstrip.width);
+      }
+    });
+  }
 }

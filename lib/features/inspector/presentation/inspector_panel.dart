@@ -127,7 +127,11 @@ class InspectorData {
 /// Collapsible like the filter panel; toggled from the toolbar.
 class InspectorPanel extends ConsumerWidget {
   /// Creates the inspector panel.
-  const InspectorPanel({super.key});
+  const InspectorPanel({this.top, super.key});
+
+  /// Pinned under the header, above the scrolling metadata (the loupe docks
+  /// its histogram here).
+  final Widget? top;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -151,6 +155,7 @@ class InspectorPanel extends ConsumerWidget {
     final target = photo;
     return InspectorPanelBody(
       data: target == null ? null : InspectorData.from(target, exif),
+      top: top,
       onClose: () => ref.read(inspectorOpenProvider.notifier).toggle(),
       onEditMetadata: () => showIptcEditor(context, ref),
       onSaveIptc: target == null
@@ -172,8 +177,12 @@ class InspectorPanelBody extends StatelessWidget {
     required this.onClose,
     this.onEditMetadata,
     this.onSaveIptc,
+    this.top,
     super.key,
   });
+
+  /// Pinned under the header, above the scrolling metadata; null for none.
+  final Widget? top;
 
   /// The metadata to show, or null when no photo is focused.
   final InspectorData? data;
@@ -204,6 +213,10 @@ class InspectorPanelBody extends StatelessWidget {
         children: [
           _header(),
           const Divider(height: 1, color: AppColors.border),
+          if (top != null) ...[
+            top!,
+            const Divider(height: 1, color: AppColors.border),
+          ],
           Expanded(
             child: d == null
                 ? const _Empty()

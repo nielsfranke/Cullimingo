@@ -1455,6 +1455,125 @@ abstract class _$FilmstripVisible extends $Notifier<bool> {
   }
 }
 
+/// Startup seed for [FilmstripPositionSetting] — the persisted choice,
+/// overridden in `main()` (bottom on first run / in tests).
+
+@ProviderFor(filmstripPositionSeed)
+final filmstripPositionSeedProvider = FilmstripPositionSeedProvider._();
+
+/// Startup seed for [FilmstripPositionSetting] — the persisted choice,
+/// overridden in `main()` (bottom on first run / in tests).
+
+final class FilmstripPositionSeedProvider
+    extends
+        $FunctionalProvider<
+          FilmstripPosition,
+          FilmstripPosition,
+          FilmstripPosition
+        >
+    with $Provider<FilmstripPosition> {
+  /// Startup seed for [FilmstripPositionSetting] — the persisted choice,
+  /// overridden in `main()` (bottom on first run / in tests).
+  FilmstripPositionSeedProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'filmstripPositionSeedProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$filmstripPositionSeedHash();
+
+  @$internal
+  @override
+  $ProviderElement<FilmstripPosition> $createElement(
+    $ProviderPointer pointer,
+  ) => $ProviderElement(pointer);
+
+  @override
+  FilmstripPosition create(Ref ref) {
+    return filmstripPositionSeed(ref);
+  }
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(FilmstripPosition value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<FilmstripPosition>(value),
+    );
+  }
+}
+
+String _$filmstripPositionSeedHash() =>
+    r'e300068379e17fc9e710c31fa0ae0e0681e4430a';
+
+/// Where the loupe docks its filmstrip (GitHub #19). Chosen in Settings;
+/// persisted.
+
+@ProviderFor(FilmstripPositionSetting)
+final filmstripPositionSettingProvider = FilmstripPositionSettingProvider._();
+
+/// Where the loupe docks its filmstrip (GitHub #19). Chosen in Settings;
+/// persisted.
+final class FilmstripPositionSettingProvider
+    extends $NotifierProvider<FilmstripPositionSetting, FilmstripPosition> {
+  /// Where the loupe docks its filmstrip (GitHub #19). Chosen in Settings;
+  /// persisted.
+  FilmstripPositionSettingProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'filmstripPositionSettingProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$filmstripPositionSettingHash();
+
+  @$internal
+  @override
+  FilmstripPositionSetting create() => FilmstripPositionSetting();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(FilmstripPosition value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<FilmstripPosition>(value),
+    );
+  }
+}
+
+String _$filmstripPositionSettingHash() =>
+    r'fb57f45e707f51ac0e45e90ad6badd72b70a95bf';
+
+/// Where the loupe docks its filmstrip (GitHub #19). Chosen in Settings;
+/// persisted.
+
+abstract class _$FilmstripPositionSetting extends $Notifier<FilmstripPosition> {
+  FilmstripPosition build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<FilmstripPosition, FilmstripPosition>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<FilmstripPosition, FilmstripPosition>,
+              FilmstripPosition,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
 /// Startup seed for [LoupeHistogramVisible] — the value persisted last
 /// session, overridden in `main()` (default false on first run / tests).
 

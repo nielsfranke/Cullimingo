@@ -114,6 +114,9 @@ Future<void> main() async {
         filmstripVisibleSeedProvider.overrideWithValue(
           settings.filmstripVisible,
         ),
+        filmstripPositionSeedProvider.overrideWithValue(
+          settings.filmstripPosition,
+        ),
         loupeHistogramVisibleSeedProvider.overrideWithValue(
           settings.loupeHistogram,
         ),

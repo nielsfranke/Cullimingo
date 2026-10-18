@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cullimingo/app/theme/tokens.dart';
 import 'package:cullimingo/core/db/database.dart';
+import 'package:cullimingo/core/settings/filmstrip_position.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
 import 'package:cullimingo/features/filter/presentation/filter_providers.dart';
 import 'package:cullimingo/shared/models/cull_marks.dart';
@@ -9,17 +10,30 @@ import 'package:cullimingo/shared/widgets/flag_badge.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// A Lightroom-style thumbnail strip docked along the loupe's bottom edge:
-/// every photo in the filtered set, the focused one highlighted, click to blit
-/// to it. Auto-scrolls to keep the focused frame in view as `[`/`]` moves.
+/// A Lightroom-style thumbnail strip docked along the loupe's bottom edge, or
+/// beside the photo ([FilmstripPosition], GitHub #19): every photo in the
+/// filtered set, the focused one highlighted, click to blit to it.
+/// Auto-scrolls to keep the focused frame in view as `[`/`]` moves.
 class LoupeFilmstrip extends ConsumerStatefulWidget {
-  /// Creates the filmstrip.
-  const LoupeFilmstrip({super.key});
+  /// Creates the filmstrip; [position] picks the edge it docks to.
+  const LoupeFilmstrip({this.position = FilmstripPosition.bottom, super.key});
 
-  /// Overall strip height (thumbnail + padding).
+  /// The edge the strip docks to; left/right run it vertically.
+  final FilmstripPosition position;
+
+  /// Overall strip height when docked at the bottom (thumbnail + padding).
   static const double height = 76;
+
+  /// Overall strip width when docked at a side.
+  static const double width = 100;
+
   static const double _thumbHeight = 60;
   static const double _itemWidth = 84;
+
+  // Vertical cells: as tall as a horizontal cell is wide would waste height on
+  // landscape frames, so they're a little shorter than they are wide.
+  static const double _verticalThumbHeight = 66;
+  static const double _itemHeight = 72;
 
   @override
   ConsumerState<LoupeFilmstrip> createState() => _LoupeFilmstripState();
@@ -42,7 +56,10 @@ class _LoupeFilmstripState extends ConsumerState<LoupeFilmstrip> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
       final viewport = _scroll.position.viewportDimension;
-      final target = (index + 0.5) * LoupeFilmstrip._itemWidth - viewport / 2;
+      final extent = widget.position.isVertical
+          ? LoupeFilmstrip._itemHeight
+          : LoupeFilmstrip._itemWidth;
+      final target = (index + 0.5) * extent - viewport / 2;
       final max = _scroll.position.maxScrollExtent;
       unawaited(
         _scroll.animateTo(
@@ -65,21 +82,33 @@ class _LoupeFilmstripState extends ConsumerState<LoupeFilmstrip> {
     final activeIndex = photos.indexWhere((p) => p.id == focusedId);
     if (activeIndex >= 0) _centerOn(activeIndex);
 
+    const edge = BorderSide(color: AppColors.border);
+    final vertical = widget.position.isVertical;
     return Container(
-      height: LoupeFilmstrip.height,
-      decoration: const BoxDecoration(
+      height: vertical ? null : LoupeFilmstrip.height,
+      width: vertical ? LoupeFilmstrip.width : null,
+      decoration: BoxDecoration(
         color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
+        border: switch (widget.position) {
+          FilmstripPosition.bottom => const Border(top: edge),
+          FilmstripPosition.left => const Border(right: edge),
+          FilmstripPosition.right => const Border(left: edge),
+        },
       ),
       child: ListView.builder(
         controller: _scroll,
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+        scrollDirection: vertical ? Axis.vertical : Axis.horizontal,
+        padding: vertical
+            ? const EdgeInsets.symmetric(vertical: AppSpacing.xs)
+            : const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
         itemCount: photos.length,
-        itemExtent: LoupeFilmstrip._itemWidth,
+        itemExtent: vertical
+            ? LoupeFilmstrip._itemHeight
+            : LoupeFilmstrip._itemWidth,
         itemBuilder: (context, i) => _FilmstripCell(
           photo: photos[i],
           active: i == activeIndex,
+          vertical: vertical,
           onTap: () =>
               ref.read(cullControllerProvider.notifier).focus(photos[i].id),
         ),
@@ -92,11 +121,13 @@ class _FilmstripCell extends ConsumerWidget {
   const _FilmstripCell({
     required this.photo,
     required this.active,
+    required this.vertical,
     required this.onTap,
   });
 
   final Photo photo;
   final bool active;
+  final bool vertical;
   final VoidCallback onTap;
 
   @override
@@ -114,8 +145,15 @@ class _FilmstripCell extends ConsumerWidget {
         ? 0.4
         : 0.72;
 
+    final thumbHeight = vertical
+        ? LoupeFilmstrip._verticalThumbHeight
+        : LoupeFilmstrip._thumbHeight;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
+      // The wide gap runs across the strip, the narrow one between frames.
+      padding: vertical
+          ? const EdgeInsets.symmetric(horizontal: 6, vertical: 3)
+          : const EdgeInsets.symmetric(horizontal: 3, vertical: 6),
       child: GestureDetector(
         onTap: onTap,
         child: AnimatedContainer(
@@ -151,12 +189,12 @@ class _FilmstripCell extends ConsumerWidget {
                             thumb,
                             fit: BoxFit.contain,
                             gaplessPlayback: true,
-                            height: LoupeFilmstrip._thumbHeight,
+                            height: thumbHeight,
                             // Decode at cell size: the source is the ~1024px
                             // grid thumbnail, so a full decode per strip cell
                             // costs 2–4 MB of ImageCache and visible jank.
                             cacheHeight:
-                                (LoupeFilmstrip._thumbHeight *
+                                (thumbHeight *
                                         MediaQuery.devicePixelRatioOf(context))
                                     .round(),
                           ),

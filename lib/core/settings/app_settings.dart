@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cullimingo/core/logging/app_logger.dart';
+import 'package:cullimingo/core/settings/filmstrip_position.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -410,6 +411,16 @@ class AppSettings {
   // ignore: avoid_positional_boolean_parameters — simple flag setter.
   Future<void> setFilmstripVisible(bool value) =>
       _setAll({'filmstripVisible': value});
+
+  /// Where the loupe docks the filmstrip (GitHub #19); bottom unless the user
+  /// picked a side in Settings.
+  FilmstripPosition get filmstripPosition =>
+      FilmstripPosition.fromName(_data['filmstripPosition'] as String?) ??
+      FilmstripPosition.bottom;
+
+  /// Sets where the loupe docks the filmstrip.
+  Future<void> setFilmstripPosition(FilmstripPosition value) =>
+      _setAll({'filmstripPosition': value.name});
 
   /// Whether the loupe's RGB histogram panel was on when last toggled
   /// (default false). Sticky across photos, loupe sessions and relaunches.
