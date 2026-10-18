@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.9.0 — 2026-10-18
 
 ### Added
 - **Filmstrip beside the photo (GitHub #19):** *Settings → General →

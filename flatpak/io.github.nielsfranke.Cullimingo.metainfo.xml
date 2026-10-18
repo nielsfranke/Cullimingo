@@ -64,6 +64,12 @@
     <color type="primary" scheme_preference="dark">#6b1f35</color>
   </branding>
   <releases>
+    <release version="1.9.0" date="2026-10-18">
+      <description>
+        <p>A new setting puts the loupe filmstrip on the left or right of the photo instead of along the bottom, for wide screens.</p>
+        <p>With the Info panel open, the histogram sits at the top of the panel instead of over the photo.</p>
+      </description>
+    </release>
     <release version="1.8.2" date="2026-10-13">
       <description>
         <p>The filmstrip under the loupe now shows pick badges as well as reject badges, like the grid.</p>
