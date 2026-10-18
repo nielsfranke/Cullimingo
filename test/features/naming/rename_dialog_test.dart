@@ -23,7 +23,7 @@ class _FakePathProvider extends PathProviderPlatform
   Future<String?> getApplicationSupportPath() async => dir;
 }
 
-const _mine = {
+const Map<String, Object> _mine = {
   'name': 'Mine',
   'folder': '',
   'file': '{shoot}_{seq:3}',
