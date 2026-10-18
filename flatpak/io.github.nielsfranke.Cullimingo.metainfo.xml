@@ -64,6 +64,11 @@
     <color type="primary" scheme_preference="dark">#6b1f35</color>
   </branding>
   <releases>
+    <release version="1.9.1" date="2026-10-18">
+      <description>
+        <p>The Rename dialog reopens on the naming preset you last used instead of falling back to Custom.</p>
+      </description>
+    </release>
     <release version="1.9.0" date="2026-10-18">
       <description>
         <p>A new setting puts the loupe filmstrip on the left or right of the photo instead of along the bottom, for wide screens.</p>

@@ -3,6 +3,13 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## 1.9.1 — 2026-10-18
+
+### Fixed
+- **Rename keeps your preset (GitHub #20):** the Rename dialog now reopens
+  on the naming scheme you last renamed with, so a saved preset stays
+  selected instead of falling back to *Custom*.
+
 ## 1.9.0 — 2026-10-18
 
 ### Added
