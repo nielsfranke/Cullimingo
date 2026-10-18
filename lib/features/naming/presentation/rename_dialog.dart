@@ -66,6 +66,8 @@ class _RenameDialogState extends State<_RenameDialog> {
             _savedNaming = [
               for (final raw in s.namePresets) NamePreset.fromJson(raw),
             ];
+            final last = s.lastRenameNaming;
+            if (last != null) _naming = NamePreset.fromJson(last);
           });
         }
       }),
@@ -126,9 +128,12 @@ class _RenameDialogState extends State<_RenameDialog> {
       (from: p.basename(item.source), to: p.basename(item.target)),
   ];
 
-  void _submit() => Navigator.of(
-    context,
-  ).pop(RenameRequest(template: _template, shoot: _shootValue));
+  void _submit() {
+    unawaited(updateSettings((s) => s.setLastRenameNaming(_naming.toJson())));
+    Navigator.of(
+      context,
+    ).pop(RenameRequest(template: _template, shoot: _shootValue));
+  }
 
   @override
   Widget build(BuildContext context) {

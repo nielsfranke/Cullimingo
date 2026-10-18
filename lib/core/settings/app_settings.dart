@@ -191,6 +191,17 @@ class AppSettings {
   Future<void> setLastExport(Map<String, dynamic> settings) =>
       _setAll({'lastExport': settings});
 
+  /// The naming scheme last used in the Rename dialog (a `NamePreset` map), or
+  /// null when the user has never renamed. Reopens the dialog on that preset.
+  Map<String, dynamic>? get lastRenameNaming {
+    final raw = _data['lastRenameNaming'];
+    return raw is Map ? raw.cast<String, dynamic>() : null;
+  }
+
+  /// Remembers the Rename dialog's naming scheme.
+  Future<void> setLastRenameNaming(Map<String, dynamic> naming) =>
+      _setAll({'lastRenameNaming': naming});
+
   /// The last-used Import dialog settings (naming scheme, verify, videos), or
   /// null when the user has never imported.
   Map<String, dynamic>? get lastImport {
