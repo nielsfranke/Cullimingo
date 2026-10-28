@@ -3,6 +3,14 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## 1.10.0 — 2026-10-28
+
+### Added
+- **Zoom in Compare:** the mouse wheel / pinch zooms and a drag pans, in all
+  tiles at once, so the same spot of every frame stays side by side. `Z`
+  toggles Fit ↔ 100%, zoomed tiles load the full-resolution source, the link
+  button in the top bar zooms tiles separately, and *Fit* resets.
+
 ## 1.9.1 — 2026-10-18
 
 ### Fixed

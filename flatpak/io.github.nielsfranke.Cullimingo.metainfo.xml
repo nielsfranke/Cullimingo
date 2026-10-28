@@ -64,6 +64,11 @@
     <color type="primary" scheme_preference="dark">#6b1f35</color>
   </branding>
   <releases>
+    <release version="1.10.0" date="2026-10-28">
+      <description>
+        <p>Compare view can zoom: the mouse wheel zooms and a drag pans in all tiles at once, Z toggles Fit and 100% with the full-resolution source, and a link button lets each tile zoom on its own.</p>
+      </description>
+    </release>
     <release version="1.9.1" date="2026-10-18">
       <description>
         <p>The Rename dialog reopens on the naming preset you last used instead of falling back to Custom.</p>
