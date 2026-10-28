@@ -132,6 +132,10 @@ mixin _CullKeyboard on _CullJobs {
         setState(() => _compareOpen = false);
         return KeyEventResult.handled;
       }
+      if (action == CullAction.zoomToggle) {
+        ref.read(loupeZoomToggleProvider.notifier).toggle();
+        return KeyEventResult.handled;
+      }
       _handleCompareKey(key, action);
       return KeyEventResult.handled;
     }
