@@ -3,6 +3,13 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **Linux (KDE Plasma and other non-GNOME desktops):** the window now gets the
+  desktop's own title bar with minimise/maximise instead of a GNOME-style
+  close-only bar, so it can be maximised and kept on screen (GitHub #21).
+
 ## 1.10.0 — 2026-10-28
 
 ### Added
