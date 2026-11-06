@@ -36,6 +36,10 @@ const int _processedDataOffset = 16;
 /// Embedded previews below this size are too small for a useful culling view.
 const int _minUsablePreviewLongEdge = 512;
 
+/// How close to the sensor's long edge an embedded JPEG must be to serve as
+/// the full-resolution (100% zoom) source.
+const double _fullResTolerance = 0.9;
+
 /// Extracts the **embedded full-res JPEG preview** from a RAW file via LibRaw
 /// (`BUILD_PLAN.md` §6.1), then downscales it for the grid. Runs the whole FFI
 /// sequence on a one-off background isolate so the UI never blocks.
@@ -93,6 +97,7 @@ class EmbeddedRawPreview {
     required this.bytes,
     required this.width,
     required this.height,
+    this.sensorLongEdge = 0,
   });
 
   /// Encoded JPEG bytes.
@@ -104,6 +109,20 @@ class EmbeddedRawPreview {
   /// Embedded JPEG height.
   final int height;
 
+  /// The RAW's own long edge in pixels, or 0 when unknown.
+  final int sensorLongEdge;
+
+  /// The longer of [width] and [height].
+  int get longEdge => width > height ? width : height;
+
+  /// Whether this preview stands in for the sensor at 100% zoom: unknown sizes
+  /// count as yes, and so does anything within [_fullResTolerance] of the
+  /// sensor (embedded full-size JPEGs are often a little cropped).
+  bool get isFullResolution {
+    if (longEdge <= 0 || sensorLongEdge <= 0) return true;
+    return longEdge >= sensorLongEdge * _fullResTolerance;
+  }
+
   /// Whether this preview is useful enough to retain the normal fast path.
   ///
   /// Unknown dimensions preserve the old embedded-preview behaviour. The
@@ -112,8 +131,7 @@ class EmbeddedRawPreview {
   /// high-resolution loupe tier.
   bool get isUsable {
     if (width <= 0 || height <= 0) return true;
-    final previewEdge = width > height ? width : height;
-    return previewEdge >= _minUsablePreviewLongEdge;
+    return longEdge >= _minUsablePreviewLongEdge;
   }
 }
 
@@ -165,24 +183,117 @@ bool _isStartOfFrame(int marker) =>
 /// decode/resize/re-encode (the pure-Dart `image` codecs are slow). Exposed so
 /// workers can load libraw **once** and reuse it across files.
 ///
-/// This is the embedded JPEG only, which may be a 160×120 thumbnail (or
-/// absent). Anything that *displays* or *exports* the RAW must go through
-/// [rawDisplayJpeg] instead so it gets the demosaic fallback; read this
-/// directly only for the embedded JPEG's EXIF.
-EmbeddedRawPreview? extractRawPreview(FlutterLibRawBindings lr, String path) {
+/// Without [minLongEdge] this is LibRaw's default thumbnail, which may be a
+/// 160×120 thumbnail (or absent) — enough for the embedded JPEG's EXIF. With
+/// it, LibRaw's default is kept when it already covers [minLongEdge] (or, for
+/// 0 = full tier, is close to sensor size), so the common case costs no extra
+/// reads. Otherwise every embedded JPEG is considered (a Canon CR3 carries
+/// 160×120, 1620×1080 and a full-size one) and the smallest that covers
+/// [minLongEdge] wins, else the largest (GitHub #22).
+///
+/// Anything that *displays* or *exports* the RAW must go through
+/// [rawDisplayJpeg] instead so it gets the demosaic fallback.
+EmbeddedRawPreview? extractRawPreview(
+  FlutterLibRawBindings lr,
+  String path, {
+  int? minLongEdge,
+}) {
   final handle = lr.libraw_init(0);
   if (handle == nullptr) return null;
 
   final pathC = path.toNativeUtf8();
   final errc = calloc<Int>();
-  Pointer<libraw_processed_image_t> processed = nullptr;
   try {
     if (lr.libraw_open_file(handle, pathC.cast<Uint8>()) != 0) return null;
-    if (lr.libraw_unpack_thumb(handle) != 0) return null;
+    final sensorEdge = math.max(
+      lr.libraw_get_iwidth(handle),
+      lr.libraw_get_iheight(handle),
+    );
+    var best = lr.libraw_unpack_thumb(handle) == 0
+        ? _unpackedJpeg(lr, handle, errc, sensorEdge)
+        : null;
+    if (minLongEdge == null || (best != null && _adequate(best, minLongEdge))) {
+      return best;
+    }
 
-    processed = lr.libraw_dcraw_make_mem_thumb(handle, errc);
-    if (processed == nullptr || errc.value != 0) return null;
+    for (var index = 0; index < _maxEmbeddedPreviews; index++) {
+      var status = 0;
+      try {
+        status = lr.libraw_unpack_thumb_ex(handle, index);
+        // The default unpack above leaves LibRaw's "thumbnail loaded" flag
+        // set, so the first unpack_thumb_ex refuses as out of order — and
+        // clears the flag. Ask again so index 0 isn't skipped.
+        if (status == _librawOutOfOrderCall) {
+          status = lr.libraw_unpack_thumb_ex(handle, index);
+        }
+        // A LibRaw older than 0.21 has no thumbnail list: the symbol lookup
+        // throws an ArgumentError, and the default thumbnail stands.
+        // ignore: avoid_catching_errors
+      } on ArgumentError {
+        break;
+      }
+      if (status == _librawNonexistentThumbnail) break;
+      if (status != 0) continue; // e.g. one in an unsupported format
+      final candidate = _unpackedJpeg(lr, handle, errc, sensorEdge);
+      if (candidate != null && _better(candidate, best, minLongEdge)) {
+        best = candidate;
+      }
+    }
+    return best;
+  } on Object {
+    return null;
+  } finally {
+    calloc.free(errc);
+    malloc.free(pathC);
+    lr.libraw_close(handle);
+  }
+}
 
+/// LibRaw keeps at most this many thumbnails per file
+/// (`LIBRAW_THUMBNAIL_MAXCOUNT`).
+const int _maxEmbeddedPreviews = 8;
+
+/// `LIBRAW_OUT_OF_ORDER_CALL`.
+const int _librawOutOfOrderCall = -4;
+
+/// `LIBRAW_REQUEST_FOR_NONEXISTENT_THUMBNAIL`: past the end of the list.
+const int _librawNonexistentThumbnail = -9;
+
+/// Whether LibRaw's default [preview] already serves a [minLongEdge] request,
+/// so the other embedded JPEGs needn't be read: it covers the tier, or for the
+/// full tier (0) it is close to sensor size.
+bool _adequate(EmbeddedRawPreview preview, int minLongEdge) => minLongEdge > 0
+    ? preview.longEdge >= minLongEdge
+    : preview.isFullResolution;
+
+/// Whether [candidate] serves a [minLongEdge] request better than [best]: the
+/// smallest preview that covers it, or the largest while none does.
+bool _better(
+  EmbeddedRawPreview candidate,
+  EmbeddedRawPreview? best,
+  int minLongEdge,
+) {
+  if (best == null) return true;
+  if (minLongEdge <= 0) return candidate.longEdge > best.longEdge;
+  final covers = candidate.longEdge >= minLongEdge;
+  final bestCovers = best.longEdge >= minLongEdge;
+  if (covers != bestCovers) return covers;
+  return covers
+      ? candidate.longEdge < best.longEdge
+      : candidate.longEdge > best.longEdge;
+}
+
+/// The thumbnail LibRaw last unpacked on [handle], when it is a JPEG.
+EmbeddedRawPreview? _unpackedJpeg(
+  FlutterLibRawBindings lr,
+  Pointer<libraw_data_t> handle,
+  Pointer<Int> errc,
+  int sensorEdge,
+) {
+  final processed = lr.libraw_dcraw_make_mem_thumb(handle, errc);
+  if (processed == nullptr) return null;
+  try {
+    if (errc.value != 0) return null;
     final image = processed.ref;
     if (image.type != _librawImageJpeg || image.data_size <= 0) return null;
 
@@ -195,14 +306,10 @@ EmbeddedRawPreview? extractRawPreview(FlutterLibRawBindings lr, String path) {
       bytes: bytes,
       width: image.width > 0 ? image.width : dimensions?.width ?? 0,
       height: image.height > 0 ? image.height : dimensions?.height ?? 0,
+      sensorLongEdge: sensorEdge,
     );
-  } on Object {
-    return null;
   } finally {
-    if (processed != nullptr) lr.libraw_dcraw_clear_mem(processed);
-    calloc.free(errc);
-    malloc.free(pathC);
-    lr.libraw_close(handle);
+    lr.libraw_dcraw_clear_mem(processed);
   }
 }
 
@@ -313,13 +420,7 @@ T? processRawBitmap<T>(
     final dataPtr = Pointer<Uint8>.fromAddress(
       processed.address + _processedDataOffset,
     );
-    return consume(
-      dataPtr,
-      expected,
-      image.width,
-      image.height,
-      image.colors,
-    );
+    return consume(dataPtr, expected, image.width, image.height, image.colors);
   } on Object {
     return null;
   } finally {

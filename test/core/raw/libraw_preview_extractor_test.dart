@@ -49,6 +49,31 @@ void main() {
     });
   });
 
+  group('EmbeddedRawPreview.isFullResolution', () {
+    EmbeddedRawPreview preview(int width, int height, int sensor) =>
+        EmbeddedRawPreview(
+          bytes: Uint8List(0),
+          width: width,
+          height: height,
+          sensorLongEdge: sensor,
+        );
+
+    test('a screen-size preview does not stand in for 100% zoom (#22)', () {
+      expect(preview(1620, 1080, 5496).isFullResolution, isFalse);
+      expect(preview(1616, 1080, 6024).isFullResolution, isFalse);
+    });
+
+    test('a slightly cropped full-size JPEG does', () {
+      expect(preview(5472, 3648, 5496).isFullResolution, isTrue);
+      expect(preview(4016, 6016, 6040).isFullResolution, isTrue);
+    });
+
+    test('unknown sizes keep the embedded JPEG', () {
+      expect(preview(1620, 1080, 0).isFullResolution, isTrue);
+      expect(preview(0, 0, 5496).isFullResolution, isTrue);
+    });
+  });
+
   test('reads JPEG dimensions without decoding pixels', () {
     final encoded = Uint8List.fromList(
       img.encodeJpg(img.Image(width: 37, height: 23)),

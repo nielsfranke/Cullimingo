@@ -3,6 +3,16 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **RAW 100% zoom:** when a RAW embeds several previews, the loupe and 100%
+  zoom use one large enough for them instead of LibRaw's default; when no
+  embedded preview is near full resolution (e.g. Sony A7 III's 1616×1080),
+  100% renders the RAW itself instead of upscaling the preview (GitHub #22).
+- Nikon HE* RAWs that can't be decoded now show their small embedded
+  thumbnail instead of an empty cell.
+
 ## 1.10.1 — 2026-11-03
 
 ### Fixed

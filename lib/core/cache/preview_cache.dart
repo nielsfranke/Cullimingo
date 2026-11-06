@@ -20,8 +20,9 @@ const int _defaultDiskBudget = 2 * 1024 * 1024 * 1024;
 /// forever (the key is otherwise path + size + mtime, which a pipeline change
 /// doesn't touch). Only salted into RAW keys: other formats' caches stay
 /// valid. 2 = demosaic fallback for missing/tiny embedded JPEGs (previously
-/// the 160×120 thumbnail was upscaled and cached).
-const int _rawRenderVersion = 2;
+/// the 160×120 thumbnail was upscaled and cached). 3 = the embedded JPEG that
+/// covers the tier when LibRaw's default one doesn't (GitHub #22).
+const int _rawRenderVersion = 3;
 
 /// Preview size tiers (`BUILD_PLAN.md` §2/§3): a tiny grid thumbnail and a
 /// screen-res loupe preview, each cached on disk.

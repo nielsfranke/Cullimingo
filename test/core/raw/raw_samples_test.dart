@@ -19,6 +19,9 @@ import 'package:path/path.dart' as p;
 /// - `demosaic`: a LibRaw render at exactly the requested long edge (e.g. a
 ///   lossless HLG NEF whose only embedded JPEG is a 160×120 thumbnail);
 /// - `embedded`: the camera's own embedded JPEG (the fast path);
+/// - `embedded-full`: like `embedded`, and the loupe and full tiers get an
+///   embedded JPEG that covers them rather than LibRaw's default preview —
+///   a Canon CR3's 1620×1080 must not stand in for 100% zoom (#22);
 /// - `none`: nothing — e.g. Nikon HE/HE* files LibRaw can't decode, which must
 ///   never come back as a demosaiced noise frame;
 /// - `thumbnail-or-none`: never a demosaic, but the embedded JPEG — however
@@ -96,6 +99,32 @@ void main() {
         case 'embedded':
           expect(out, isNotNull);
           expect(out!.demosaiced, isFalse);
+        case 'embedded-full':
+          expect(out, isNotNull);
+          expect(out!.demosaiced, isFalse);
+          int edgeOf(RawDisplayJpeg jpeg) {
+            final dims = jpegDimensions(jpeg.bytes)!;
+            return dims.width > dims.height ? dims.width : dims.height;
+          }
+
+          final loupe = await rawDisplayJpeg(
+            lr,
+            path,
+            longEdge: 2048,
+            vips: () => vips,
+          );
+          expect(loupe!.demosaiced, isFalse);
+          expect(edgeOf(loupe), greaterThanOrEqualTo(2048));
+          final full = await rawDisplayJpeg(
+            lr,
+            path,
+            longEdge: 0,
+            vips: () => vips,
+          );
+          expect(full!.demosaiced, isFalse);
+          final sensor = extractRawPreview(lr, path, minLongEdge: 0)!;
+          expect(sensor.isFullResolution, isTrue);
+          expect(edgeOf(full), sensor.longEdge);
         case 'thumbnail-or-none':
           expect(out?.demosaiced ?? false, isFalse, reason: 'noise frame');
         case 'none':

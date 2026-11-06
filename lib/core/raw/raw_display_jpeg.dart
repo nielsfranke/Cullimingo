@@ -27,10 +27,13 @@ class RawDisplayJpeg {
 /// The best JPEG to display or export for the RAW at [path]: one place, so the
 /// preview pool, export and the legacy extractor all agree.
 ///
-/// 1. The embedded JPEG when it is usable (the fast path, unchanged).
-/// 2. Otherwise — missing, or an unusably small thumbnail like the 160×120 in
-///    Nikon HLG NEFs — a LibRaw demosaic rendered to [longEdge] (0 = native
-///    size), when libvips is available. [vips] is called lazily, so callers
+/// 1. The embedded JPEG when it is usable (the fast path): of several, the
+///    smallest that covers [longEdge], else the largest (GitHub #22). For the
+///    full tier ([longEdge] 0) it must also be close to sensor size.
+/// 2. Otherwise — missing, an unusably small thumbnail like the 160×120 in
+///    Nikon HLG NEFs, or a full-tier request with no full-size JPEG — a LibRaw
+///    demosaic rendered to [longEdge] (0 = native size), when libvips is
+///    available. [vips] is called lazily, so callers
 ///    that rarely need the fallback (export) only load libvips when they do.
 /// 3. If the demosaic fails or LibRaw reports corrupt/undecodable data (Nikon
 ///    HE/HE* TicoRAW decodes "successfully" into noise), whatever embedded JPEG
@@ -53,8 +56,10 @@ Future<RawDisplayJpeg?> rawDisplayJpeg(
   DemosaicCache? cache,
   void Function()? onDemosaic,
 }) async {
-  final embedded = extractRawPreview(lr, path);
-  if (embedded != null && embedded.isUsable) {
+  final embedded = extractRawPreview(lr, path, minLongEdge: longEdge);
+  if (embedded != null &&
+      embedded.isUsable &&
+      (longEdge > 0 || embedded.isFullResolution)) {
     return RawDisplayJpeg(embedded.bytes, demosaiced: false);
   }
   final v = vips();
