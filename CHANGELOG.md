@@ -6,6 +6,9 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 ## Unreleased
 
 ### Fixed
+- **Loupe zoom between Fit and 150% is sharp:** the full-resolution source now
+  loads as soon as you zoom in past Fit, instead of only beyond 1.5×, so the
+  screen-size preview is no longer stretched in between (GitHub #22).
 - **RAW 100% zoom:** when a RAW embeds several previews, the loupe and 100%
   zoom use one large enough for them instead of LibRaw's default; when no
   embedded preview is near full resolution (e.g. Sony A7 III's 1616×1080),

@@ -146,9 +146,11 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
   /// peeping. Reset on each photo change so a blit stays on the fast preview.
   bool _wantFull = false;
 
-  /// Zoom (relative to Fit) past which we fetch the full-resolution source. A
-  /// modest magnification, so the sharp bytes are usually in before 100%.
-  static const double _fullZoomTrigger = 1.5;
+  /// Zoom (relative to Fit) past which we fetch the full-resolution source.
+  /// The loupe preview is sized to the display, so any zoom-in past Fit
+  /// already upscales it: the slack only absorbs float noise at Fit (a 1.5
+  /// trigger left 1–1.5× visibly soft, GitHub #22).
+  static const double _fullZoomTrigger = 1.01;
 
   /// Whether the read-only Lightroom/Camera-Raw crop outline is shown (only has
   /// an effect on photos that carry a crop).
