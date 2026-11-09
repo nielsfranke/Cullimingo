@@ -52,7 +52,7 @@ jobs:
         run: flutter test --coverage
 
   test-macos:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
       - name: Install native deps
@@ -89,7 +89,7 @@ jobs:
         run: flutter build linux --release
 
   build-macos:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
       - name: Install native deps
