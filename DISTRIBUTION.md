@@ -6,9 +6,9 @@ Released DMGs are **signed with a Developer ID and notarized** (since 1.10.2),
 so they open like any downloaded app. The app is self-contained — the native
 `libvips`/`libraw` dylibs are bundled — so it does **not** need Homebrew.
 
-CI builds the DMGs **ad hoc**; they are signed afterwards on the maintainer's
-Mac (below), so no Apple credential ever reaches GitHub. A local or CI build
-you make yourself stays ad hoc — see *Opening an unsigned build* below.
+The release workflow signs and notarizes them itself (below). A local build,
+or a CI run without the signing secrets (a fork), stays ad hoc — see *Opening
+an unsigned build* below.
 
 ### Build a distributable .app
 
@@ -60,23 +60,39 @@ ditto -c -k --keepParent \
 
 ### Signing and notarizing a release
 
-After the release workflow has published `vX.Y.Z` with the ad-hoc DMGs:
+`.github/workflows/release.yml` signs in its macOS job, which runs in the
+`release` environment (deploys only to `v*` tags and `main`):
+`tool/sign_macos_release.sh --app` after `tool/bundle_macos.sh`, then
+`--finish` on the DMG from `tool/build_dmg.sh`. The script signs every bundled
+dylib, framework and the app inside-out with the hardened runtime and a secure
+timestamp (`macos/Runner/Release.entitlements` on the app), signs the DMG,
+notarizes it with `notarytool`, staples the ticket and checks a quarantined
+copy with `spctl` ("Notarized Developer ID"). A tag run without the secrets
+fails instead of publishing ad-hoc DMGs.
+
+Secrets of the `release` environment:
+
+| Secret | Value |
+|---|---|
+| `APPLE_CERTIFICATE` | the Developer ID Application certificate **with its private key**, exported from Keychain Access as `.p12`, base64 on one line |
+| `APPLE_CERTIFICATE_PASSWORD` | that `.p12`'s export password |
+| `APPLE_API_KEY_BASE64` | App Store Connect team API key (`.p8`), base64 on one line |
+| `APPLE_API_KEY` | its key ID |
+| `APPLE_API_ISSUER` | its issuer ID |
+
+The certificate expires (the current one on 2027-02-01): export the renewed
+one and replace the two certificate secrets. Notarized releases stay valid.
+
+**Fallback, on the maintainer's Mac** (when CI couldn't sign): with
+`~/.config/cullimingo/signing.env` exporting `APPLE_SIGNING_IDENTITY` (the
+SHA-1 when two certificates share a name), `APPLE_API_ISSUER`, `APPLE_API_KEY`
+and `APPLE_API_KEY_PATH`:
 
 ```sh
 gh release download vX.Y.Z -p 'Cullimingo-*.dmg' -D /tmp/dmg
 tool/sign_macos_release.sh --out /tmp/dmg/signed /tmp/dmg/Cullimingo-*.dmg
 gh release upload vX.Y.Z /tmp/dmg/signed/Cullimingo-*.dmg --clobber
 ```
-
-`tool/sign_macos_release.sh` copies each app out of its DMG, re-signs every
-bundled dylib, framework and the app inside-out with the hardened runtime and
-a secure timestamp (`macos/Runner/Release.entitlements` on the app), rebuilds
-the DMG with `tool/build_dmg.sh`, signs it, notarizes it with `notarytool`,
-staples the ticket and checks a quarantined copy with `spctl` ("Notarized
-Developer ID"). Credentials come from `~/.config/cullimingo/signing.env`
-(`APPLE_SIGNING_IDENTITY` — the certificate's SHA-1 when two share a name —
-plus an App Store Connect team API key: `APPLE_API_ISSUER`, `APPLE_API_KEY`,
-`APPLE_API_KEY_PATH` → the `.p8`). Never commit it.
 
 ### Opening an unsigned build
 
@@ -295,8 +311,8 @@ GitHub Release on every `v*` tag push: the AppImage on `ubuntu-24.04` and both
 cached per `build_macos_deps.sh` revision), each running the same `tool/`
 scripts above. The
 Release notes carry the install steps (chmod for Linux; drag to Applications
-for macOS). The DMGs it attaches are ad hoc; sign and replace them right after
-(*Signing and notarizing a release* above). Run it without cutting a tag via the **workflow_dispatch** trigger — it
+for macOS); the DMGs it attaches are signed and notarized (*Signing and
+notarizing a release* above). Run it without cutting a tag via the **workflow_dispatch** trigger — it
 builds both and leaves them as downloadable run artifacts (no Release). The
 published Release is what the in-app update check reads.
 

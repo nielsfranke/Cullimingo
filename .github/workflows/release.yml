@@ -72,11 +72,23 @@ jobs:
   # Apple Silicon: arm64 bundles Homebrew's dylibs; x86_64 bundles ones
   # cross-compiled from source by tool/build_macos_deps.sh, since Homebrew no
   # longer ships Intel bottles.
+  #
+  # Signed with the Developer ID and notarized here (tool/sign_macos_release.sh)
+  # when the `release` environment's secrets are present; it only deploys to
+  # `v*` tags and main. A tag run without them fails rather than publish
+  # ad-hoc DMGs under notes that say they're signed.
   build-macos:
     strategy:
       matrix:
         arch: [arm64, x86_64]
     runs-on: macos-15
+    environment: release
+    env:
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
     steps:
       - uses: actions/checkout@v7
 
@@ -116,7 +128,16 @@ jobs:
           flutter pub get
           flutter build macos --release
           tool/bundle_macos.sh
+          if [ -n "$APPLE_CERTIFICATE" ]; then
+            tool/sign_macos_release.sh --app build/macos/Build/Products/Release/Cullimingo.app
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "::error::no signing secrets in the release environment"
+            exit 1
+          fi
           tool/build_dmg.sh
+          if [ -n "$APPLE_CERTIFICATE" ]; then
+            tool/sign_macos_release.sh --finish build/macos/Cullimingo-${{ matrix.arch }}.dmg
+          fi
 
       - uses: actions/upload-artifact@v7
         with:
