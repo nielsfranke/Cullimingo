@@ -64,6 +64,11 @@
     <color type="primary" scheme_preference="dark">#6b1f35</color>
   </branding>
   <releases>
+    <release version="1.10.2" date="2026-11-09">
+      <description>
+        <p>Zooming in the loupe is sharp right from Fit, not only past 150%. RAWs whose embedded preview is small are rendered at full resolution for 100% zoom.</p>
+      </description>
+    </release>
     <release version="1.10.1" date="2026-11-03">
       <description>
         <p>On KDE Plasma and other non-GNOME desktops the window gets the desktop's own title bar with minimise and maximise, so it stays on screen.</p>
