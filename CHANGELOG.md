@@ -16,6 +16,10 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 - Nikon HE* RAWs that can't be decoded now show their small embedded
   thumbnail instead of an empty cell.
 
+### Changed
+- **macOS:** the DMGs are signed with a Developer ID and notarized by Apple,
+  so the app opens without clearing the quarantine flag in Terminal.
+
 ## 1.10.1 — 2026-11-03
 
 ### Fixed

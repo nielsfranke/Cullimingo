@@ -63,14 +63,11 @@ Grab the latest build from the
   ```
 - **macOS** — download `Cullimingo-arm64.dmg` for Apple Silicon (M1 and
   later) or `Cullimingo-x86_64.dmg` for Intel Macs (macOS 12 or later). Open
-  it, drag **Cullimingo** to **Applications**, then clear the quarantine flag
-  once (it's unsigned):
-  ```sh
-  xattr -cr /Applications/Cullimingo.app
-  ```
+  it and drag **Cullimingo** to **Applications**. The app is signed and
+  notarized by Apple.
 
-Both builds are self-contained — no Homebrew or apt libraries needed — but
-unsigned. See [DISTRIBUTION.md](DISTRIBUTION.md) for the details.
+Both builds are self-contained — no Homebrew or apt libraries needed. See
+[DISTRIBUTION.md](DISTRIBUTION.md) for the details.
 
 ## What it does
 

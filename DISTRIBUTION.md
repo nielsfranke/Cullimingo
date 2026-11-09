@@ -1,11 +1,14 @@
 # Distributing Cullimingo
 
-## macOS (unsigned)
+## macOS
 
-Cullimingo is **not** signed with an Apple Developer ID or notarized (we don't
-pay for the Apple Developer Program yet). The app is self-contained — the native
-`libvips`/`libraw` dylibs are bundled — so it does **not** need Homebrew, but
-macOS Gatekeeper will warn because it can't verify the developer.
+Released DMGs are **signed with a Developer ID and notarized** (since 1.10.2),
+so they open like any downloaded app. The app is self-contained — the native
+`libvips`/`libraw` dylibs are bundled — so it does **not** need Homebrew.
+
+CI builds the DMGs **ad hoc**; they are signed afterwards on the maintainer's
+Mac (below), so no Apple credential ever reaches GitHub. A local or CI build
+you make yourself stays ad hoc — see *Opening an unsigned build* below.
 
 ### Build a distributable .app
 
@@ -55,10 +58,30 @@ ditto -c -k --keepParent \
   build/macos/Build/Products/Release/Cullimingo.app Cullimingo.zip
 ```
 
-### Opening it on another Mac
+### Signing and notarizing a release
 
-Because the app isn't notarized, a freshly downloaded copy is quarantined and
-Gatekeeper blocks it. Pick **one**:
+After the release workflow has published `vX.Y.Z` with the ad-hoc DMGs:
+
+```sh
+gh release download vX.Y.Z -p 'Cullimingo-*.dmg' -D /tmp/dmg
+tool/sign_macos_release.sh --out /tmp/dmg/signed /tmp/dmg/Cullimingo-*.dmg
+gh release upload vX.Y.Z /tmp/dmg/signed/Cullimingo-*.dmg --clobber
+```
+
+`tool/sign_macos_release.sh` copies each app out of its DMG, re-signs every
+bundled dylib, framework and the app inside-out with the hardened runtime and
+a secure timestamp (`macos/Runner/Release.entitlements` on the app), rebuilds
+the DMG with `tool/build_dmg.sh`, signs it, notarizes it with `notarytool`,
+staples the ticket and checks a quarantined copy with `spctl` ("Notarized
+Developer ID"). Credentials come from `~/.config/cullimingo/signing.env`
+(`APPLE_SIGNING_IDENTITY` — the certificate's SHA-1 when two share a name —
+plus an App Store Connect team API key: `APPLE_API_ISSUER`, `APPLE_API_KEY`,
+`APPLE_API_KEY_PATH` → the `.p8`). Never commit it.
+
+### Opening an unsigned build
+
+A build that isn't notarized (your own, or a CI run artifact) is quarantined
+when downloaded and Gatekeeper blocks it. Pick **one**:
 
 **A. Right-click → Open (simplest, no Terminal)**
 1. Move `Cullimingo.app` to `/Applications`.
@@ -82,8 +105,6 @@ quarantine flag on an un-notarized app — option **B** clears it.
   `Cullimingo-x86_64.dmg` (Intel, macOS 12+). Each is single-architecture.
 - The first launch may still prompt for access to network/removable volumes —
   that's the normal macOS file-access prompt, click **Allow**.
-- A proper signed + notarized build (no warnings) needs the paid Apple Developer
-  Program; deferred. See `BUILD_PLAN.md` §6.1.
 
 ## Linux (AppImage)
 
@@ -270,11 +291,12 @@ account that owns the repo — no website file needed.
 
 `.github/workflows/release.yml` builds both artifacts and attaches them to a
 GitHub Release on every `v*` tag push: the AppImage on `ubuntu-24.04` and both
-`.dmg`s on `macos-14` (arm64 — the x86_64 one cross-compiled, its native stack
+`.dmg`s on `macos-15` (arm64 — the x86_64 one cross-compiled, its native stack
 cached per `build_macos_deps.sh` revision), each running the same `tool/`
 scripts above. The
-Release notes carry the install steps (chmod for Linux; drag + `xattr -cr` for
-macOS). Run it without cutting a tag via the **workflow_dispatch** trigger — it
+Release notes carry the install steps (chmod for Linux; drag to Applications
+for macOS). The DMGs it attaches are ad hoc; sign and replace them right after
+(*Signing and notarizing a release* above). Run it without cutting a tag via the **workflow_dispatch** trigger — it
 builds both and leaves them as downloadable run artifacts (no Release). The
 published Release is what the in-app update check reads.
 

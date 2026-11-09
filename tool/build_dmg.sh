@@ -9,8 +9,8 @@
 # Defaults to the release build. Produces build/macos/Cullimingo-<arch>.dmg.
 #
 # The DMG holds the .app + an /Applications symlink, so opening it shows the
-# familiar "drag Cullimingo to Applications" window. The app is still UNSIGNED
-# (ad-hoc) — see DISTRIBUTION.md for the one-time `xattr -cr` a user runs.
+# familiar "drag Cullimingo to Applications" window. The app is ad hoc signed
+# here; tool/sign_macos_release.sh signs and notarizes released DMGs.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

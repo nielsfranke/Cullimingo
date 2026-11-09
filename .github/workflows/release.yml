@@ -238,12 +238,8 @@ jobs:
           1. Open `Cullimingo-arm64.dmg` (Apple Silicon: M1 and later) or
              `Cullimingo-x86_64.dmg` (Intel, macOS 12 or later) and drag
              **Cullimingo** to **Applications**.
-          2. The app isn't signed/notarized, so clear the quarantine flag once —
-             open **Terminal** and run:
-             ```
-             xattr -cr /Applications/Cullimingo.app
-             ```
-          3. Launch it from Applications.
+          2. Launch it from Applications. The app is signed and notarized by
+             Apple.
           EOF
 
           # Notes = what changed (from CHANGELOG) + install instructions.
