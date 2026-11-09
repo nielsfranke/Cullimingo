@@ -68,6 +68,16 @@ void main() {
       expect(z.isPixelExact(3), isTrue);
       const unknown = LoupeZoom(intrinsic: null, viewport: Size(1000, 1000));
       expect(unknown.isPixelExact(4), isFalse);
+      // A small image Fit already upscales: Fit stays smooth, 1:1 doesn't.
+      const small = LoupeZoom(
+        intrinsic: Size(800, 400),
+        viewport: Size(1000, 1000),
+        devicePixelRatio: 2,
+      );
+      expect(small.hundredScale, 0.4);
+      expect(small.isPixelExact(1), isFalse);
+      expect(small.isPixelExact(0.4), isTrue);
+      expect(small.isPixelExact(2), isTrue);
     });
 
     test('exact fit: 100% equals Fit', () {

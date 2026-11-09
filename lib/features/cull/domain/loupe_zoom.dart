@@ -77,12 +77,15 @@ class LoupeZoom {
     return i.width / (f.width * devicePixelRatio);
   }
 
-  /// Whether [scale] shows the image at or beyond 1:1, where each image pixel
-  /// covers whole screen pixels: draw it unfiltered then, so pixel-peeping
-  /// isn't softened by smoothing (below 1:1 smoothing is needed to downscale).
+  /// Whether the loupe should draw unfiltered at [scale]: at exactly 1:1, or
+  /// zoomed in past both Fit and 1:1, so pixel-peeping isn't softened by
+  /// smoothing. Below 1:1 smoothing is needed to downscale, and Fit stays
+  /// smooth even when it upscales a small image.
   bool isPixelExact(double scale) {
     final h = hundredScale;
-    return h != null && scale >= h - _epsilon;
+    if (h == null) return false;
+    if ((scale - h).abs() < _epsilon) return true;
+    return scale > h && scale > 1 + _epsilon;
   }
 
   /// Smallest scale the slider allows: Fit, unless 100% is *below* Fit (Fit was

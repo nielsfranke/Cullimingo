@@ -53,9 +53,9 @@ void main() {
   final preview = img.encodePng(img.Image(width: 800, height: 400));
   final full = img.encodePng(img.Image(width: 4000, height: 2000));
 
-  Future<void> openLoupe(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1280, 800);
-    tester.view.devicePixelRatio = 1.0;
+  Future<void> openLoupe(WidgetTester tester, {double dpr = 1}) async {
+    tester.view.physicalSize = Size(1280 * dpr, 800 * dpr);
+    tester.view.devicePixelRatio = dpr;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
@@ -179,6 +179,32 @@ void main() {
     await tester.pump();
     expect(scale(), 1);
     expect(translation(), Offset.zero);
+  });
+
+  testWidgets('on a 2× screen Z lands on physical 1:1, drawn unfiltered', (
+    tester,
+  ) async {
+    await openLoupe(tester, dpr: 2);
+    final viewer = find.byType(InteractiveViewer);
+    double scale() => tester
+        .widget<InteractiveViewer>(viewer)
+        .transformationController!
+        .value
+        .getMaxScaleOnAxis();
+    FilterQuality quality() =>
+        tester.widget<Image>(find.byType(Image).first).filterQuality;
+
+    final area = tester.getRect(viewer); // logical pixels
+    final fitWidth = math.min(area.width, area.height * 2);
+    expect(quality(), FilterQuality.medium); // Fit downscales: smoothed
+
+    final mouse = TestPointer(1, PointerDeviceKind.mouse);
+    await tester.sendEventToBinding(mouse.hover(area.center));
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
+    await settle(tester);
+    // One image pixel per *physical* pixel: half the logical-pixel scale.
+    expect(scale(), closeTo(4000 / (fitWidth * 2), 1e-6));
+    expect(quality(), FilterQuality.none);
   });
 }
 

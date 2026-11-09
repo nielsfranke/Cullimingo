@@ -28,6 +28,7 @@ import 'package:cullimingo/features/metadata/presentation/keyword_dialog.dart';
 import 'package:cullimingo/shared/models/cull_marks.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
@@ -379,6 +380,18 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
     _resolvedBytes = bytes;
     final stream = MemoryImage(bytes).resolve(ImageConfiguration.empty);
     late final ImageStreamListener listener;
+    void apply(Size size) {
+      if (!mounted || _intrinsic == size) return;
+      setState(() => _intrinsic = size);
+      // Holding 100%: snap to the new size's 1:1. A preview standing in
+      // while the full-res source loads would only zoom out and back in
+      // again, so that one waits.
+      final hundred = _zoom.hundredScale;
+      if (_holdHundred && (isFull || !_wantFull) && hundred != null) {
+        _zoomTo(hundred, focal: _hundredFocal);
+      }
+    }
+
     listener = ImageStreamListener(
       (info, _) {
         final size = Size(
@@ -386,14 +399,14 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
           info.image.height.toDouble(),
         );
         stream.removeListener(listener);
-        if (!mounted || _intrinsic == size) return;
-        setState(() => _intrinsic = size);
-        // Holding 100%: snap to the new size's 1:1. A preview standing in
-        // while the full-res source loads would only zoom out and back in
-        // again, so that one waits.
-        final hundred = _zoom.hundredScale;
-        if (_holdHundred && (isFull || !_wantFull) && hundred != null) {
-          _zoomTo(hundred, focal: _hundredFocal);
+        // An image already in Flutter's cache reports synchronously, i.e.
+        // during this build; the 100% re-snap then writes the zoom provider,
+        // which mustn't happen mid-build. Apply after the frame instead.
+        if (SchedulerBinding.instance.schedulerPhase ==
+            SchedulerPhase.persistentCallbacks) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => apply(size));
+        } else {
+          apply(size);
         }
       },
       // Corrupt/undecodable bytes: drop the listener quietly (the image area
