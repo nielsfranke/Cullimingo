@@ -171,6 +171,7 @@ class _CompareViewState extends ConsumerState<CompareView> {
         intrinsic: _intrinsic[id],
         viewport: viewport,
         quarterTurns: photo.userRotation,
+        devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
       ).hundredScale;
       if (hundred != null && hundred > 1) target = hundred;
     }

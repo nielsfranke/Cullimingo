@@ -37,6 +37,39 @@ void main() {
       expect(z.maxScale, 4.0);
     });
 
+    test('HiDPI: 100% is one image pixel per physical pixel', () {
+      // 4000×2000 into 1000×1000 logical on a 2× screen: Fit shows it at
+      // 2000 physical pixels wide, so 1:1 is 2× Fit, not 4×.
+      const z = LoupeZoom(
+        intrinsic: Size(4000, 2000),
+        viewport: Size(1000, 1000),
+        devicePixelRatio: 2,
+      );
+      expect(z.hundredScale, 2.0);
+      expect(z.modeForScale(2), LoupeZoomMode.hundred);
+      // Fractional scaling (150%) lands between.
+      const f = LoupeZoom(
+        intrinsic: Size(4000, 2000),
+        viewport: Size(1000, 1000),
+        devicePixelRatio: 1.5,
+      );
+      expect(f.hundredScale, closeTo(4000 / 1500, 1e-9));
+    });
+
+    test('pixel-exact (unfiltered) from 100% upwards only', () {
+      const z = LoupeZoom(
+        intrinsic: Size(4000, 2000),
+        viewport: Size(1000, 1000),
+        devicePixelRatio: 2,
+      );
+      expect(z.isPixelExact(1), isFalse); // Fit downscales: keep smoothing
+      expect(z.isPixelExact(1.9), isFalse);
+      expect(z.isPixelExact(2), isTrue);
+      expect(z.isPixelExact(3), isTrue);
+      const unknown = LoupeZoom(intrinsic: null, viewport: Size(1000, 1000));
+      expect(unknown.isPixelExact(4), isFalse);
+    });
+
     test('exact fit: 100% equals Fit', () {
       const z = LoupeZoom(
         intrinsic: Size(1000, 500),

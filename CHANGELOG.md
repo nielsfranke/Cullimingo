@@ -3,6 +3,14 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **100% zoom on Retina/HiDPI screens is true 1:1:** one image pixel per
+  physical screen pixel, instead of per logical pixel (which on a 2× screen
+  was really 200%). At 100% and above the photo is drawn unsmoothed, so focus
+  checks show the real pixels.
+
 ## 1.10.2 — 2026-11-09
 
 ### Fixed

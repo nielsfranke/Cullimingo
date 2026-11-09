@@ -284,6 +284,7 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
     intrinsic: _intrinsic,
     viewport: _viewport,
     quarterTurns: _quarterTurns,
+    devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
   );
 
   // Sets an absolute zoom [target] (relative to Fit), keeping the content
@@ -908,6 +909,9 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
                     bytes,
                     fit: BoxFit.contain,
                     gaplessPlayback: true,
+                    filterQuality: _zoom.isPixelExact(_scale)
+                        ? FilterQuality.none
+                        : FilterQuality.medium,
                     errorBuilder: (context, error, stack) => _brokenImage(),
                   ),
                   if (clippingImage != null)

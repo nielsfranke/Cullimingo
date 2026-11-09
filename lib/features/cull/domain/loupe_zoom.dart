@@ -8,7 +8,7 @@ enum LoupeZoomMode {
   /// Whole frame fits the viewport (scale 1.0 relative to Fit).
   fit,
 
-  /// One image-pixel per logical pixel (`hundredScale`).
+  /// One image-pixel per physical screen pixel (`hundredScale`).
   hundred,
 
   /// A specific scale the user dialled in with the slider / pinch.
@@ -19,9 +19,9 @@ enum LoupeZoomMode {
 /// the Fit / 100% behaviour can be unit-tested in isolation.
 ///
 /// Scale is expressed relative to **Fit**: `1.0` contains the whole frame in
-/// the viewport; [hundredScale] renders one image pixel per logical pixel (the
-/// focus-check view). The image's native size is unknown until it decodes, so
-/// every getter copes with a `null` [intrinsic].
+/// the viewport; [hundredScale] renders one image pixel per physical screen
+/// pixel (the focus-check view). The image's native size is unknown until it
+/// decodes, so every getter copes with a `null` [intrinsic].
 class LoupeZoom {
   /// Creates zoom math for an image of [intrinsic] native pixels shown in a
   /// [viewport] of logical pixels.
@@ -29,6 +29,7 @@ class LoupeZoom {
     required this.intrinsic,
     required this.viewport,
     this.quarterTurns = 0,
+    this.devicePixelRatio = 1,
   });
 
   /// Native pixel size of the decoded preview, or `null` before it resolves.
@@ -40,6 +41,11 @@ class LoupeZoom {
 
   /// The loupe image-area size in logical pixels.
   final Size viewport;
+
+  /// Physical pixels per logical pixel. 100% is one image pixel per *physical*
+  /// pixel, so on a 2× (Retina / HiDPI) screen it is half the logical scale —
+  /// one image pixel per logical pixel there would really be 200%.
+  final double devicePixelRatio;
 
   /// Hard ceiling on magnification beyond Fit, so the slider always has room
   /// even for tiny images.
@@ -59,14 +65,24 @@ class LoupeZoom {
     return (i != null && quarterTurns.isOdd) ? i.flipped : i;
   }
 
-  /// Scale (relative to Fit) that renders 1 image-pixel per logical pixel, or
-  /// `null` until the native size is known. Below `1.0` when Fit upscales past
-  /// native (a big window on a small image); above when Fit downscales.
+  /// Scale (relative to Fit) that renders 1 image-pixel per physical pixel,
+  /// or `null` until the native size is known. Below `1.0` when Fit upscales
+  /// past native (a big window on a small image); above when Fit downscales.
   double? get hundredScale {
     final f = fitted;
     final i = _upright;
-    if (f == null || i == null || f.width == 0) return null;
-    return i.width / f.width;
+    if (f == null || i == null || f.width == 0 || devicePixelRatio <= 0) {
+      return null;
+    }
+    return i.width / (f.width * devicePixelRatio);
+  }
+
+  /// Whether [scale] shows the image at or beyond 1:1, where each image pixel
+  /// covers whole screen pixels: draw it unfiltered then, so pixel-peeping
+  /// isn't softened by smoothing (below 1:1 smoothing is needed to downscale).
+  bool isPixelExact(double scale) {
+    final h = hundredScale;
+    return h != null && scale >= h - _epsilon;
   }
 
   /// Smallest scale the slider allows: Fit, unless 100% is *below* Fit (Fit was
