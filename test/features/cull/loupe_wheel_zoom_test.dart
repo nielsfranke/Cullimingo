@@ -174,9 +174,13 @@ void main() {
     expect(scale(), closeTo(zoomedIn, 1e-6));
     expect(container.read(loupeZoomLevelProvider).mode, LoupeZoomMode.custom);
 
-    // Z from any zoom goes back to Fit.
+    // Z from any zoom eases back to Fit (190 ms — one pump isn't enough, and
+    // the eased trip starts from the current frame, so it is still at 100%
+    // right after the key).
     await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
     await tester.pump();
+    expect(scale(), closeTo(zoomedIn, 1e-6));
+    await settle(tester);
     expect(scale(), 1);
     expect(translation(), Offset.zero);
   });
