@@ -93,9 +93,34 @@ class LoupeView extends ConsumerStatefulWidget {
   ConsumerState<LoupeView> createState() => _LoupeViewState();
 }
 
-class _LoupeViewState extends ConsumerState<LoupeView> {
+class _LoupeViewState extends ConsumerState<LoupeView>
+    with SingleTickerProviderStateMixin {
   /// Pan/zoom transform for the [InteractiveViewer]; scale 1.0 == Fit.
   final TransformationController _tc = TransformationController();
+
+  /// Eases a preset zoom (Fit ↔ 100%, the zoom-toggle key) instead of
+  /// snapping to it. Short enough to stay out of a keyboard run's way, long
+  /// enough that the eye follows where the frame is going.
+  late final AnimationController _zoomAnim;
+
+  /// How long an eased zoom takes.
+  static const Duration _zoomDuration = Duration(milliseconds: 190);
+
+  /// The transform an eased zoom started from, its target scale and focal
+  /// point — null while nothing is easing.
+  double? _animFromScale;
+  Offset? _animFromTranslation;
+  double _animToScale = 1;
+  Offset _animFocal = Offset.zero;
+
+  /// Whether [_zoomAnim] is driving the transform, so the per-tick
+  /// [_onTransform] work (persisting the zoom mode, rebuilding) waits for the
+  /// landing frame instead of running ~12 times.
+  bool _zooming = false;
+
+  /// Set around the synchronous landing of an eased zoom started from
+  /// `build`, where reporting the mode would write a provider mid-build.
+  bool _settling = false;
 
   /// Native pixel size of the decoded preview, once resolved.
   Size? _intrinsic;
@@ -205,6 +230,8 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
   @override
   void initState() {
     super.initState();
+    _zoomAnim = AnimationController(vsync: this, duration: _zoomDuration)
+      ..addListener(_onZoomFrame);
     _tc.addListener(_onTransform);
   }
 
@@ -212,6 +239,7 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
   void dispose() {
     _flashTimer?.cancel();
     _disposeAnalysisImages();
+    _zoomAnim.dispose();
     _tc
       ..removeListener(_onTransform)
       ..dispose();
@@ -260,6 +288,9 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
   // session — a raw scale wouldn't mean 100% on the next photo.
   void _onTransform() {
     if (_wheelPending) return;
+    // An eased zoom writes the transform every frame; one rebuild and one
+    // persist at the landing frame is enough (see [_onZoomFrame]).
+    if (_zooming) return;
     final scale = _scale;
     setState(() {
       // Past a modest zoom-in, pull the full-resolution source so 100% renders
@@ -288,34 +319,119 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
     devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
   );
 
+  // The loupe transform is always a uniform scale plus a translation, so it
+  // is written in one place.
+  void _setTransform(Offset translation, double scale) {
+    _tc.value = Matrix4.identity()
+      ..translateByDouble(translation.dx, translation.dy, 0, 1)
+      ..scaleByDouble(scale, scale, scale, 1);
+  }
+
   // Sets an absolute zoom [target] (relative to Fit), keeping the content
   // under [focal] (default: the viewport centre) in place. Drives the presets,
-  // the slider, the zoom-toggle key and ⌘/Ctrl+wheel.
-  void _zoomTo(double target, {Offset? focal}) {
+  // the slider, the zoom-toggle key and ⌘/Ctrl+wheel; [animate] eases the trip
+  // where a snap would lose the reader (the presets and the toggle key), and
+  // is left off for continuous controls (slider drag, wheel, pinch) that are
+  // already a stream of small steps.
+  void _zoomTo(double target, {Offset? focal, bool animate = false}) {
     final zoom = _zoom;
     final scale = target.clamp(zoom.minScale, zoom.maxScale);
-    final t = zoom.translationForZoom(
-      scale: _scale,
-      translation: _translation,
-      target: scale,
-      focal: focal ?? _viewport.center(Offset.zero),
+    final fromScale = _scale;
+    final at = focal ?? _viewport.center(Offset.zero);
+    // A new zoom supersedes one still easing: carry on from the frame on
+    // screen rather than from where the old trip was heading.
+    _endZoom();
+    if (!animate || (scale - fromScale).abs() < _zoomEpsilon) {
+      _setTransform(
+        zoom.translationForZoom(
+          scale: fromScale,
+          translation: _translation,
+          target: scale,
+          focal: at,
+        ),
+        scale,
+      );
+      return;
+    }
+    _animFromScale = fromScale;
+    _animFromTranslation = _translation;
+    _animToScale = scale;
+    _animFocal = at;
+    _zooming = true;
+    _zoomAnim.forward(from: 0);
+  }
+
+  // Close enough to call two scales the same zoom (the slider's own steps are
+  // far coarser).
+  static const double _zoomEpsilon = 0.001;
+
+  // One frame of an eased zoom: the curve is the presentation's taste
+  // ([Curves.easeOutCubic]), the scale and translation come from the same
+  // pure zoom math the instant path uses ([LoupeZoom.zoomStep] →
+  // [LoupeZoom.translationForZoom]), so the focal point holds still and the
+  // view stays clamped on every frame of the trip.
+  void _onZoomFrame() {
+    final fromScale = _animFromScale;
+    final fromTranslation = _animFromTranslation;
+    if (fromScale == null || fromTranslation == null) return;
+    final step = _zoom.zoomStep(
+      scale: fromScale,
+      translation: fromTranslation,
+      target: _animToScale,
+      focal: _animFocal,
+      progress: Curves.easeOutCubic.transform(_zoomAnim.value),
     );
-    _tc.value = Matrix4.identity()
-      ..translateByDouble(t.dx, t.dy, 0, 1)
-      ..scaleByDouble(scale, scale, scale, 1);
+    _setTransform(step.translation, step.scale);
+    if (!_zoomAnim.isCompleted) return;
+    // Landed: report the zoom the user asked for (once) from [_onTransform].
+    _zooming = false;
+    _animFromScale = null;
+    _animFromTranslation = null;
+    if (!_settling) _onTransform();
+  }
+
+  // Stops an eased zoom where it stands: the user grabbing the wheel, the
+  // slider or the photo takes over from the frame on screen.
+  void _endZoom() {
+    if (!_zooming) return;
+    _zooming = false;
+    _zoomAnim.stop();
+    _animFromScale = null;
+    _animFromTranslation = null;
+  }
+
+  // Ends an eased zoom on its target instead of continuing. Used where a new
+  // frame or a new native size makes the trip meaningless (a blit): the next
+  // frame must appear at the zoom that was asked for, not mid-flight.
+  //
+  // [report] is false when this runs from `build`: persisting the zoom mode
+  // there would write a provider mid-build, so the landing is reported after
+  // the frame instead.
+  void _settleZoom({bool report = true}) {
+    if (!_zooming) return;
+    _settling = !report;
+    _zoomAnim
+      ..stop()
+      ..value = 1; // the frame listener lands it
+    _settling = false;
+    if (!report) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _onTransform();
+      });
+    }
   }
 
   // A zoom the user dialled in (slider, Fit, pinch, ⌘/Ctrl+wheel): no longer
   // holding 100%.
-  void _zoomFreely(double target, {Offset? focal}) {
+  void _zoomFreely(double target, {Offset? focal, bool animate = false}) {
     _holdHundred = false;
-    _zoomTo(target, focal: focal);
+    _zoomTo(target, focal: focal, animate: animate);
   }
 
   // 100%: fetch the full-resolution source right away and hold 1:1, so the
   // zoom re-snaps to the original's pixels once it lands (until then the
   // preview's own 100% stands in).
-  void _zoomToHundred({Offset? focal}) {
+  void _zoomToHundred({Offset? focal, bool animate = false}) {
     final hundred = _zoom.hundredScale;
     if (hundred == null) return;
     setState(() {
@@ -323,16 +439,16 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
       _holdHundred = true;
     });
     _hundredFocal = focal;
-    _zoomTo(hundred, focal: focal);
+    _zoomTo(hundred, focal: focal, animate: animate);
   }
 
   // The zoom-toggle key: Fit ↔ 100%, zooming in where the mouse points.
   void _toggleZoom() {
     if (_viewport == Size.zero) return;
     if (_holdHundred || _zoom.modeForScale(_scale) != LoupeZoomMode.fit) {
-      _zoomFreely(1);
+      _zoomFreely(1, animate: true);
     } else {
-      _zoomToHundred(focal: _pointer);
+      _zoomToHundred(focal: _pointer, animate: true);
     }
   }
 
@@ -354,6 +470,9 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
     GestureBinding.instance.pointerSignalResolver.register(event, (e) {
       _wheelPending = false;
       _tc.value = before;
+      // A wheel tick overrides a zoom that's still easing: take over from the
+      // frame on screen.
+      _endZoom();
       final delta = (e as PointerScrollEvent).scrollDelta;
       final keys = HardwareKeyboard.instance;
       if (keys.isMetaPressed || keys.isControlPressed) {
@@ -605,6 +724,10 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
     if (photo.id != _photoId) {
       _photoId = photo.id;
       _resolvedBytes = null;
+      // Stepping between frames never animates: an eased zoom still in flight
+      // lands on its target first, so the next frame appears at the zoom the
+      // user asked for rather than mid-flight.
+      _settleZoom(report: false);
       // Zoomed in, the next frame needs its full-resolution source too (a
       // focus check across a burst); at Fit a blit stays on the fast preview.
       _wantFull = _holdHundred || _scale > _fullZoomTrigger;
@@ -853,8 +976,8 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
               onTogglePeaking: () =>
                   ref.read(loupeFocusPeakingVisibleProvider.notifier).toggle(),
               onZoom: _zoomFreely,
-              onFit: () => _zoomFreely(1),
-              onHundred: _zoomToHundred,
+              onFit: () => _zoomFreely(1, animate: true),
+              onHundred: () => _zoomToHundred(animate: true),
               onRating: (r) {
                 ref.read(loupeMarkFlashProvider.notifier).rating(r);
                 unawaited(controller.markRating(photo.id, r));
@@ -903,6 +1026,9 @@ class _LoupeViewState extends ConsumerState<LoupeView> {
           transformationController: _tc,
           minScale: _zoom.minScale,
           maxScale: _zoom.maxScale,
+          // A pinch or a drag is the user taking over a zoom that's still
+          // easing: stop it where it stands.
+          onInteractionStart: (_) => _endZoom(),
           // A pinch is the user zooming away from a held 100%.
           onInteractionUpdate: (d) {
             if (d.scale != 1 && !_wheelPending) _holdHundred = false;

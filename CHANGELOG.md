@@ -5,6 +5,13 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 
 ## Unreleased
 
+### Added
+- **Eased loupe zoom:** the Fit / 100% presets and the zoom-toggle key (`Z`)
+  now glide into place over 190 ms instead of snapping, zooming about the
+  pointer on every frame and staying inside the frame while they travel.
+  Continuous controls (slider, ⌘/Ctrl+wheel, pinch) and stepping between
+  frames stay instant.
+
 ### Fixed
 - **100% zoom on Retina/HiDPI screens is true 1:1:** one image pixel per
   physical screen pixel, instead of per logical pixel (which on a 2× screen

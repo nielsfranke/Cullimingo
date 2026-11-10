@@ -151,4 +151,33 @@ class LoupeZoom {
     final scene = (focal - translation) / scale;
     return clampTranslation(focal - scene * target, target);
   }
+
+  /// One step of a zoom eased from [scale]/[translation] to [target] about
+  /// [focal], [progress] (0 → 1, already curved by the caller) of the way
+  /// there.
+  ///
+  /// The scale moves geometrically — the same *ratio* per step, which reads as
+  /// a uniform speed where a linear scale would sprint at the start and crawl
+  /// at the end — and the translation comes from [translationForZoom], so the
+  /// step is zoom-at-cursor at its own scale: the focal point holds still and
+  /// the view stays clamped to the image for the whole trip, not just at the
+  /// ends. [progress] 0 and 1 reproduce the start and the target exactly.
+  ({double scale, Offset translation}) zoomStep({
+    required double scale,
+    required Offset translation,
+    required double target,
+    required Offset focal,
+    required double progress,
+  }) {
+    final step = scale * math.pow(target / scale, progress);
+    return (
+      scale: step,
+      translation: translationForZoom(
+        scale: scale,
+        translation: translation,
+        target: step,
+        focal: focal,
+      ),
+    );
+  }
 }
