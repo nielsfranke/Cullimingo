@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.11.0 — 2026-11-17
 
 ### Added
 - **Eased loupe zoom:** the Fit / 100% presets and the zoom-toggle key (`Z`)
