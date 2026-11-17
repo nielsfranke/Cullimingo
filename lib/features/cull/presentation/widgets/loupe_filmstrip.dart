@@ -6,7 +6,9 @@ import 'package:cullimingo/core/settings/filmstrip_position.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
 import 'package:cullimingo/features/filter/presentation/filter_providers.dart';
 import 'package:cullimingo/shared/models/cull_marks.dart';
+import 'package:cullimingo/shared/widgets/color_dot.dart';
 import 'package:cullimingo/shared/widgets/flag_badge.dart';
+import 'package:cullimingo/shared/widgets/rating_stars.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -215,6 +217,34 @@ class _FilmstripCell extends ConsumerWidget {
                     top: 3,
                     left: 3,
                     child: FlagBadge(flag: photo.flag, size: 13),
+                  ),
+                // Rating (GitHub #26): the strip showed flag and colour only,
+                // so a frame that slipped by unrated looked exactly like one
+                // left at zero — which meant a second pass with a "no rating"
+                // filter just to find it. Same widget as the grid, at 8 px, on
+                // a small scrim so the gold still reads on a bright frame.
+                if (photo.rating > 0)
+                  Positioned(
+                    right: 3,
+                    bottom: 5,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.42),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: RatingStars(rating: photo.rating, size: 8),
+                      ),
+                    ),
+                  ),
+                // Colour label as the grid's dot: the thin bar stays for the
+                // full-width cue, the dot is what the eye catches at 60 px.
+                if (photo.colorLabel != ColorLabel.none)
+                  Positioned(
+                    left: 3,
+                    bottom: 6,
+                    child: ColorDot(label: photo.colorLabel, size: 9),
                   ),
               ],
             ),
