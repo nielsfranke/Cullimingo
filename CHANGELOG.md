@@ -5,6 +5,12 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 
 ## Unreleased
 
+### Added
+- **Loupe overlay shortcuts:** histogram (`H`), clipping warning (`J`) and
+  focus peaking (`E`) toggle straight from the keyboard, without the analysis
+  menu. Each is its own entry in the shortcut editor, so it can be rebound —
+  or put on a gamepad button (GitHub #25).
+
 ### Fixed
 - **100% zoom on Retina/HiDPI screens is true 1:1:** one image pixel per
   physical screen pixel, instead of per logical pixel (which on a 2× screen

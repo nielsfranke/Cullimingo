@@ -164,9 +164,7 @@ void main() {
         .toggleHideJpegPairs();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(PhotoCell), findsNWidgets(3));
-    container.read(cullControllerProvider.notifier).setSelection({
-      idOf(bRaw),
-    });
+    container.read(cullControllerProvider.notifier).setSelection({idOf(bRaw)});
     await tester.pump();
     await tester.sendKeyEvent(LogicalKeyboardKey.keyR);
     await pumpUntil(tester, () => find.text('Rename 2').evaluate().isNotEmpty);

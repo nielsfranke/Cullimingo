@@ -29,6 +29,10 @@ void main() {
     expect(s.keyFor(CullAction.reject), LogicalKeyboardKey.keyX);
     // Expand-selection-to-bracket on G.
     expect(s.keyFor(CullAction.expandBrackets), LogicalKeyboardKey.keyG);
+    // Loupe overlays: histogram H, clipping J (Lightroom), peaking E.
+    expect(s.keyFor(CullAction.toggleHistogram), LogicalKeyboardKey.keyH);
+    expect(s.keyFor(CullAction.toggleClipping), LogicalKeyboardKey.keyJ);
+    expect(s.keyFor(CullAction.toggleFocusPeaking), LogicalKeyboardKey.keyE);
     // No two actions share a key.
     final keys = [for (final a in CullAction.values) s.keyFor(a)];
     expect(keys.toSet().length, keys.length);
@@ -37,11 +41,11 @@ void main() {
   test('rebinding moves the action and records an override', () {
     final s = CullShortcuts.defaults().withBinding(
       CullAction.pick,
-      LogicalKeyboardKey.keyH,
+      LogicalKeyboardKey.keyQ,
     );
-    expect(s.keyFor(CullAction.pick), LogicalKeyboardKey.keyH);
-    expect(s.actionFor(LogicalKeyboardKey.keyH), CullAction.pick);
-    expect(s.toOverrides(), {'pick': LogicalKeyboardKey.keyH.keyId});
+    expect(s.keyFor(CullAction.pick), LogicalKeyboardKey.keyQ);
+    expect(s.actionFor(LogicalKeyboardKey.keyQ), CullAction.pick);
+    expect(s.toOverrides(), {'pick': LogicalKeyboardKey.keyQ.keyId});
   });
 
   test('conflictFor reports a key already used by another action', () {
@@ -52,7 +56,7 @@ void main() {
       CullAction.reject,
     );
     // A free key has no conflict.
-    expect(s.conflictFor(CullAction.pick, LogicalKeyboardKey.keyH), isNull);
+    expect(s.conflictFor(CullAction.pick, LogicalKeyboardKey.keyQ), isNull);
     // The action's own current key is not a conflict.
     expect(s.conflictFor(CullAction.pick, LogicalKeyboardKey.keyP), isNull);
   });

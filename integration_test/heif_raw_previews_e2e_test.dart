@@ -43,9 +43,10 @@ Future<void> shot(String name) async {
     await Process.run('screencapture', ['-x', out]);
     return;
   }
-  final r = await Process.run('spectacle', ['-abno', out]).catchError(
-    (_) => Process.run('import', ['-window', 'root', out]),
-  );
+  final r = await Process.run('spectacle', [
+    '-abno',
+    out,
+  ]).catchError((_) => Process.run('import', ['-window', 'root', out]));
   if (r.exitCode != 0) await Process.run('import', ['-window', 'root', out]);
 }
 

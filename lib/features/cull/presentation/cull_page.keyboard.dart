@@ -166,6 +166,7 @@ mixin _CullKeyboard on _CullJobs {
         ref.read(loupeZoomToggleProvider.notifier).toggle();
         return KeyEventResult.handled;
       }
+      if (_toggleLoupeOverlay(action)) return KeyEventResult.handled;
       final step = loupeStepFor(key);
       if (step != null) {
         final next = (index + step).clamp(0, photos.length - 1);
@@ -299,6 +300,24 @@ mixin _CullKeyboard on _CullJobs {
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
+  }
+
+  /// Flips the loupe analysis overlay bound to [action] (histogram, clipping
+  /// warning, focus peaking) — the same sticky, persisted switch as the
+  /// loupe's analysis menu, so the keypress is the whole interaction (GitHub
+  /// #25). Returns false when [action] isn't an overlay toggle.
+  bool _toggleLoupeOverlay(CullAction? action) {
+    final toggle = switch (action) {
+      CullAction.toggleHistogram =>
+        ref.read(loupeHistogramVisibleProvider.notifier).toggle,
+      CullAction.toggleClipping =>
+        ref.read(loupeClippingVisibleProvider.notifier).toggle,
+      CullAction.toggleFocusPeaking =>
+        ref.read(loupeFocusPeakingVisibleProvider.notifier).toggle,
+      _ => null,
+    };
+    toggle?.call();
+    return toggle != null;
   }
 
   /// Photo-Mechanic-style auto-advance: after marking a *single* photo, step

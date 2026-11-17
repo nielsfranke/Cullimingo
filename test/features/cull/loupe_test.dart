@@ -164,6 +164,45 @@ void main() {
     expect(container.read(loupeZoomToggleProvider), 1);
   });
 
+  testWidgets('H / J / E toggle the loupe overlays without the menu', (
+    tester,
+  ) async {
+    await pumpPage(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter); // focus first
+    await tester.pump();
+
+    // In the grid the overlay keys do nothing (there's no loupe to draw on).
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyE);
+    await tester.pump();
+    expect(container.read(loupeFocusPeakingVisibleProvider), isFalse);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter); // open loupe
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyE);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+    await tester.pump();
+    expect(container.read(loupeFocusPeakingVisibleProvider), isTrue);
+    expect(container.read(loupeHistogramVisibleProvider), isTrue);
+    expect(container.read(loupeClippingVisibleProvider), isTrue);
+    expect(find.byType(LoupeView), findsOneWidget); // stays open
+
+    // Sticky across photos; a second press turns it off again.
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
+    await tester.pump();
+    expect(container.read(loupeFocusPeakingVisibleProvider), isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyE);
+    await tester.pump();
+    expect(container.read(loupeFocusPeakingVisibleProvider), isFalse);
+
+    // ⌘/Ctrl+E is still send-to, not a peaking toggle.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyE);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+    expect(container.read(loupeFocusPeakingVisibleProvider), isFalse);
+  });
+
   testWidgets('loupe rating buttons set the rating with a click', (
     tester,
   ) async {
