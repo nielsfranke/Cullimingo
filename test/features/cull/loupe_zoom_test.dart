@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:cullimingo/features/cull/domain/loupe_zoom.dart';
@@ -237,6 +238,105 @@ void main() {
         ),
         Offset.zero,
       );
+    });
+  });
+
+  group('eased zoom', () {
+    const z = LoupeZoom(
+      intrinsic: Size(4000, 2000),
+      viewport: Size(1000, 800),
+    );
+
+    ({double scale, Offset translation}) step(
+      double progress, {
+      double from = 1,
+      Offset translation = Offset.zero,
+      double target = 4,
+      Offset focal = const Offset(200, 300),
+    }) => z.zoomStep(
+      scale: from,
+      translation: translation,
+      target: target,
+      focal: focal,
+      progress: progress,
+    );
+
+    test('the ends are the plain zoom — no drift from the snapping path', () {
+      final start = step(0);
+      expect(start.scale, 1);
+      expect(start.translation, Offset.zero);
+
+      final end = step(1);
+      final snapped = z.translationForZoom(
+        scale: 1,
+        translation: Offset.zero,
+        target: 4,
+        focal: const Offset(200, 300),
+      );
+      expect(end.scale, closeTo(4, 1e-12));
+      expect(end.translation.dx, closeTo(snapped.dx, 1e-12));
+      expect(end.translation.dy, closeTo(snapped.dy, 1e-12));
+    });
+
+    test('the scale moves by ratio, not by amount', () {
+      // Halfway in progress is the geometric mean, not the arithmetic one:
+      // 1× → 4× passes 2×, and equal steps are equal multiples.
+      expect(step(0.5).scale, closeTo(2, 1e-12));
+      expect(step(0.25).scale, closeTo(math.sqrt(2), 1e-12));
+      expect(step(0.75).scale, closeTo(2 * math.sqrt(2), 1e-12));
+      expect(
+        step(0.4).scale / step(0.2).scale,
+        closeTo(step(0.6).scale / step(0.4).scale, 1e-12),
+      );
+    });
+
+    test('the focal point holds still on every step', () {
+      const focal = Offset(200, 300);
+      for (final progress in [0.1, 0.25, 0.5, 0.75, 0.9]) {
+        final s = step(progress);
+        final scene = (focal - s.translation) / s.scale;
+        expect(scene.dx, closeTo(focal.dx, 1e-9), reason: 'at $progress');
+        expect(scene.dy, closeTo(focal.dy, 1e-9), reason: 'at $progress');
+      }
+    });
+
+    test('every step stays clamped to the image, not just the ends', () {
+      // Zooming out of a corner-panned view: no mid-trip frame may open a gap
+      // past the image edge (the content must still cover the viewport).
+      for (final progress in [0.1, 0.3, 0.5, 0.7, 0.9]) {
+        final s = step(
+          progress,
+          from: 4,
+          translation: const Offset(-1000, -800),
+          target: 1,
+          focal: const Offset(500, 400),
+        );
+        // Above Fit the content spans `1000 * scale`: the left/top edge may
+        // run from `1000 * (1 - scale)` (fully panned) to 0 (flush).
+        final slack = Offset(1000 * (1 - s.scale), 800 * (1 - s.scale));
+        expect(
+          s.translation.dx,
+          inInclusiveRange(slack.dx, 0),
+          reason: 'x at $progress',
+        );
+        expect(
+          s.translation.dy,
+          inInclusiveRange(slack.dy, 0),
+          reason: 'y at $progress',
+        );
+      }
+    });
+
+    test('zooming out eases back to Fit at the origin', () {
+      final s = step(
+        1,
+        from: 4,
+        translation: const Offset(-1500, -900),
+        target: 1,
+        focal: const Offset(250, 600),
+      );
+      expect(s.scale, closeTo(1, 1e-12));
+      expect(s.translation, Offset.zero);
     });
   });
 }

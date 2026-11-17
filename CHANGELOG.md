@@ -6,6 +6,11 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 ## Unreleased
 
 ### Added
+- **Eased loupe zoom:** the Fit / 100% presets and the zoom-toggle key (`Z`)
+  now glide into place over 190 ms instead of snapping, zooming about the
+  pointer on every frame and staying inside the frame while they travel.
+  Continuous controls (slider, ⌘/Ctrl+wheel, pinch) and stepping between
+  frames stay instant.
 - **Ratings and colour labels on the loupe filmstrip:** the strip under the
   loupe now carries the same gold stars and colour dot as the grid, so a frame
   that hasn't been rated yet is visible while stepping through a set instead of
