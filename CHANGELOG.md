@@ -11,6 +11,10 @@ All notable user-facing changes to Cullimingo. The format loosely follows
   pointer on every frame and staying inside the frame while they travel.
   Continuous controls (slider, ⌘/Ctrl+wheel, pinch) and stepping between
   frames stay instant.
+- **Ratings and colour labels on the loupe filmstrip:** the strip under the
+  loupe now carries the same gold stars and colour dot as the grid, so a frame
+  that hasn't been rated yet is visible while stepping through a set instead of
+  only after filtering for "no rating" (GitHub #26).
 - **Loupe overlay shortcuts:** histogram (`H`), clipping warning (`J`) and
   focus peaking (`E`) toggle straight from the keyboard, without the analysis
   menu. Each is its own entry in the shortcut editor, so it can be rebound —
