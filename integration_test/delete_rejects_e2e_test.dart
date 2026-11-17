@@ -152,10 +152,7 @@ void main() {
     final ours = <({String trashedName, String originalPath})>[];
     for (final info in infoDir.listSync().whereType<File>()) {
       final content = info.readAsStringSync();
-      final match = RegExp(
-        r'^Path=(.*)$',
-        multiLine: true,
-      ).firstMatch(content);
+      final match = RegExp(r'^Path=(.*)$', multiLine: true).firstMatch(content);
       final original = Uri.decodeFull(match?.group(1) ?? '');
       if (p.isWithin(shoot.path, original)) {
         ours.add((
