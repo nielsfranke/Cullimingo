@@ -142,7 +142,7 @@ void main() {
     final focal = area.topLeft + Offset(area.width * 0.3, area.height * 0.4);
     await tester.sendEventToBinding(mouse.hover(focal));
     await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
-    await settle(tester);
+    await settleZoom(tester);
     expect(scale(), closeTo(trueHundred, 1e-6));
     final local = focal - area.topLeft;
     final scene = (local - translation()) / scale();
@@ -205,7 +205,7 @@ void main() {
     final mouse = TestPointer(1, PointerDeviceKind.mouse);
     await tester.sendEventToBinding(mouse.hover(area.center));
     await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
-    await settle(tester);
+    await settleZoom(tester);
     // One image pixel per *physical* pixel: half the logical-pixel scale.
     expect(scale(), closeTo(4000 / (fitWidth * 2), 1e-6));
     expect(quality(), FilterQuality.none);
@@ -219,5 +219,32 @@ Future<void> settle(WidgetTester tester) async {
       () => Future<void>.delayed(const Duration(milliseconds: 50)),
     );
     await tester.pump(const Duration(milliseconds: 50));
+  }
+}
+
+/// Pumps until the zoom comes to rest. `Z` makes two eased trips on a frame
+/// whose preview is smaller than the original — to the preview's 100%, then to
+/// the original's once it decodes — so a fixed settle samples it mid-flight.
+Future<void> settleZoom(WidgetTester tester, {int maxFrames = 100}) async {
+  double? last;
+  var still = 0;
+  for (var i = 0; i < maxFrames; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 10)),
+    );
+    await tester.pump(const Duration(milliseconds: 16));
+    final viewer = find.byType(InteractiveViewer);
+    if (viewer.evaluate().isEmpty) continue;
+    final s = tester
+        .widget<InteractiveViewer>(viewer)
+        .transformationController!
+        .value
+        .getMaxScaleOnAxis();
+    if (last != null && (s - last).abs() < 1e-9) {
+      if (++still >= 6) return;
+    } else {
+      still = 0;
+    }
+    last = s;
   }
 }

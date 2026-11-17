@@ -358,7 +358,7 @@ class _LoupeViewState extends ConsumerState<LoupeView>
     _animToScale = scale;
     _animFocal = at;
     _zooming = true;
-    _zoomAnim.forward(from: 0);
+    unawaited(_zoomAnim.forward(from: 0));
   }
 
   // Close enough to call two scales the same zoom (the slider's own steps are
@@ -502,12 +502,16 @@ class _LoupeViewState extends ConsumerState<LoupeView>
     void apply(Size size) {
       if (!mounted || _intrinsic == size) return;
       setState(() => _intrinsic = size);
-      // Holding 100%: snap to the new size's 1:1. A preview standing in
-      // while the full-res source loads would only zoom out and back in
-      // again, so that one waits.
+      // Holding 100%: move to the new size's 1:1. A preview standing in while
+      // the full-res source loads would only zoom out and back in again, so
+      // that one waits. The move is eased on purpose: the full-res frame is
+      // usually twice the preview, so snapping would cut a trip that is still
+      // in flight (or land a hard jump right after it) — the maintainer's
+      // point on PR #23. [_zoomTo] starts from the frame on screen, so a trip
+      // already under way is retargeted rather than restarted.
       final hundred = _zoom.hundredScale;
       if (_holdHundred && (isFull || !_wantFull) && hundred != null) {
-        _zoomTo(hundred, focal: _hundredFocal);
+        _zoomTo(hundred, focal: _hundredFocal, animate: true);
       }
     }
 
