@@ -2273,6 +2273,64 @@ abstract class _$LoupeZoomToggle extends $Notifier<int> {
   }
 }
 
+/// The latest stepped-zoom request; see [LoupeZoomStepRequest].
+
+@ProviderFor(LoupeZoomStep)
+final loupeZoomStepProvider = LoupeZoomStepProvider._();
+
+/// The latest stepped-zoom request; see [LoupeZoomStepRequest].
+final class LoupeZoomStepProvider
+    extends $NotifierProvider<LoupeZoomStep, LoupeZoomStepRequest> {
+  /// The latest stepped-zoom request; see [LoupeZoomStepRequest].
+  LoupeZoomStepProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'loupeZoomStepProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$loupeZoomStepHash();
+
+  @$internal
+  @override
+  LoupeZoomStep create() => LoupeZoomStep();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(LoupeZoomStepRequest value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<LoupeZoomStepRequest>(value),
+    );
+  }
+}
+
+String _$loupeZoomStepHash() => r'd71f2d80b5c26f8c078973226fd948492bc9ceb0';
+
+/// The latest stepped-zoom request; see [LoupeZoomStepRequest].
+
+abstract class _$LoupeZoomStep extends $Notifier<LoupeZoomStepRequest> {
+  LoupeZoomStepRequest build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<LoupeZoomStepRequest, LoupeZoomStepRequest>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<LoupeZoomStepRequest, LoupeZoomStepRequest>,
+              LoupeZoomStepRequest,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
 /// Startup seed for [CullShortcuts] — persisted overrides from last session,
 /// overridden in `main()` (empty = all defaults, on first run / tests).
 

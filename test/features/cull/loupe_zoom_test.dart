@@ -23,7 +23,7 @@ void main() {
       expect(z.fitted, const Size(1000, 500));
       expect(z.hundredScale, 4.0); // 4000 / 1000
       expect(z.minScale, 1.0); // Fit is the floor
-      expect(z.maxScale, 4.0); // ceiling already covers 100%
+      expect(z.maxScale, 8.0); // stretched so 200% is reachable
     });
 
     test('upscaled fit: 100% is below Fit, slider may shrink to native', () {
@@ -93,13 +93,35 @@ void main() {
     });
 
     test('maxScale stretches past the ceiling for huge images', () {
-      // 100% needs 6× here, beyond the 4× ceiling — slider must still reach it.
+      // 200% needs 12× here, beyond the 4× ceiling — slider must reach it.
       const z = LoupeZoom(
         intrinsic: Size(6000, 3000),
         viewport: Size(1000, 1000),
       );
       expect(z.hundredScale, 6.0);
-      expect(z.maxScale, 6.0);
+      expect(z.maxScale, 12.0);
+    });
+
+    test('50% / 200% are multiples of true 1:1 (GitHub #24)', () {
+      // hundredScale 4 (4000-px image, 1000-px fit).
+      const z = LoupeZoom(
+        intrinsic: Size(4000, 2000),
+        viewport: Size(1000, 1000),
+      );
+      expect(z.scaleForMode(LoupeZoomMode.fifty), 2);
+      expect(z.scaleForMode(LoupeZoomMode.twoHundred), 8);
+      expect(z.modeForScale(2), LoupeZoomMode.fifty);
+      expect(z.modeForScale(8), LoupeZoomMode.twoHundred);
+      // …and the same steps on a 2× screen are half the logical scale.
+      const hi = LoupeZoom(
+        intrinsic: Size(4000, 2000),
+        viewport: Size(1000, 1000),
+        devicePixelRatio: 2,
+      );
+      expect(hi.scaleForMode(LoupeZoomMode.fifty), 1);
+      expect(hi.scaleForMode(LoupeZoomMode.twoHundred), 4);
+      expect(LoupeZoomMode.forHundredFactor(0.5), LoupeZoomMode.fifty);
+      expect(LoupeZoomMode.fit.ofHundred, isNull);
     });
   });
 

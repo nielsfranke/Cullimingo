@@ -19,6 +19,12 @@ All notable user-facing changes to Cullimingo. The format loosely follows
   focus peaking (`E`) toggle straight from the keyboard, without the analysis
   menu. Each is its own entry in the shortcut editor, so it can be rebound —
   or put on a gamepad button (GitHub #25).
+- **Stepped loupe zoom (50% / 200%):** two new presets beside Fit and 100%,
+  measured against true 1:1 so they mean the same on every photo. Fit, 50%,
+  100% and 200% each have their own rebindable key (`A` / `S` / `D` / `W`), so
+  every step can sit on its own (gamepad) button. A step zooms at the pointer,
+  carries over from photo to photo, and uses the full-resolution source even
+  at 50% (GitHub #24).
 
 ### Fixed
 - **100% zoom on Retina/HiDPI screens is true 1:1:** one image pixel per

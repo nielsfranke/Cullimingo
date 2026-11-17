@@ -170,7 +170,11 @@ void main() {
     await tester.sendEventToBinding(mouse.scroll(const Offset(0, -50)));
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    final zoomedIn = math.min(trueHundred * math.exp(50 / 200), 4);
+    // Capped at the slider's ceiling: 4× or 200%, whichever is larger.
+    final zoomedIn = math.min(
+      trueHundred * math.exp(50 / 200),
+      math.max(4, 2 * trueHundred),
+    );
     expect(scale(), closeTo(zoomedIn, 1e-6));
     expect(container.read(loupeZoomLevelProvider).mode, LoupeZoomMode.custom);
 
@@ -183,6 +187,83 @@ void main() {
     await settle(tester);
     expect(scale(), 1);
     expect(translation(), Offset.zero);
+  });
+
+  testWidgets('step keys: A Fit, S 50%, D 100%, W 200% (GitHub #24)', (
+    tester,
+  ) async {
+    await openLoupe(tester);
+    final viewer = find.byType(InteractiveViewer);
+    Matrix4 matrix() => tester
+        .widget<InteractiveViewer>(viewer)
+        .transformationController!
+        .value;
+    double scale() => matrix().getMaxScaleOnAxis();
+    Offset translation() {
+      final t = matrix().getTranslation();
+      return Offset(t.x, t.y);
+    }
+
+    final area = tester.getRect(viewer);
+    final fitWidth = math.min(area.width, area.height * 2);
+    final trueHundred = 4000 / fitWidth;
+    LoupeZoomMode mode() => container.read(loupeZoomLevelProvider).mode;
+
+    // 50% is half of the *original's* 1:1: the step pulls the full-res
+    // source even below 100% (the preview's own 50% would be 5× smaller).
+    final mouse = TestPointer(1, PointerDeviceKind.mouse);
+    final local = Offset(area.width * 0.3, area.height * 0.4);
+    await tester.sendEventToBinding(mouse.hover(area.topLeft + local));
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+    await settleZoom(tester);
+    expect(scale(), closeTo(trueHundred / 2, 1e-6));
+    expect(mode(), LoupeZoomMode.fifty);
+
+    // Each step zooms about the pointer: the content under it stays put.
+    Offset scene() => (local - translation()) / scale();
+    final under = scene();
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyW);
+    await settleZoom(tester);
+    expect(scale(), closeTo(trueHundred * 2, 1e-6));
+    expect(mode(), LoupeZoomMode.twoHundred);
+    expect(scene().dx, closeTo(under.dx, 1e-6));
+    expect(scene().dy, closeTo(under.dy, 1e-6));
+
+    // Straight from 200% back to 100% — one press, no cycling.
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
+    await settleZoom(tester);
+    expect(scale(), closeTo(trueHundred, 1e-6));
+    expect(mode(), LoupeZoomMode.hundred);
+
+    // Pressing the step again is a no-op, not a toggle.
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyD);
+    await settleZoom(tester);
+    expect(scale(), closeTo(trueHundred, 1e-6));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyA);
+    await settleZoom(tester);
+    expect(scale(), 1);
+    expect(translation(), Offset.zero);
+    expect(mode(), LoupeZoomMode.fit);
+  });
+
+  testWidgets('the toolbar has 50% and 200% presets', (tester) async {
+    await openLoupe(tester);
+    final viewer = find.byType(InteractiveViewer);
+    double scale() => tester
+        .widget<InteractiveViewer>(viewer)
+        .transformationController!
+        .value
+        .getMaxScaleOnAxis();
+    final area = tester.getRect(viewer);
+    final trueHundred = 4000 / math.min(area.width, area.height * 2);
+
+    await tester.tap(find.text('200%'));
+    await settleZoom(tester);
+    expect(scale(), closeTo(trueHundred * 2, 1e-6));
+    await tester.tap(find.text('50%'));
+    await settleZoom(tester);
+    expect(scale(), closeTo(trueHundred / 2, 1e-6));
   });
 
   testWidgets('on a 2× screen Z lands on physical 1:1, drawn unfiltered', (

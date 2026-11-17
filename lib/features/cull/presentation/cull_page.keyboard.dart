@@ -167,6 +167,17 @@ mixin _CullKeyboard on _CullJobs {
         return KeyEventResult.handled;
       }
       if (_toggleLoupeOverlay(action)) return KeyEventResult.handled;
+      final zoomStep = switch (action) {
+        CullAction.zoomFit => (factor: null),
+        CullAction.zoom50 => (factor: 0.5),
+        CullAction.zoom100 => (factor: 1.0),
+        CullAction.zoom200 => (factor: 2.0),
+        _ => null,
+      };
+      if (zoomStep != null) {
+        ref.read(loupeZoomStepProvider.notifier).request(zoomStep.factor);
+        return KeyEventResult.handled;
+      }
       final step = loupeStepFor(key);
       if (step != null) {
         final next = (index + step).clamp(0, photos.length - 1);

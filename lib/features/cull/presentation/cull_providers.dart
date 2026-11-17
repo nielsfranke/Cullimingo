@@ -550,6 +550,23 @@ class LoupeZoomToggle extends _$LoupeZoomToggle {
   void toggle() => state++;
 }
 
+/// Asks the open loupe for a stepped zoom (GitHub #24): Fit when `factor` is
+/// null, else that multiple of true 1:1 (`0.5` / `1` / `2`). Like
+/// [LoupeZoomToggle], the keyboard lives on the cull page and the loupe —
+/// which knows the pointer and the image — does the zooming; `seq` makes a
+/// repeated press of the same step a new request.
+typedef LoupeZoomStepRequest = ({int seq, double? factor});
+
+/// The latest stepped-zoom request; see [LoupeZoomStepRequest].
+@Riverpod(keepAlive: true)
+class LoupeZoomStep extends _$LoupeZoomStep {
+  @override
+  LoupeZoomStepRequest build() => (seq: 0, factor: null);
+
+  /// Requests Fit ([factor] null) or [factor] × true 1:1.
+  void request(double? factor) => state = (seq: state.seq + 1, factor: factor);
+}
+
 /// Startup seed for [CullShortcuts] — persisted overrides from last session,
 /// overridden in `main()` (empty = all defaults, on first run / tests).
 @Riverpod(keepAlive: true)

@@ -133,16 +133,17 @@ class _LoupeViewState extends ConsumerState<LoupeView>
   /// the pointer is elsewhere — where the zoom-toggle key zooms in.
   Offset? _pointer;
 
-  /// The user asked for 100% (toggle key, preset, or restored on open) and
-  /// hasn't zoomed away since: re-snap to true 1:1 whenever the native size
-  /// changes — the full-res source replacing the preview, or a blit to a
-  /// differently sized frame. Panning keeps it; slider/pinch/wheel zoom and
-  /// Fit clear it.
-  bool _holdHundred = false;
+  /// The user asked for a 1:1-relative step — 50%, 100% or 200% (step keys,
+  /// toggle key, presets, or restored on open) — and hasn't zoomed away since:
+  /// the multiple of true 1:1 held (`0.5` / `1` / `2`), else null. Re-snaps
+  /// to that step whenever the native size changes — the full-res source
+  /// replacing the preview, or a blit to a differently sized frame. Panning
+  /// keeps it; slider/pinch/wheel zoom and Fit clear it.
+  double? _holdFactor;
 
-  /// Where the held 100% was asked for (viewport coordinates; null = centre),
+  /// Where the held step was asked for (viewport coordinates; null = centre),
   /// so a re-snap keeps that spot under the pointer.
-  Offset? _hundredFocal;
+  Offset? _holdFocal;
 
   /// Set while the inner wheel listener is undoing the InteractiveViewer's
   /// built-in wheel zoom (see [_onWheel]), so that transient change is neither
@@ -300,7 +301,7 @@ class _LoupeViewState extends ConsumerState<LoupeView>
     ref
         .read(loupeZoomLevelProvider.notifier)
         .set(
-          _holdHundred ? LoupeZoomMode.hundred : _zoom.modeForScale(scale),
+          _heldMode ?? _zoom.modeForScale(scale),
           scale,
         );
   }
@@ -424,31 +425,52 @@ class _LoupeViewState extends ConsumerState<LoupeView>
   // A zoom the user dialled in (slider, Fit, pinch, ⌘/Ctrl+wheel): no longer
   // holding 100%.
   void _zoomFreely(double target, {Offset? focal, bool animate = false}) {
-    _holdHundred = false;
+    _holdFactor = null;
     _zoomTo(target, focal: focal, animate: animate);
   }
 
-  // 100%: fetch the full-resolution source right away and hold 1:1, so the
-  // zoom re-snaps to the original's pixels once it lands (until then the
-  // preview's own 100% stands in).
-  void _zoomToHundred({Offset? focal, bool animate = false}) {
+  // The persisted mode for the held step, if any.
+  LoupeZoomMode? get _heldMode {
+    final f = _holdFactor;
+    return f == null ? null : LoupeZoomMode.forHundredFactor(f);
+  }
+
+  // A 1:1-relative step ([factor] × true 1:1: 50%, 100%, 200%): fetch the
+  // full-resolution source right away — even for 50%, which a screen-size
+  // preview would render soft — and hold the step, so the zoom re-snaps to the
+  // original's pixels once it lands (until then the preview's own step stands
+  // in). The step is clamped to the zoom range: 50% of a small image can be
+  // under Fit, which then stands in for it.
+  void _zoomToStep(double factor, {Offset? focal, bool animate = false}) {
     final hundred = _zoom.hundredScale;
     if (hundred == null) return;
     setState(() {
       _wantFull = true;
-      _holdHundred = true;
+      _holdFactor = factor;
     });
-    _hundredFocal = focal;
-    _zoomTo(hundred, focal: focal, animate: animate);
+    _holdFocal = focal;
+    _zoomTo(hundred * factor, focal: focal, animate: animate);
+  }
+
+  // A step key (GitHub #24): Fit when [factor] is null, else that step —
+  // eased, at the mouse pointer, keeping the current pan around it.
+  void _onZoomStep(double? factor) {
+    if (_viewport == Size.zero) return;
+    if (factor == null) {
+      _zoomFreely(1, animate: true);
+    } else {
+      _zoomToStep(factor, focal: _pointer, animate: true);
+    }
   }
 
   // The zoom-toggle key: Fit ↔ 100%, zooming in where the mouse points.
   void _toggleZoom() {
     if (_viewport == Size.zero) return;
-    if (_holdHundred || _zoom.modeForScale(_scale) != LoupeZoomMode.fit) {
+    if (_holdFactor != null ||
+        _zoom.modeForScale(_scale) != LoupeZoomMode.fit) {
       _zoomFreely(1, animate: true);
     } else {
-      _zoomToHundred(focal: _pointer, animate: true);
+      _zoomToStep(1, focal: _pointer, animate: true);
     }
   }
 
@@ -510,8 +532,9 @@ class _LoupeViewState extends ConsumerState<LoupeView>
       // point on PR #23. [_zoomTo] starts from the frame on screen, so a trip
       // already under way is retargeted rather than restarted.
       final hundred = _zoom.hundredScale;
-      if (_holdHundred && (isFull || !_wantFull) && hundred != null) {
-        _zoomTo(hundred, focal: _hundredFocal, animate: true);
+      final factor = _holdFactor;
+      if (factor != null && (isFull || !_wantFull) && hundred != null) {
+        _zoomTo(hundred * factor, focal: _holdFocal, animate: true);
       }
     }
 
@@ -734,7 +757,7 @@ class _LoupeViewState extends ConsumerState<LoupeView>
       _settleZoom(report: false);
       // Zoomed in, the next frame needs its full-resolution source too (a
       // focus check across a burst); at Fit a blit stays on the fast preview.
-      _wantFull = _holdHundred || _scale > _fullZoomTrigger;
+      _wantFull = _holdFactor != null || _scale > _fullZoomTrigger;
       // A blit's analysis is the new photo's, not a rescale of the old one —
       // drop it so `_scheduleAnalysis` recomputes instead of skipping (its
       // dedup only keys off the byte reference, not the photo id).
@@ -759,8 +782,9 @@ class _LoupeViewState extends ConsumerState<LoupeView>
         _restored = true;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          if (saved.mode == LoupeZoomMode.hundred) {
-            _zoomToHundred();
+          final factor = saved.mode.ofHundred;
+          if (factor != null) {
+            _zoomToStep(factor);
           } else {
             _zoomTo(target);
           }
@@ -813,7 +837,8 @@ class _LoupeViewState extends ConsumerState<LoupeView>
     // Flash an ephemeral confirmation when a mark is applied in the loupe.
     ref
       ..listen(loupeMarkFlashProvider, (_, signal) => _onMarkSignal(signal))
-      ..listen(loupeZoomToggleProvider, (_, _) => _toggleZoom());
+      ..listen(loupeZoomToggleProvider, (_, _) => _toggleZoom())
+      ..listen(loupeZoomStepProvider, (_, r) => _onZoomStep(r.factor));
 
     // ExcludeFocus: the on-screen controls stay clickable but never steal
     // keyboard focus from the grid, so `[`/`]` and cull keys keep working.
@@ -981,7 +1006,9 @@ class _LoupeViewState extends ConsumerState<LoupeView>
                   ref.read(loupeFocusPeakingVisibleProvider.notifier).toggle(),
               onZoom: _zoomFreely,
               onFit: () => _zoomFreely(1, animate: true),
-              onHundred: () => _zoomToHundred(animate: true),
+              onHundred: () => _zoomToStep(1, animate: true),
+              onFifty: () => _zoomToStep(0.5, animate: true),
+              onTwoHundred: () => _zoomToStep(2, animate: true),
               onRating: (r) {
                 ref.read(loupeMarkFlashProvider.notifier).rating(r);
                 unawaited(controller.markRating(photo.id, r));
@@ -1035,7 +1062,7 @@ class _LoupeViewState extends ConsumerState<LoupeView>
           onInteractionStart: (_) => _endZoom(),
           // A pinch is the user zooming away from a held 100%.
           onInteractionUpdate: (d) {
-            if (d.scale != 1 && !_wheelPending) _holdHundred = false;
+            if (d.scale != 1 && !_wheelPending) _holdFactor = null;
           },
           // The preview is upright per the file's EXIF; apply only the user's
           // extra quarter-turns (§ rotate). The crop outline and analysis
@@ -1170,6 +1197,8 @@ class _LoupeToolbar extends StatelessWidget {
     required this.onZoom,
     required this.onFit,
     required this.onHundred,
+    required this.onFifty,
+    required this.onTwoHundred,
     required this.onRating,
     required this.onFlag,
     required this.onColor,
@@ -1220,6 +1249,12 @@ class _LoupeToolbar extends StatelessWidget {
   final ValueChanged<double> onZoom;
   final VoidCallback onFit;
   final VoidCallback onHundred;
+
+  /// The 50% preset (half of true 1:1).
+  final VoidCallback onFifty;
+
+  /// The 200% preset (twice true 1:1).
+  final VoidCallback onTwoHundred;
   final ValueChanged<int> onRating;
   final ValueChanged<PickFlag> onFlag;
   final ValueChanged<ColorLabel> onColor;
@@ -1251,6 +1286,8 @@ class _LoupeToolbar extends StatelessWidget {
             onZoom: onZoom,
             onFit: onFit,
             onHundred: onHundred,
+            onFifty: onFifty,
+            onTwoHundred: onTwoHundred,
           ),
           Expanded(
             child: Column(
@@ -1389,7 +1426,7 @@ class _AnalysisMenuButton extends StatelessWidget {
   }
 }
 
-/// Fit / 100% presets, a zoom slider, and the current percentage.
+/// Fit / 50% / 100% / 200% presets, a zoom slider, and the current percentage.
 class _ZoomControls extends StatelessWidget {
   const _ZoomControls({
     required this.scale,
@@ -1399,6 +1436,8 @@ class _ZoomControls extends StatelessWidget {
     required this.onZoom,
     required this.onFit,
     required this.onHundred,
+    required this.onFifty,
+    required this.onTwoHundred,
   });
 
   final double scale;
@@ -1408,6 +1447,12 @@ class _ZoomControls extends StatelessWidget {
   final ValueChanged<double> onZoom;
   final VoidCallback onFit;
   final VoidCallback onHundred;
+
+  /// The 50% preset (half of true 1:1).
+  final VoidCallback onFifty;
+
+  /// The 200% preset (twice true 1:1).
+  final VoidCallback onTwoHundred;
 
   @override
   Widget build(BuildContext context) {
@@ -1424,8 +1469,11 @@ class _ZoomControls extends StatelessWidget {
       children: [
         _PresetButton(label: 'Fit', active: atFit, onTap: onFit),
         const SizedBox(width: AppSpacing.xs),
+        // Narrower since the 50% / 200% presets joined (GitHub #24), so the
+        // toolbar still fits a 1280-px window; the presets and keys cover the
+        // usual stops, the slider is for the in-betweens.
         SizedBox(
-          width: 100,
+          width: 60,
           child: Slider(
             value: scale.clamp(minScale, maxScale),
             min: minScale,
@@ -1434,12 +1482,19 @@ class _ZoomControls extends StatelessWidget {
           ),
         ),
         const SizedBox(width: AppSpacing.xs),
-        _PresetButton(
-          label: '100%',
-          active: hundred != null && (scale - hundred).abs() < 0.01,
-          onTap: hundred == null ? null : onHundred,
-        ),
-        const SizedBox(width: AppSpacing.sm),
+        for (final (label, factor, onTap) in [
+          ('50%', 0.5, onFifty),
+          ('100%', 1.0, onHundred),
+          ('200%', 2.0, onTwoHundred),
+        ]) ...[
+          if (factor != 0.5) const SizedBox(width: AppSpacing.xs),
+          _PresetButton(
+            label: label,
+            active: hundred != null && (scale - hundred * factor).abs() < 0.01,
+            onTap: hundred == null ? null : onTap,
+          ),
+        ],
+        const SizedBox(width: AppSpacing.xs),
         SizedBox(
           width: 40,
           child: Text(
@@ -1489,10 +1544,9 @@ class _PresetButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.sm),
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.xs,
-          ),
+          // Tighter than `sm` so Fit + the three 1:1 steps still fit beside
+          // the cull controls in a 1280-px window.
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           child: Text(
             label,
             style: TextStyle(

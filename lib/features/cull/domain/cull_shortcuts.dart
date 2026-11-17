@@ -111,7 +111,22 @@ enum CullAction {
 
   /// Toggle the loupe's focus-peaking overlay. `E` for edges — plain E is
   /// free (⌘/Ctrl+E is send-to, checked before the cull keys).
-  toggleFocusPeaking('Loupe: focus peaking', LogicalKeyboardKey.keyE);
+  toggleFocusPeaking('Loupe: focus peaking', LogicalKeyboardKey.keyE),
+
+  /// Loupe zoom straight to Fit (GitHub #24): one key per zoom step, so each
+  /// can sit on its own (gamepad) button. A left-hand row: `A` Fit, `S` 50%,
+  /// `D` 100%, `W` 200% (W sits above, "further in"). Plain A/S/D/W are free —
+  /// ⌘/Ctrl+A/S are select-all / export, checked before the cull keys.
+  zoomFit('Loupe zoom: Fit', LogicalKeyboardKey.keyA),
+
+  /// Loupe zoom to 50% of true 1:1, at the mouse pointer.
+  zoom50('Loupe zoom: 50%', LogicalKeyboardKey.keyS),
+
+  /// Loupe zoom to 100% (true 1:1), at the mouse pointer.
+  zoom100('Loupe zoom: 100%', LogicalKeyboardKey.keyD),
+
+  /// Loupe zoom to 200% of true 1:1, at the mouse pointer.
+  zoom200('Loupe zoom: 200%', LogicalKeyboardKey.keyW);
 
   const CullAction(this.label, this.defaultKey);
 

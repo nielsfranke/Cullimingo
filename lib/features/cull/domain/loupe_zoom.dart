@@ -13,6 +13,29 @@ enum LoupeZoomMode {
 
   /// A specific scale the user dialled in with the slider / pinch.
   custom,
+
+  /// Half of true 1:1 — a stepped zoom preset (GitHub #24).
+  fifty,
+
+  /// Twice true 1:1 — a stepped zoom preset (GitHub #24).
+  twoHundred;
+
+  /// For the 1:1-relative presets, the multiple of `hundredScale` they stand
+  /// for (`0.5`, `1`, `2`); null for [fit] and [custom].
+  double? get ofHundred => switch (this) {
+    LoupeZoomMode.fifty => 0.5,
+    LoupeZoomMode.hundred => 1,
+    LoupeZoomMode.twoHundred => 2,
+    LoupeZoomMode.fit || LoupeZoomMode.custom => null,
+  };
+
+  /// The 1:1-relative preset for [factor] (`0.5` / `1` / `2`), or null.
+  static LoupeZoomMode? forHundredFactor(double factor) {
+    for (final m in values) {
+      if (m.ofHundred == factor) return m;
+    }
+    return null;
+  }
 }
 
 /// Pure zoom math for the loupe (`BUILD_PLAN.md` §7), kept out of the widget so
@@ -95,9 +118,10 @@ class LoupeZoom {
     return (h != null && h < 1) ? h : 1.0;
   }
 
-  /// Largest scale the slider allows: at least [zoomCeiling], extended so 100%
-  /// is always reachable even for images larger than the ceiling implies.
-  double get maxScale => math.max(zoomCeiling, hundredScale ?? 1.0);
+  /// Largest scale the slider allows: at least [zoomCeiling], extended so the
+  /// 200% preset is always reachable even for images larger than the ceiling
+  /// implies.
+  double get maxScale => math.max(zoomCeiling, 2 * (hundredScale ?? 0.5));
 
   static const double _epsilon = 0.01;
 
@@ -106,19 +130,26 @@ class LoupeZoom {
   LoupeZoomMode modeForScale(double scale) {
     if ((scale - 1).abs() < _epsilon) return LoupeZoomMode.fit;
     final h = hundredScale;
-    if (h != null && (scale - h).abs() < _epsilon) return LoupeZoomMode.hundred;
+    if (h != null) {
+      for (final mode in LoupeZoomMode.values) {
+        final f = mode.ofHundred;
+        if (f != null && (scale - h * f).abs() < _epsilon) return mode;
+      }
+    }
     return LoupeZoomMode.custom;
   }
 
   /// The target scale for [mode] given the current image, or `null` when it
   /// can't be computed yet ([LoupeZoomMode.hundred] before the native size is
-  /// known). [custom] is used for [LoupeZoomMode.custom].
-  double? scaleForMode(LoupeZoomMode mode, {double custom = 1}) =>
-      switch (mode) {
-        LoupeZoomMode.fit => 1,
-        LoupeZoomMode.hundred => hundredScale,
-        LoupeZoomMode.custom => custom,
-      };
+  /// known). [custom] is used for [LoupeZoomMode.custom]. The 50% / 200%
+  /// presets are multiples of true 1:1, so they mean the same on every photo
+  /// whatever its pixel size or the window's.
+  double? scaleForMode(LoupeZoomMode mode, {double custom = 1}) {
+    if (mode == LoupeZoomMode.fit) return 1;
+    if (mode == LoupeZoomMode.custom) return custom;
+    final h = hundredScale;
+    return h == null ? null : h * mode.ofHundred!;
+  }
 
   /// The pan offset that keeps the content inside the viewport at [scale]:
   /// no black gap opens past the image area's edges while magnified, and a
