@@ -172,7 +172,8 @@ void main() {
       expect(
         seen[i].scale,
         greaterThanOrEqualTo(seen[i - 1].scale - 1e-6),
-        reason: 'frame $i does not fall back '
+        reason:
+            'frame $i does not fall back '
             '(${seen[i - 1].scale} → ${seen[i].scale})',
       );
     }
@@ -189,7 +190,8 @@ void main() {
     expect(
       reachedFull.ms - reachedPreview.ms,
       greaterThanOrEqualTo(120),
-      reason: 'the re-snap jumped: '
+      reason:
+          'the re-snap jumped: '
           '${reachedPreview.scale} → ${reachedFull.scale} '
           'in ${reachedFull.ms - reachedPreview.ms} ms',
     );
