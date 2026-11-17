@@ -70,10 +70,7 @@ void main() {
 
     // The CullPage listener fires when the (overridden) future resolves; the
     // notice bar then appears above the export bar even on the empty grid.
-    await pumpUntil(
-      tester,
-      find.text('Cullimingo 1.4.0 is available.'),
-    );
+    await pumpUntil(tester, find.text('Cullimingo 1.4.0 is available.'));
     expect(find.text('Download'), findsOneWidget);
     expect(find.byIcon(Icons.system_update_alt), findsOneWidget);
 

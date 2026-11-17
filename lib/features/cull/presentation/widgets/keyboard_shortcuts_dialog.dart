@@ -46,6 +46,14 @@ const List<({String title, List<CullAction> actions})> kShortcutActionGroups = [
       CullAction.inspector,
     ],
   ),
+  (
+    title: 'Loupe overlays',
+    actions: [
+      CullAction.toggleHistogram,
+      CullAction.toggleClipping,
+      CullAction.toggleFocusPeaking,
+    ],
+  ),
 ];
 
 /// Fixed (non-rebindable) keys shown for reference. A getter, not a const:

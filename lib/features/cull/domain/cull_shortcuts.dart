@@ -97,7 +97,21 @@ enum CullAction {
   /// undo, checked before the cull keys). Last in the enum on purpose: a key
   /// lookup takes the first match, so someone who already rebound another
   /// action to Z keeps it.
-  zoomToggle('Loupe zoom: Fit / 100%', LogicalKeyboardKey.keyZ);
+  zoomToggle('Loupe zoom: Fit / 100%', LogicalKeyboardKey.keyZ),
+
+  /// Toggle the loupe's RGB histogram panel — the same sticky switch as the
+  /// analysis menu's "Histogram" (GitHub #25). `H` for histogram. Like
+  /// [zoomToggle], the overlay toggles sit at the end of the enum so a key a
+  /// user had already bound to an older action keeps that action.
+  toggleHistogram('Loupe: histogram', LogicalKeyboardKey.keyH),
+
+  /// Toggle the loupe's clipping warning (blown highlights red, crushed
+  /// shadows blue). `J` is Lightroom's clipping-indicator key.
+  toggleClipping('Loupe: clipping warning', LogicalKeyboardKey.keyJ),
+
+  /// Toggle the loupe's focus-peaking overlay. `E` for edges — plain E is
+  /// free (⌘/Ctrl+E is send-to, checked before the cull keys).
+  toggleFocusPeaking('Loupe: focus peaking', LogicalKeyboardKey.keyE);
 
   const CullAction(this.label, this.defaultKey);
 
