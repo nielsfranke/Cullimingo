@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.11.1 — 2026-11-18
 
 ### Changed
 - **Batch marks only reach photos you can see:** with a filter active, a
