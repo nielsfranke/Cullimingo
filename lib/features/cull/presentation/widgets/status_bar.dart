@@ -49,7 +49,10 @@ class StatusBar extends StatelessWidget {
     }
     if (batch) selection.write(' · Esc clears');
 
-    final n = selectedCount > 0 ? selectedCount : filteredCount;
+    // Export takes the *visible* selection (or the filtered set when nothing
+    // is selected), so the button counts those — not the hidden ones.
+    final visibleSelected = selectedCount - hiddenSelectedCount;
+    final n = selectedCount > 0 ? visibleSelected : filteredCount;
     final label = selectedCount > 0
         ? 'Export $n selected'
         : 'Export $n photo${n == 1 ? '' : 's'}';
@@ -91,7 +94,7 @@ class StatusBar extends StatelessWidget {
           Tooltip(
             message: 'Export (${modShortcut('S')})',
             child: FilledButton.icon(
-              onPressed: onExport,
+              onPressed: n == 0 ? null : onExport,
               style: FilledButton.styleFrom(
                 minimumSize: const Size(0, 32),
                 padding: const EdgeInsets.symmetric(

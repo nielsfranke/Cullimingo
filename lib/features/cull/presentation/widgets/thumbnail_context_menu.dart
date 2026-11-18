@@ -45,7 +45,7 @@ Future<void> showThumbnailContextMenu({
     Offset.zero & overlay.size,
   );
   final controller = ref.read(cullControllerProvider.notifier);
-  final count = ref.read(cullControllerProvider).markTargets.length;
+  final count = controller.visibleMarkTargets.length;
   // Configured "Send to" editors (empty when none set / not yet loaded); the
   // menu adds an "Open in <editor>" row per entry. Read synchronously — the
   // page keeps this provider warm — so opening the menu stays instant.

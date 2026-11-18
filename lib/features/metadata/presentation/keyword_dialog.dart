@@ -14,7 +14,11 @@ Future<void> showKeywordEditor(BuildContext context, WidgetRef ref) async {
   final photos = ref.read(filteredPhotosProvider);
   if (photos.isEmpty) return;
   final selection = ref.read(cullControllerProvider);
-  final targetIds = selection.markTargets.toList();
+  // Like every selection action, only the photos the grid shows (GitHub #28).
+  final targetIds = ref
+      .read(cullControllerProvider.notifier)
+      .visibleMarkTargets
+      .toList();
   if (targetIds.isEmpty) return;
 
   // Prefill from the actual target photo, resolved against the *unfiltered*

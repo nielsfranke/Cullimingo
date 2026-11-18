@@ -115,6 +115,8 @@ void main() {
       find.textContaining('3 selected (2 hidden by filter)'),
       findsOneWidget,
     );
+    // Export takes only the visible selection, and says so.
+    expect(find.text('Export 1 selected'), findsOneWidget);
 
     // A digit rates only what the grid shows.
     await tester.sendKeyEvent(LogicalKeyboardKey.digit3);

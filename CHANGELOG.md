@@ -12,6 +12,9 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 - **The selection is easy to see and to drop:** `Esc` in the grid clears it,
   and a selection of more than one photo stands out in the status bar —
   with how many of them the filter hides (GitHub #28).
+- **Keywords follow the same rule:** like metadata, export and copy/move,
+  the keyword editor now applies only to the selected photos the grid shows,
+  and the export button and right-click menu count those, not hidden ones.
 
 ## 1.11.0 — 2026-11-17
 

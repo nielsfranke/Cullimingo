@@ -101,6 +101,7 @@ void main() {
       find.textContaining('6 selected (5 hidden by filter)'),
       findsOneWidget,
     );
+    expect(find.text('Export 1 selected'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.digit4);
     await settle(tester, 2000);
     await shot(tester, '2-filtered-rated');

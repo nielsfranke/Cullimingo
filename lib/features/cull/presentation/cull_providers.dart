@@ -1047,15 +1047,20 @@ class CullController extends _$CullController {
   /// active filter hides are left alone (GitHub #28 — a digit pressed with a
   /// forgotten Find selection re-rated hundreds of frames the user couldn't
   /// see). Their own bracket / RAW+JPEG twins still follow, via [_grown].
-  Set<int> get _effectiveMarkTargets {
+  Set<int> get _effectiveMarkTargets => _grown(visibleMarkTargets);
+
+  /// [CullSelection.markTargets] minus the photos the active filter hides —
+  /// what every selection action (marks, keywords, metadata, export, copy /
+  /// move, delete) acts on, and what their counts should say (GitHub #28).
+  Set<int> get visibleMarkTargets {
     final targets = state.markTargets;
-    if (targets.length <= 1) return _grown(targets);
+    if (targets.length <= 1) return targets;
     final shown = {for (final p in ref.read(filteredPhotosProvider)) p.id};
     final hidden = {
       for (final p in ref.read(photosProvider).value ?? const <Photo>[])
         if (!shown.contains(p.id)) p.id,
     };
-    return _grown(targets.difference(hidden));
+    return targets.difference(hidden);
   }
 
   /// [photoId] grown like [_effectiveMarkTargets] — the single-photo (loupe)
