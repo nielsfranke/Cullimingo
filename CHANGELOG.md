@@ -3,6 +3,16 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Changed
+- **Batch marks only reach photos you can see:** with a filter active, a
+  rating, flag, colour or rotate key no longer touches selected photos the
+  filter hides (GitHub #28).
+- **The selection is easy to see and to drop:** `Esc` in the grid clears it,
+  and a selection of more than one photo stands out in the status bar —
+  with how many of them the filter hides (GitHub #28).
+
 ## 1.11.0 — 2026-11-17
 
 ### Added

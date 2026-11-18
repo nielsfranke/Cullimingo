@@ -156,9 +156,14 @@ class _CullPageState extends ConsumerState<CullPage>
   Widget build(BuildContext context) {
     final photosAsync = ref.watch(photosProvider);
     final filtered = ref.watch(filteredPhotosProvider);
-    final selectedCount = ref.watch(
-      cullControllerProvider.select((s) => s.selectedIds.length),
+    final selectedIds = ref.watch(
+      cullControllerProvider.select((s) => s.selectedIds),
     );
+    final selectedCount = selectedIds.length;
+    final visibleIds = {for (final p in filtered) p.id};
+    final hiddenSelected = selectedIds
+        .where((id) => !visibleIds.contains(id))
+        .length;
     final workspace = ref.watch(workspaceProvider);
     ref
       // Keep the "Send to" editor list warm so the right-click menu / ⌘E can
@@ -325,6 +330,7 @@ class _CullPageState extends ConsumerState<CullPage>
                       total: total,
                       filteredCount: filtered.length,
                       selectedCount: selectedCount,
+                      hiddenSelectedCount: hiddenSelected,
                       onExport: filtered.isEmpty ? null : _export,
                     ),
                 ],

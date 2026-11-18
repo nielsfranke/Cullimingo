@@ -1042,7 +1042,21 @@ class CullController extends _$CullController {
   /// is on — so rating/flagging the reference frame carries to its ±EV
   /// siblings without an explicit expand — and to each one's RAW+JPEG twin
   /// when the propagate-to-pair setting is on.
-  Set<int> get _effectiveMarkTargets => _grown(state.markTargets);
+  ///
+  /// A batch mark only reaches photos the grid shows: selected frames the
+  /// active filter hides are left alone (GitHub #28 — a digit pressed with a
+  /// forgotten Find selection re-rated hundreds of frames the user couldn't
+  /// see). Their own bracket / RAW+JPEG twins still follow, via [_grown].
+  Set<int> get _effectiveMarkTargets {
+    final targets = state.markTargets;
+    if (targets.length <= 1) return _grown(targets);
+    final shown = {for (final p in ref.read(filteredPhotosProvider)) p.id};
+    final hidden = {
+      for (final p in ref.read(photosProvider).value ?? const <Photo>[])
+        if (!shown.contains(p.id)) p.id,
+    };
+    return _grown(targets.difference(hidden));
+  }
 
   /// [photoId] grown like [_effectiveMarkTargets] — the single-photo (loupe)
   /// counterpart.

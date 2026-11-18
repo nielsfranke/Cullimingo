@@ -187,6 +187,15 @@ mixin _CullKeyboard on _CullJobs {
       }
       // Fall through: rate/flag/colour/select also work inside the loupe.
     } else {
+      // Esc in the grid drops the selection, so one key always gets back to
+      // "this photo only" before a batch mark lands on it (GitHub #28).
+      if (key == LogicalKeyboardKey.escape) {
+        if (ref.read(cullControllerProvider).selectedIds.isEmpty) {
+          return KeyEventResult.ignored;
+        }
+        controller.clearSelection();
+        return KeyEventResult.handled;
+      }
       final direction = gridDirectionFor(key);
       if (direction != null) {
         final next = moveFocus(

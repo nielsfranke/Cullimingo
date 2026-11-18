@@ -12,6 +12,7 @@ class StatusBar extends StatelessWidget {
     required this.total,
     required this.filteredCount,
     required this.selectedCount,
+    this.hiddenSelectedCount = 0,
     this.onExport,
     super.key,
   });
@@ -25,6 +26,9 @@ class StatusBar extends StatelessWidget {
   /// Photos currently selected.
   final int selectedCount;
 
+  /// Selected photos the active filter hides (not marked by a batch mark).
+  final int hiddenSelectedCount;
+
   /// Starts an export of the selection (or the filtered set when nothing is
   /// selected), or null to disable the button.
   final VoidCallback? onExport;
@@ -33,13 +37,17 @@ class StatusBar extends StatelessWidget {
   Widget build(BuildContext context) {
     // "165 photos · 2 selected", or "12 of 165 photos · 2 selected" when a
     // filter is narrowing the grid.
-    final counts = StringBuffer()
-      ..write(
-        filteredCount == total
-            ? '$total photo${total == 1 ? '' : 's'}'
-            : '$filteredCount of $total photos',
-      )
-      ..write(' · $selectedCount selected');
+    final counts = filteredCount == total
+        ? '$total photo${total == 1 ? '' : 's'}'
+        : '$filteredCount of $total photos';
+    // A batch selection is where a digit lands on many frames at once, so it
+    // stands out in the selection colour, with how to drop it (GitHub #28).
+    final batch = selectedCount > 1;
+    final selection = StringBuffer('$selectedCount selected');
+    if (hiddenSelectedCount > 0) {
+      selection.write(' ($hiddenSelectedCount hidden by filter)');
+    }
+    if (batch) selection.write(' · Esc clears');
 
     final n = selectedCount > 0 ? selectedCount : filteredCount;
     final label = selectedCount > 0
@@ -58,8 +66,21 @@ class StatusBar extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              counts.toString(),
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(text: '$counts · '),
+                  TextSpan(
+                    text: selection.toString(),
+                    style: batch
+                        ? const TextStyle(
+                            color: AppColors.selection,
+                            fontWeight: FontWeight.w600,
+                          )
+                        : null,
+                  ),
+                ],
+              ),
               style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 12,
