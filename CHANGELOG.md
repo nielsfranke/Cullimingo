@@ -3,6 +3,13 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **macOS: "Add editor…" can pick apps:** the picker greyed out every
+  application, so no "Send to" editor could be added. It now lists `.app`
+  bundles, starting in `/Applications` (GitHub #29).
+
 ## 1.11.1 — 2026-11-18
 
 ### Changed

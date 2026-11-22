@@ -22,14 +22,25 @@ Future<String?> pickDirectory({String? initialDirectory}) async {
   return getDirectoryPath(initialDirectory: initialDirectory);
 }
 
+/// Restricts the macOS app picker to application bundles.
+const XTypeGroup macApplicationTypeGroup = XTypeGroup(
+  label: 'Applications',
+  uniformTypeIdentifiers: ['com.apple.application-bundle'],
+);
+
 /// Picks an application to hand photos to ("Send to" editors). On macOS an app
-/// is an `.app` *bundle* (a directory), so the folder picker — opened at
-/// `/Applications` — is the right tool. Elsewhere an app is a plain executable,
-/// picked as a file.
+/// is an `.app` bundle. It is a directory on disk, but `NSOpenPanel` treats
+/// bundles as packages, i.e. as *files*. A folder-only panel greys every app
+/// out (#29), so this uses a file panel filtered to application bundles,
+/// opened at `/Applications`. Elsewhere an app is a plain executable, picked as
+/// a file.
 Future<String?> pickApplication() async {
-  if (Platform.isMacOS) {
-    return pickDirectory(initialDirectory: '/Applications');
-  }
-  final file = await openFile();
+  final file = Platform.isMacOS
+      ? await openFile(
+          acceptedTypeGroups: const [macApplicationTypeGroup],
+          initialDirectory: '/Applications',
+          confirmButtonText: 'Add',
+        )
+      : await openFile();
   return file?.path;
 }
