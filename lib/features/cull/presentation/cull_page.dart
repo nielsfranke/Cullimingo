@@ -229,6 +229,9 @@ class _CullPageState extends ConsumerState<CullPage>
                         ? _clearSimilar
                         : null,
                     onImport: total > 0 ? _importSelection : null,
+                    onSendTo: total > 0
+                        ? (editor) => unawaited(_sendTo(editor))
+                        : null,
                     onSaveSelection: total > 0 ? _saveSelection : null,
                     onLoadSelection: total > 0 ? _loadSelection : null,
                     onDeleteSelection: total > 0 ? _deleteSelection : null,

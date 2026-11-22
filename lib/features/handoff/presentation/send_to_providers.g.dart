@@ -60,6 +60,104 @@ final class SendToEditorsProvider
 
 String _$sendToEditorsHash() => r'5953cca136c1da4bccf77738f5093222497e1f4f';
 
+/// The app icon of a "Send to" editor as PNG bytes, for the toolbar button.
+/// macOS only (the Finder icon of the `.app` bundle, via the native channel);
+/// null elsewhere or when the lookup fails, and the button falls back to a
+/// generic glyph. Kept alive: the icon doesn't change while the app runs.
+
+@ProviderFor(editorIcon)
+final editorIconProvider = EditorIconFamily._();
+
+/// The app icon of a "Send to" editor as PNG bytes, for the toolbar button.
+/// macOS only (the Finder icon of the `.app` bundle, via the native channel);
+/// null elsewhere or when the lookup fails, and the button falls back to a
+/// generic glyph. Kept alive: the icon doesn't change while the app runs.
+
+final class EditorIconProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<Uint8List?>,
+          Uint8List?,
+          FutureOr<Uint8List?>
+        >
+    with $FutureModifier<Uint8List?>, $FutureProvider<Uint8List?> {
+  /// The app icon of a "Send to" editor as PNG bytes, for the toolbar button.
+  /// macOS only (the Finder icon of the `.app` bundle, via the native channel);
+  /// null elsewhere or when the lookup fails, and the button falls back to a
+  /// generic glyph. Kept alive: the icon doesn't change while the app runs.
+  EditorIconProvider._({
+    required EditorIconFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'editorIconProvider',
+         isAutoDispose: false,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$editorIconHash();
+
+  @override
+  String toString() {
+    return r'editorIconProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<Uint8List?> $createElement($ProviderPointer pointer) =>
+      $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<Uint8List?> create(Ref ref) {
+    final argument = this.argument as String;
+    return editorIcon(ref, argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is EditorIconProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$editorIconHash() => r'8c7a7787ecd372a9e9f746002557f3abac18db1a';
+
+/// The app icon of a "Send to" editor as PNG bytes, for the toolbar button.
+/// macOS only (the Finder icon of the `.app` bundle, via the native channel);
+/// null elsewhere or when the lookup fails, and the button falls back to a
+/// generic glyph. Kept alive: the icon doesn't change while the app runs.
+
+final class EditorIconFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<Uint8List?>, String> {
+  EditorIconFamily._()
+    : super(
+        retry: null,
+        name: r'editorIconProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: false,
+      );
+
+  /// The app icon of a "Send to" editor as PNG bytes, for the toolbar button.
+  /// macOS only (the Finder icon of the `.app` bundle, via the native channel);
+  /// null elsewhere or when the lookup fails, and the button falls back to a
+  /// generic glyph. Kept alive: the icon doesn't change while the app runs.
+
+  EditorIconProvider call(String appPath) =>
+      EditorIconProvider._(argument: appPath, from: this);
+
+  @override
+  String toString() => r'editorIconProvider';
+}
+
 /// Whether the ContactSheet integration is set up, so the grid context menu can
 /// offer "Send to ContactSheet" / "Pull marks". Gated on the base URL alone
 /// (pure settings, no secret-store read) so building a menu never triggers a

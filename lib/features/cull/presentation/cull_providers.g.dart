@@ -3066,7 +3066,7 @@ final class CullControllerProvider
   }
 }
 
-String _$cullControllerHash() => r'792a7f9171b52eb1f4600a6bb0e2539c7816f427';
+String _$cullControllerHash() => r'40e98207e5d06674cfcc98415002c810972fa103';
 
 /// Owns grid focus/selection and writes cull marks straight to the read model
 /// (the reactive `photos` stream reflects them immediately).

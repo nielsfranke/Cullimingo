@@ -7,6 +7,8 @@ import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/grid_zoom_slider.dart';
 import 'package:cullimingo/features/filter/domain/photo_sort.dart';
 import 'package:cullimingo/features/filter/presentation/filter_providers.dart';
+import 'package:cullimingo/features/handoff/domain/external_editor.dart';
+import 'package:cullimingo/features/handoff/presentation/send_to_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -43,6 +45,7 @@ class CullTopBar extends StatelessWidget {
     this.onRefresh,
     this.onDeleteRejects,
     this.onContactSheet,
+    this.onSendTo,
     this.propagateMarksToStack = false,
     this.onTogglePropagateMarks,
     this.propagateMarksToPair = false,
@@ -134,6 +137,10 @@ class CullTopBar extends StatelessWidget {
 
   /// Opens the ContactSheet dialog (send/pull); null = disabled, no folder.
   final Future<void> Function()? onContactSheet;
+
+  /// Hands the selection to a "Send to" editor (null = hidden, no folder).
+  /// The button itself also hides while no editor is configured.
+  final ValueChanged<ExternalEditor>? onSendTo;
 
   /// Whether marking a photo also marks the rest of its exposure bracket — the
   /// live value of the same Settings toggle, surfaced here as a checkable
@@ -253,6 +260,11 @@ class CullTopBar extends StatelessWidget {
                         onDelete: onDeleteSelection!,
                       ),
                     const _BarDivider(),
+                    if (onSendTo != null)
+                      SendToButton(
+                        onSendTo: onSendTo!,
+                        trailing: const _BarDivider(),
+                      ),
                   ],
                   // Get-photos group: the sub-folder mode toggle sits with the
                   // Open-folder button it modifies, next to card Import.
