@@ -279,18 +279,22 @@ Future<void> installAndRelaunch(
     switch (t.method) {
       case InstallMethod.windowsNsis:
       case InstallMethod.windowsMsi:
-        await Process.start(
-          'powershell.exe',
-          [
-            '-NoProfile',
-            '-NonInteractive',
-            '-WindowStyle',
-            'Hidden',
-            '-EncodedCommand',
-            encodePowerShell(windowsInstallScript(update, processId: me)),
-          ],
-          mode: ProcessStartMode.detached,
-        );
+        // Not ProcessStartMode.detached: Dart starts that with
+        // DETACHED_PROCESS, and a console-less powershell.exe then exits
+        // with code 0 within ~300 ms without running its command (measured
+        // on Windows 11, 3 of 3 updates lost). A normal child survives this
+        // app's exit(0) all the same and shows no window; with stdin ignored
+        // (-InputFormat None) the pipes closing with us don't matter.
+        await Process.start('powershell.exe', [
+          '-NoProfile',
+          '-NonInteractive',
+          '-InputFormat',
+          'None',
+          '-WindowStyle',
+          'Hidden',
+          '-EncodedCommand',
+          encodePowerShell(windowsInstallScript(update, processId: me)),
+        ]);
       case InstallMethod.macApp:
         await Process.start(
           '/bin/sh',
