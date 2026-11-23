@@ -7,6 +7,7 @@ import 'package:cullimingo/core/secrets/secret_store.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:cullimingo/core/settings/performance_preset.dart';
 import 'package:cullimingo/core/version/app_version.g.dart';
+import 'package:cullimingo/features/handoff/presentation/send_to_providers.dart';
 import 'package:cullimingo/features/settings/presentation/settings_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -211,6 +212,74 @@ void main() {
 
     expect(result(), target);
   });
+
+  testWidgets(
+    'Apply refreshes the Send-to editors only after saving them (#30)',
+    (tester) async {
+      // One editor on disk; the host reads it into the provider before the
+      // dialog opens, like the cull page's toolbar does.
+      File(p.join(tempDir.path, 'settings.json')).writeAsStringSync(
+        jsonEncode({
+          'sendToEditors': [
+            {'label': 'Edge', 'path': r'C:\Edge\msedge.exe'},
+          ],
+        }),
+      );
+      await tallSurface(tester);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            secretStoreProvider.overrideWithValue(InMemorySecretStore()),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: Consumer(
+                builder: (context, ref, _) {
+                  final editors = ref.watch(sendToEditorsProvider).value;
+                  return Column(
+                    children: [
+                      Text('editors: ${editors?.length}'),
+                      TextButton(
+                        onPressed: () => showSettingsDialog(
+                          context,
+                          secrets: InMemorySecretStore(),
+                          onClearCache: () async {},
+                        ),
+                        child: const Text('open'),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('editors: 1'), findsOneWidget);
+
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await openTab(tester, 'Delivery');
+      await tester.ensureVisible(find.byTooltip('Remove'));
+      await tester.tap(find.byTooltip('Remove'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Apply'));
+      await tester.pumpAndSettle();
+
+      final persisted = await drainApplyPersist(tester);
+      expect(persisted['sendToEditors'], isEmpty);
+      // The provider re-read the *saved* list, not the stale file.
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('editors: 0'), findsOneWidget);
+    },
+  );
 
   testWidgets('Clear thumbnail cache runs the callback', (tester) async {
     var cleared = false;

@@ -198,6 +198,9 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
     // Persist in the background and pop immediately — the page only needs the
     // result, and a settings save shouldn't block closing the dialog. Capture
     // the field values first since the controllers are disposed on pop.
+    // The dialog's own `ref` dies with it, so the "Send to" refresh goes
+    // through the enclosing container.
+    final container = ProviderScope.containerOf(context, listen: false);
     unawaited(
       _persist(
         baseUrl: _baseUrl.text.trim(),
@@ -215,10 +218,12 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
         applyTemplateOnIngest: _applyTemplateOnIngest,
         codes: _codes.toJson(),
         hotCodes: _hotCodes.toJson(),
+        // Refresh the "Send to" menu / ⌘E without a restart — only once the
+        // new list is on disk: invalidating right away re-read the old file
+        // (the editor showed up only after a restart).
+        onEditorsSaved: () => container.invalidate(sendToEditorsProvider),
       ),
     );
-    // Refresh the "Send to" menu / ⌘E without a restart.
-    ref.invalidate(sendToEditorsProvider);
     Navigator.of(context).pop(changed ? preset : null);
   }
 
@@ -237,6 +242,7 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
     required bool applyTemplateOnIngest,
     required Map<String, dynamic> codes,
     required Map<String, dynamic> hotCodes,
+    required void Function() onEditorsSaved,
     PerformancePreset? preset,
   }) async {
     // Runs fire-and-forget after the dialog already popped: one failing write
@@ -266,6 +272,7 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
       () => settings.setCheckForUpdatesEnabled(checkForUpdates),
     );
     await guard('send-to editors', () => settings.setSendToEditors(editors));
+    onEditorsSaved();
     await guard(
       'delivery servers',
       () => settings.setDeliveryServers(servers),
