@@ -88,6 +88,9 @@ if ($dumpbin) {
     foreach ($d in $deps) {
       if ($present[$d]) { continue }
       if ($d -like 'api-ms-win-*' -or $d -like 'ext-ms-*') { continue }
+      # The jni plugin (pulled in by a dependency, used only on Android) links
+      # the JVM, which it loads only when a JVM is started — never here.
+      if ($bin.Name -eq 'dartjni.dll' -and $d -eq 'jvm.dll') { continue }
       if (Test-Path (Join-Path $env:SystemRoot "System32\$d")) { continue }
       $missing += "$($bin.Name) -> $d"
     }
