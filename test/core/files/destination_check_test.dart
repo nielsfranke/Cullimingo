@@ -51,7 +51,8 @@ void main() {
       roots: [nas.path],
       files: [file('a.arw', 1)],
       rememberedMounts: {nas.path: nas.path},
-      probe: fakeVolumes({'/': 100 * gb}),
+      // The system volume's root: `/`, or `C:\` on Windows.
+      probe: fakeVolumes({p.rootPrefix(tmp.path): 100 * gb}),
     );
 
     expect(check.ok, isFalse);

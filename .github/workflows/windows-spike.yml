@@ -34,8 +34,7 @@ jobs:
 
       - run: flutter pub get
 
-      - name: Run tests (failures expected — this is the to-do list)
-        continue-on-error: true
+      - name: Run tests
         run: |
           flutter test --reporter expanded 2>&1 | Tee-Object -FilePath test.log
           exit $LASTEXITCODE

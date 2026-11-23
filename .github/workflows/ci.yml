@@ -1,4 +1,4 @@
-# Format, analyze, test (Linux + macOS) and a release build per platform on
+# Format, analyze, test (Linux, macOS, Windows) and a release build per platform on
 # every push to main and every pull request. Release artifacts are built and
 # published separately by release.yml on a `v*` tag.
 name: CI
@@ -66,6 +66,21 @@ jobs:
       - name: Run tests
         run: flutter test
 
+  # The DLLs aren't needed here: tests that load libvips/LibRaw skip without
+  # them, as on a dev machine without the native libs.
+  test-windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Run tests
+        run: flutter test
+
   build-linux:
     runs-on: ubuntu-24.04
     steps:
@@ -102,3 +117,18 @@ jobs:
       - run: flutter pub get
       - name: Build macOS bundle
         run: flutter build macos --release
+
+  # The release build only; packaging, the Defender scan and the install
+  # smoke tests run in windows.yml (releases, or on demand).
+  build-windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Build Windows bundle
+        run: flutter build windows --release

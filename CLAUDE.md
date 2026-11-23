@@ -2,14 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Cullimingo is a fast, keyboard-first photo-culling desktop app (Flutter, macOS + Linux). `BUILD_PLAN.md` is the master spec; `ARCHITECTURE.md` records what's actually built and any deviations — keep it honest when you deviate.
+Cullimingo is a fast, keyboard-first photo-culling desktop app (Flutter, macOS + Linux + Windows). `BUILD_PLAN.md` is the master spec; `ARCHITECTURE.md` records what's actually built and any deviations — keep it honest when you deviate.
 
 ## Commands
 
 ```bash
 flutter pub get
 dart run build_runner watch --delete-conflicting-outputs   # keep running during dev
-flutter run -d macos                                       # or: flutter run -d linux
+flutter run -d macos                                       # or: -d linux / -d windows
 
 flutter test                                               # all unit/widget tests
 flutter test test/features/cull/some_test.dart             # single test file
@@ -20,9 +20,9 @@ dart format .
 flutter analyze
 ```
 
-Native deps for RAW/thumbnail decode: LibRaw and libvips (`brew install libraw vips`, or distro `-dev` packages). macOS also needs full Xcode + CocoaPods.
+Native deps for RAW/thumbnail decode: LibRaw and libvips (`brew install libraw vips`, or distro `-dev` packages; on Windows the DLLs from libvips' `build-win64-mxe` zip, which includes LibRaw, beside the exe). macOS also needs full Xcode + CocoaPods; Windows needs the VS 2022 Build Tools C++ workload **plus** the `VC.ATL` component, and Developer Mode.
 
-Release bundling: `flutter build macos --release` + `tool/bundle_macos.sh` + `tool/build_dmg.sh` (macOS), `tool/build_appimage.sh` (Linux AppImage), `tool/build_flatpak.sh` + `tool/publish_flatpak_repo.sh` (Flatpak, self-hosted signed repo on GitHub Pages — not Flathub). See `DISTRIBUTION.md`.
+Release bundling: `flutter build macos --release` + `tool/bundle_macos.sh` + `tool/build_dmg.sh` (macOS), `tool/build_appimage.sh` (Linux AppImage), `tool/build_flatpak.sh` + `tool/publish_flatpak_repo.sh` (Flatpak, self-hosted signed repo on GitHub Pages — not Flathub), `tool/bundle_windows.ps1` (Windows: unsigned NSIS setup + MSI + portable zip, packaged like rawtonic — no code signing on Windows). See `DISTRIBUTION.md`.
 
 ## Codegen
 
@@ -33,7 +33,7 @@ Riverpod (`@riverpod`), freezed, json_serializable and drift all use build_runne
 ## Hooks & CI
 
 - lefthook pre-commit: `dart format` on staged files, `flutter analyze`, version regen. Pre-push runs `flutter test` — red code can't reach the remote; main stays green.
-- GitHub (`origin`) is the source of truth; Forgejo only pull-mirrors it (Actions off there). CI is GitHub Actions: `.github/workflows/ci.yml` (format check, analyze, tests on Linux + macOS, Linux + macOS release builds) on push to main and PRs; `release.yml` builds the AppImage + DMG and publishes the GitHub Release when a `v*` tag is pushed.
+- GitHub (`origin`) is the source of truth; Forgejo only pull-mirrors it (Actions off there). CI is GitHub Actions: `.github/workflows/ci.yml` (format check, analyze, tests on Linux + macOS + Windows, release builds for all three) on push to main and PRs; `release.yml` builds the AppImage, Flatpak, DMG and (via the reusable `windows.yml`: package, Defender scan, install smoke test) the Windows downloads, and publishes the GitHub Release when a `v*` tag is pushed.
 - Lint set is `very_good_analysis`. riverpod_lint/custom_lint are deliberately disabled (dependency conflict — see the note in `analysis_options.yaml`); don't try to re-add them without checking that note.
 - `CHANGELOG.md` tracks user-facing changes manually (Keep-a-Changelog style).
 

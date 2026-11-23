@@ -141,7 +141,8 @@ packages/
 ## Build / CI
 - CI on GitHub Actions (`.github/workflows/ci.yml`; originally Forgejo Actions,
   moved once GitHub became the source of truth and Forgejo a pull mirror).
-  Jobs: `analyze`, `test-linux`, `test-macos`, `build-linux`, `build-macos`.
+  Jobs: `analyze`, `test-linux`, `test-macos`, `test-windows`, `build-linux`,
+  `build-macos`, `build-windows`.
   Releases: `.github/workflows/release.yml` on a `v*` tag.
 - Local dev: macOS needs full Xcode + CocoaPods; Linux needs the GTK dev libs
   listed in the CI workflow.
