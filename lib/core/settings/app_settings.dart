@@ -105,6 +105,15 @@ class AppSettings {
     return null;
   }
 
+  /// Whether the window was maximized when last seen.
+  bool get windowMaximized => _data['windowMaximized'] as bool? ?? false;
+
+  /// Remembers whether the window is maximized (its normal bounds stay in
+  /// [windowSize]/[windowPosition] for when it's restored).
+  // ignore: avoid_positional_boolean_parameters — simple flag setter.
+  Future<void> setWindowMaximized(bool value) =>
+      _setAll({'windowMaximized': value});
+
   /// Remembers the window position so the next launch reopens in place.
   Future<void> setWindowPosition(double x, double y) =>
       _setAll({'windowX': x, 'windowY': y});

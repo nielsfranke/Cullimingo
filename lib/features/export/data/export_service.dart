@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:cullimingo/core/cache/vips.dart';
+import 'package:cullimingo/core/files/rel_path.dart';
 import 'package:cullimingo/core/raw/libraw_preview_extractor.dart';
 import 'package:cullimingo/core/raw/raw_display_jpeg.dart';
 import 'package:cullimingo/features/export/data/export_encoder.dart';
@@ -129,9 +130,9 @@ Stream<ExportProgress> runExport({
       final base = subfolder.isEmpty
           ? p.dirname(item.source)
           : p.join(p.dirname(item.source), subfolder);
-      return p.join(base, item.relPath);
+      return joinRelPath(base, item.relPath);
     }
-    return p.join(destinationRoot!, item.relPath);
+    return joinRelPath(destinationRoot!, item.relPath);
   }
 
   Future<void> worker() async {

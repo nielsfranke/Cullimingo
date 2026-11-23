@@ -1,3 +1,7 @@
+// gvfs/dbus-send is the Linux file manager path; POSIX paths only.
+@TestOn('mac-os || linux')
+library;
+
 import 'package:cullimingo/core/files/open_external.dart';
 import 'package:flutter_test/flutter_test.dart';
 

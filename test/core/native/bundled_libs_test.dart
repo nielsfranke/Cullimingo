@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cullimingo/core/native/bundled_libs.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   test('returns null when not running from a packaged app', () {
@@ -15,40 +16,55 @@ void main() {
 
   group('nativeLibMatches', () {
     test('matches .dylib on macOS', () {
-      expect(nativeLibMatches('libraw.dylib', 'libraw.', linux: false), isTrue);
+      expect(nativeLibMatches('libraw.dylib', 'libraw.', os: 'macos'), isTrue);
       expect(
-        nativeLibMatches('libvips.42.dylib', 'libvips.', linux: false),
+        nativeLibMatches('libvips.42.dylib', 'libvips.', os: 'macos'),
         isTrue,
       );
       // Linux .so must not match on macOS.
       expect(
-        nativeLibMatches('libraw.so.23', 'libraw.', linux: false),
+        nativeLibMatches('libraw.so.23', 'libraw.', os: 'macos'),
         isFalse,
       );
     });
 
     test('matches .so and versioned .so.N on Linux', () {
-      expect(nativeLibMatches('libraw.so', 'libraw.', linux: true), isTrue);
-      expect(nativeLibMatches('libraw.so.23', 'libraw.', linux: true), isTrue);
+      expect(nativeLibMatches('libraw.so', 'libraw.', os: 'linux'), isTrue);
+      expect(nativeLibMatches('libraw.so.23', 'libraw.', os: 'linux'), isTrue);
       expect(
-        nativeLibMatches('libvips.so.42', 'libvips.', linux: true),
+        nativeLibMatches('libvips.so.42', 'libvips.', os: 'linux'),
         isTrue,
       );
       expect(
-        nativeLibMatches('libglib-2.0.so.0', 'libglib-2.0', linux: true),
+        nativeLibMatches('libglib-2.0.so.0', 'libglib-2.0', os: 'linux'),
         isTrue,
       );
       // macOS .dylib must not match on Linux.
       expect(
-        nativeLibMatches('libraw.dylib', 'libraw.', linux: true),
+        nativeLibMatches('libraw.dylib', 'libraw.', os: 'linux'),
         isFalse,
       );
     });
 
+    test('matches the build-win64-mxe DLL names on Windows', () {
+      bool win(String name, String prefix) =>
+          nativeLibMatches(name, prefix, os: 'windows');
+      expect(win('libvips-42.dll', 'libvips.'), isTrue);
+      expect(win('libraw_r-25.dll', 'libraw.'), isTrue);
+      expect(win('libraw.dll', 'libraw.'), isTrue);
+      expect(win('libglib-2.0-0.dll', 'libglib-2.0'), isTrue);
+      expect(win('libgobject-2.0-0.dll', 'libgobject-2.0'), isTrue);
+      expect(win('LIBVIPS-42.DLL', 'libvips.'), isTrue);
+      // The C++ wrapper shares the prefix but is not libvips itself.
+      expect(win('libvips-cpp-42.dll', 'libvips.'), isFalse);
+      expect(win('libvips.so.42', 'libvips.'), isFalse);
+      expect(win('libvips.42.dylib', 'libvips.'), isFalse);
+    });
+
     test('requires the prefix', () {
-      expect(nativeLibMatches('libother.so', 'libraw.', linux: true), isFalse);
+      expect(nativeLibMatches('libother.so', 'libraw.', os: 'linux'), isFalse);
       expect(
-        nativeLibMatches('libother.dylib', 'libraw.', linux: false),
+        nativeLibMatches('libother.dylib', 'libraw.', os: 'macos'),
         isFalse,
       );
     });
@@ -93,7 +109,7 @@ void _hostPreferredTests() {
     );
     expect(opened, [
       'librsvg-2.so.2',
-      '${fallback.path}/librsvg-2.so.2',
+      p.join(fallback.path, 'librsvg-2.so.2'),
       'libzeta.so.1',
     ]);
   });

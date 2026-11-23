@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cullimingo/core/files/rel_path.dart';
 import 'package:cullimingo/features/delivery/data/delivery_client.dart';
 import 'package:path/path.dart' as p;
 
@@ -86,7 +87,7 @@ List<DeliveryItem> deliveryItemsFor({
   return [
     for (final rel in relPaths)
       DeliveryItem(
-        localPath: p.join(localRoot, rel),
+        localPath: joinRelPath(localRoot, rel),
         remoteName: nameCounts[p.basename(rel)]! > 1
             ? rel.replaceAll('/', '_')
             : p.basename(rel),

@@ -1,0 +1,57 @@
+# Windows port work in progress (branch spike/windows-build): the packaged
+# downloads (windows.yml) plus the unit tests on Windows, on every push.
+name: Windows spike
+
+on:
+  push:
+    branches: ['spike/windows**']
+  workflow_dispatch:
+
+concurrency:
+  group: windows-spike-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: 3.44.4
+
+jobs:
+  downloads:
+    uses: ./.github/workflows/windows.yml
+
+  test:
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Run tests
+        run: |
+          flutter test --reporter expanded 2>&1 | Tee-Object -FilePath test.log
+          exit $LASTEXITCODE
+
+      - name: Summarise failing tests
+        if: always()
+        run: |
+          $fails = Select-String -Path test.log -Pattern '\[E\]$' | ForEach-Object { $_.Line }
+          "## Windows test failures ($($fails.Count))" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          '```' | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          $fails | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          '```' | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          Select-String -Path test.log -Pattern '^\d\d:\d\d \+\d+.*: (All tests passed|Some tests failed)' |
+            Select-Object -Last 1 | ForEach-Object { $_.Line } | Out-File -Append $env:GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-test-log
+          path: test.log

@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Per-machine MSI (Program Files, administrator) for the unsigned Windows
+  build: the alternative for PCs whose Defender deletes the unsigned NSIS
+  setup. Built by tool/bundle_windows.ps1 with WiX 5:
+    wix build -arch x64 -d Version=… -d SourceDir=… -d IconPath=… Cullimingo.wxs
+  Installs exactly the staged Cullimingo folder (the same files as the NSIS
+  installer and the portable zip) plus a Start menu shortcut. It lives apart
+  from the per-user NSIS copy (%LOCALAPPDATA%\Programs\Cullimingo), so the
+  two never share or delete each other's files.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Cullimingo"
+           Manufacturer="Niels Franke"
+           Version="$(Version)"
+           UpgradeCode="426D24A7-D929-4032-8F14-BDE89C21F4D2"
+           Scope="perMachine">
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of Cullimingo is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="AppIcon" SourceFile="$(IconPath)" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/nielsfranke/Cullimingo" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Cullimingo">
+        <Files Include="$(SourceDir)\**" />
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut">
+        <Shortcut Id="AppShortcut"
+                  Name="Cullimingo"
+                  Target="[INSTALLFOLDER]cullimingo.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+        <RegistryValue Root="HKMU" Key="Software\Cullimingo"
+                       Name="StartMenuShortcut" Type="integer" Value="1"
+                       KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+  </Package>
+</Wix>

@@ -5,7 +5,24 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 
 ## Unreleased
 
+### Added
+- **Windows version** (x64, Windows 10 and 11): an installer for your user,
+  an MSI for the whole PC and a portable zip. Not code-signed — see the
+  README for the one-time SmartScreen step.
+- **Log file:** the log is now also written to `logs/cullimingo.log` in the
+  app's data folder, so a problem can still be read after a restart.
+  Settings → About → "Show log file".
+- **Free space under the import destination:** the import dialog shows how
+  much room is left on each destination's drive.
+- **The window remembers being maximized** across restarts.
+
 ### Fixed
+- **A photo the Trash refused keeps its sidecar:** when one photo couldn't
+  be moved to the Trash (open in another app, say), its `.xmp` went to the
+  Trash anyway and the marks were separated from the photo. Sidecars now
+  follow only photos that actually went.
+- **"Move to _Rejected" reports every failure** and no longer leaves an
+  empty `_Rejected` folder behind when nothing could be moved.
 - **New "Send to" editors show up right away:** an editor added (or
   removed) in Settings only reached the toolbar button, the right-click menu
   and `⌘E` after a restart. They now update as soon as you press Apply.

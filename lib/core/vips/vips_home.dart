@@ -22,7 +22,11 @@ import 'package:path/path.dart' as p;
 /// on Linux the bundle root already has `lib/`. Best effort — without it,
 /// only HEIF/AVIF support is missing (the export dialog probes and hides
 /// AVIF), WebP and JPEG are linked into libvips itself.
+///
+/// Windows: a no-op — libvips locates `vips-modules-<ver>` beside its own
+/// DLL, and the process has no `setenv`.
 void pointVipsHomeAtBundle(String libPath) {
+  if (Platform.isWindows) return;
   final libsDir = p.dirname(libPath);
   final home = Platform.isMacOS
       ? p.join(p.dirname(libsDir), 'vipshome')

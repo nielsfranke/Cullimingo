@@ -5,6 +5,7 @@ import 'package:cullimingo/features/delivery/data/delivery_client.dart';
 import 'package:cullimingo/features/delivery/data/delivery_uploader.dart';
 import 'package:cullimingo/features/delivery/data/ftp_client.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 import 'fake_ftp_server.dart';
 
@@ -114,7 +115,10 @@ void main() {
         relPaths: ['2026/2026-07-02/a.jpg', 'b.jpg'],
       );
       expect(items.map((i) => i.remoteName), ['a.jpg', 'b.jpg']);
-      expect(items.first.localPath, '/tmp/x/2026/2026-07-02/a.jpg');
+      expect(
+        items.first.localPath,
+        p.join('/tmp/x', '2026', '2026-07-02', 'a.jpg'),
+      );
     });
 
     test('colliding basenames keep their path, / flattened to _', () {

@@ -1,5 +1,11 @@
+import 'dart:io';
+
+import 'package:cullimingo/core/logging/file_log.dart';
 import 'package:cullimingo/core/logging/provider_diagnostics.dart';
+import 'package:cullimingo/core/version/app_version.g.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:talker_flutter/talker_flutter.dart';
 
 /// Whether the benign "rebuild scheduled during build" has been noted already
@@ -45,4 +51,30 @@ void setupLogging() {
     appTalker.handle(error, stack, 'Uncaught error');
     return true;
   };
+}
+
+FileLog? _fileLog;
+
+/// The log file this session writes, or null before [startFileLogging] (or
+/// when the folder isn't writable).
+File? get appLogFile => _fileLog?.file;
+
+/// Mirrors [appTalker] into `logs/cullimingo.log` in the app-support folder
+/// (macOS `~/Library/Application Support/cc.nielsbox.cullimingo`, Linux
+/// `~/.local/share/cc.nielsbox.cullimingo`, Windows
+/// `%APPDATA%\cc.nielsbox\Cullimingo`). Best effort; call once from `main()`.
+Future<void> startFileLogging() async {
+  if (_fileLog != null) return;
+  try {
+    final support = await getApplicationSupportDirectory();
+    _fileLog = await FileLog.start(
+      appTalker,
+      dir: Directory(p.join(support.path, 'logs')),
+      header:
+          'Cullimingo $kAppVersion on ${Platform.operatingSystem} '
+          '${Platform.operatingSystemVersion}',
+    );
+  } on Object {
+    // No app-support folder: the in-app viewer still has this session.
+  }
 }

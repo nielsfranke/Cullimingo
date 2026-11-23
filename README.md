@@ -12,7 +12,7 @@
 
 <p align="center">
   <img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue">
-  <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux-1f6feb">
+  <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-1f6feb">
   <img alt="Flutter" src="https://img.shields.io/badge/Flutter-3.44-027DFD?logo=flutter&logoColor=white">
   <img alt="Dart" src="https://img.shields.io/badge/Dart-3.12-0175C2?logo=dart&logoColor=white">
 </p>
@@ -65,8 +65,17 @@ Grab the latest build from the
   later) or `Cullimingo-x86_64.dmg` for Intel Macs (macOS 12 or later). Open
   it and drag **Cullimingo** to **Applications**. The app is signed and
   notarized by Apple.
+- **Windows** (10 and 11, x64) — three downloads with the same app:
+  `Cullimingo_<version>_x64-setup.exe` installs it for your user (no
+  administrator rights), `Cullimingo_<version>_x64.msi` for everyone on the
+  PC (needs an administrator), and `Cullimingo_<version>_x64-portable.zip`
+  runs from any folder. They are **not code-signed**, so Windows shows
+  "Windows protected your PC" on first start: compare the file's SHA-256
+  (`Get-FileHash <file>` in PowerShell) with `SHA256SUMS-windows.txt` on the
+  release page, then click **More info → Run anyway**. If your antivirus
+  removes the setup `.exe`, use the `.msi` or the portable zip.
 
-Both builds are self-contained — no Homebrew or apt libraries needed. See
+All builds are self-contained — no Homebrew, apt or other libraries needed. See
 [DISTRIBUTION.md](DISTRIBUTION.md) for the details.
 
 ## What it does

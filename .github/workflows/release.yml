@@ -1,4 +1,5 @@
-# Builds the Linux AppImage, the Flatpak (x86_64 + aarch64) and the macOS .dmg,
+# Builds the Linux AppImage, the Flatpak (x86_64 + aarch64), the macOS .dmg and
+# the unsigned Windows downloads (windows.yml),
 # and publishes them on a GitHub Release whenever a version tag is pushed. A
 # non-prerelease tag also redeploys the self-hosted Flatpak repo on GitHub
 # Pages (GitHub #13), which is where installed Flatpaks get their updates.
@@ -193,8 +194,13 @@ jobs:
           path: build/flatpak/repo-${{ matrix.arch }}.tar
           if-no-files-found: error
 
+  # The unsigned Windows downloads (NSIS, MSI, portable zip + checksums),
+  # Defender-scanned and smoke-installed — see windows.yml.
+  build-windows:
+    uses: ./.github/workflows/windows.yml
+
   release:
-    needs: [build-linux, build-macos, build-flatpak]
+    needs: [build-linux, build-macos, build-flatpak, build-windows]
     if: startsWith(github.ref, 'refs/tags/') # only tag pushes publish a Release
     runs-on: ubuntu-latest
     permissions:
@@ -210,7 +216,7 @@ jobs:
       # flat in dist/.
       - uses: actions/download-artifact@v8
         with:
-          pattern: '{appimage,dmg-*,flatpak-bundle-*}'
+          pattern: '{appimage,dmg-*,flatpak-bundle-*,cullimingo-windows-downloads}'
           path: dist
           merge-multiple: true
 
@@ -261,6 +267,19 @@ jobs:
              **Cullimingo** to **Applications**.
           2. Launch it from Applications. The app is signed and notarized by
              Apple.
+
+          ### Windows (10 and 11, x64)
+          - `Cullimingo_<version>_x64-setup.exe` installs for your user (no
+            administrator rights);
+          - `Cullimingo_<version>_x64.msi` installs for everyone on the PC
+            (administrator);
+          - `Cullimingo_<version>_x64-portable.zip` runs from any folder.
+
+          The Windows downloads are **not code-signed**. Compare the file's
+          SHA-256 (`Get-FileHash <file>` in PowerShell) with
+          `SHA256SUMS-windows.txt` below, then, when Windows shows "Windows
+          protected your PC", click **More info → Run anyway**. If your
+          antivirus removes the setup `.exe`, use the `.msi` or the zip.
           EOF
 
           # Notes = what changed (from CHANGELOG) + install instructions.

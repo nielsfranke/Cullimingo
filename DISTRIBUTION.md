@@ -303,6 +303,45 @@ review questions about `--filesystem=home` and
 The `io.github.nielsfranke.Cullimingo` ID is verified through the GitHub
 account that owns the repo — no website file needed.
 
+## Windows (unsigned, in progress)
+
+Not released yet — built on the `spike/windows-build` branch by
+`.github/workflows/windows-spike.yml`. Packaged the same way as rawtonic, and
+**not code-signed** (a deliberate decision): three x64 downloads with the
+same files,
+
+- `Cullimingo_<v>_x64-setup.exe` — NSIS, per user into
+  `%LOCALAPPDATA%\Programs\Cullimingo`, no administrator rights;
+- `Cullimingo_<v>_x64.msi` — per machine into `Program Files` (administrator),
+  for PCs whose Defender deletes unsigned NSIS setups;
+- `Cullimingo_<v>_x64-portable.zip` — one `Cullimingo\` folder that runs from
+  anywhere,
+
+plus `SHA256SUMS-windows.txt`. Each carries the Flutter release bundle, the
+libvips/LibRaw DLLs from libvips' official `build-win64-mxe` zip (SHA-256
+pinned in `windows/packaging/vips.sha256`) and the Visual C++ runtime
+app-local. Build them on Windows with
+
+```powershell
+flutter build windows --release
+pwsh tool/bundle_windows.ps1 -VipsZip vips-dev-x64-all-8.18.7.zip
+```
+
+(needs NSIS's `makensis` and `dotnet tool install --global wix --version
+5.0.2`). CI scans every download with Microsoft Defender on a fresh runner and
+installs, starts and uninstalls each one there.
+
+Unsigned means SmartScreen shows "Windows protected your PC" on first start:
+users click **More info → Run anyway**, after comparing the download's SHA-256
+with `SHA256SUMS-windows.txt`. App data lives in
+`%APPDATA%\cc.nielsbox\Cullimingo` (settings, catalog) and
+`%LOCALAPPDATA%\cc.nielsbox\Cullimingo` (preview cache); uninstalling keeps it.
+
+Building from source needs the Visual Studio 2022 Build Tools with the C++
+desktop workload **and** "C++ ATL for latest v143 build tools"
+(`Microsoft.VisualStudio.Component.VC.ATL`, needed by
+`flutter_secure_storage`), plus Windows Developer Mode for plugin symlinks.
+
 ## Releases (automated)
 
 `.github/workflows/release.yml` builds both artifacts and attaches them to a

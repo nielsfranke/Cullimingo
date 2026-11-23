@@ -5,6 +5,14 @@ import 'package:cullimingo/features/naming/data/rename_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
+/// These plans are built from POSIX fixture paths; on Windows the service
+/// joins with `\`. The logic is the same, so compare with `/` throughout.
+String u(String path) => path.replaceAll(r'\', '/');
+
+List<({String source, String target})> us(
+  List<({String source, String target})> sidecars,
+) => [for (final s in sidecars) (source: u(s.source), target: u(s.target))];
+
 void main() {
   RenameSource src(String path, {int id = 0}) => RenameSource(
     id: id,
@@ -24,9 +32,9 @@ void main() {
           exists: (_) => false,
         );
         // The folder token is flattened away — a rename stays in its folder.
-        expect(plan[0].target, '/shoot/Derby_001.ARW');
-        expect(plan[1].target, '/shoot/Derby_002.ARW');
-        expect(plan.every((i) => p.dirname(i.target) == '/shoot'), isTrue);
+        expect(u(plan[0].target), '/shoot/Derby_001.ARW');
+        expect(u(plan[1].target), '/shoot/Derby_002.ARW');
+        expect(plan.every((i) => u(p.dirname(i.target)) == '/shoot'), isTrue);
       },
     );
 
@@ -35,12 +43,12 @@ void main() {
         [src('/s/DSC0001.ARW', id: 1), src('/s/DSC0002.ARW', id: 2)],
         template: const RenameTemplate('{seq:2}'),
         // Only the first photo has a sidecar on disk.
-        exists: (path) => path == '/s/DSC0001.xmp',
+        exists: (path) => u(path) == '/s/DSC0001.xmp',
       );
-      expect(plan[0].sidecars, [
+      expect(us(plan[0].sidecars), [
         (source: '/s/DSC0001.xmp', target: '/s/01.xmp'),
       ]);
-      expect(plan[1].sidecars, isEmpty);
+      expect(us(plan[1].sidecars), isEmpty);
     });
 
     test('de-dupes in-batch name clashes with a _2 suffix', () {
@@ -50,8 +58,8 @@ void main() {
         template: const RenameTemplate('roll'),
         exists: (_) => false,
       );
-      expect(plan[0].target, '/s/roll.ARW');
-      expect(plan[1].target, '/s/roll_2.ARW');
+      expect(u(plan[0].target), '/s/roll.ARW');
+      expect(u(plan[1].target), '/s/roll_2.ARW');
     });
 
     test('avoids a bystander file already on disk', () {
@@ -59,9 +67,9 @@ void main() {
         [src('/s/a.ARW', id: 1)],
         template: const RenameTemplate('taken'),
         // A non-batch file already owns the target name.
-        exists: (path) => path == '/s/taken.ARW',
+        exists: (path) => u(path) == '/s/taken.ARW',
       );
-      expect(plan[0].target, '/s/taken_2.ARW');
+      expect(u(plan[0].target), '/s/taken_2.ARW');
     });
 
     test('lets a rename reuse a name freed by another batch source', () {
@@ -71,10 +79,10 @@ void main() {
       final plan = planRenames(
         [src('/s/a.ARW', id: 1), src('/s/b.ARW', id: 2)],
         template: const RenameTemplate('b'),
-        exists: (path) => path == '/s/a.ARW' || path == '/s/b.ARW',
+        exists: (path) => u(path) == '/s/a.ARW' || u(path) == '/s/b.ARW',
       );
-      expect(plan[0].target, '/s/b.ARW');
-      expect(plan[1].target, '/s/b_2.ARW');
+      expect(u(plan[0].target), '/s/b.ARW');
+      expect(u(plan[1].target), '/s/b_2.ARW');
     });
 
     test('groups a RAW+JPEG pair into one base with a shared number', () {
@@ -90,20 +98,20 @@ void main() {
       final byId = {for (final i in plan) i.photoId: i};
       // The .ARW and .JPG twin share base roll_001 (the counter is per shot);
       // the next distinct shot is roll_002 — the pair is never split.
-      expect(byId[1]!.target, '/s/roll_001.ARW');
-      expect(byId[2]!.target, '/s/roll_001.JPG');
-      expect(byId[3]!.target, '/s/roll_002.ARW');
+      expect(u(byId[1]!.target), '/s/roll_001.ARW');
+      expect(u(byId[2]!.target), '/s/roll_001.JPG');
+      expect(u(byId[3]!.target), '/s/roll_002.ARW');
     });
 
     test("renames a pair's shared .xmp sidecar exactly once", () {
       final plan = planRenames(
         [src('/s/DSC1.ARW', id: 1), src('/s/DSC1.JPG', id: 2)],
         template: const RenameTemplate('new'),
-        exists: (path) => path == '/s/DSC1.xmp',
+        exists: (path) => u(path) == '/s/DSC1.xmp',
       );
       final withSidecar = plan.where((i) => i.sidecars.isNotEmpty).toList();
       expect(withSidecar, hasLength(1));
-      expect(withSidecar.single.sidecars, [
+      expect(us(withSidecar.single.sidecars), [
         (source: '/s/DSC1.xmp', target: '/s/new.xmp'),
       ]);
     });
@@ -114,13 +122,14 @@ void main() {
         // JPEG first: the shared DSC1.xmp still belongs to the RAW.
         [src('/s/DSC1.JPG', id: 1), src('/s/DSC1.ARW', id: 2)],
         template: const RenameTemplate('new'),
-        exists: (path) => path == '/s/DSC1.xmp' || path == '/s/DSC1.JPG.xmp',
+        exists: (path) =>
+            u(path) == '/s/DSC1.xmp' || u(path) == '/s/DSC1.JPG.xmp',
       );
       final byId = {for (final i in plan) i.photoId: i};
-      expect(byId[1]!.sidecars, [
+      expect(us(byId[1]!.sidecars), [
         (source: '/s/DSC1.JPG.xmp', target: '/s/new.JPG.xmp'),
       ]);
-      expect(byId[2]!.sidecars, [
+      expect(us(byId[2]!.sidecars), [
         (source: '/s/DSC1.xmp', target: '/s/new.xmp'),
       ]);
     });

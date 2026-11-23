@@ -3,12 +3,15 @@ import 'dart:async';
 import 'package:cullimingo/app/theme/tokens.dart';
 import 'package:cullimingo/core/files/destination_check.dart';
 import 'package:cullimingo/core/files/directory_picker.dart';
+import 'package:cullimingo/core/files/posix_fs.dart';
 import 'package:cullimingo/core/files/supported_files.dart';
 import 'package:cullimingo/core/files/verified_copy.dart';
+import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/naming/rename_template.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:cullimingo/features/ingest/data/ingest_service.dart';
 import 'package:cullimingo/features/ingest/data/volume_detector.dart';
+import 'package:cullimingo/features/ingest/presentation/free_space_line.dart';
 import 'package:cullimingo/features/library/data/folder_scanner.dart';
 import 'package:cullimingo/features/naming/domain/name_preset.dart';
 import 'package:cullimingo/features/naming/presentation/name_builder.dart';
@@ -34,6 +37,7 @@ class IngestDialog extends ConsumerStatefulWidget {
     @visibleForTesting this.scan = scanSources,
     @visibleForTesting this.destinationChecker = checkDestinations,
     @visibleForTesting this.copier,
+    @visibleForTesting this.volumeProbe = probeVolumeOffUiIsolate,
     super.key,
   });
 
@@ -60,6 +64,9 @@ class IngestDialog extends ConsumerStatefulWidget {
 
   /// Copies one file during a run (default: `runIngest`'s watched copy).
   final Copier? copier;
+
+  /// Resolves a destination's volume for its free-space line.
+  final Future<VolumeInfo?> Function(String path) volumeProbe;
 
   @override
   ConsumerState<IngestDialog> createState() => _IngestDialogState();
@@ -456,18 +463,50 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       if (mounted) setState(() => _progress = tick);
     }
     _stopwatch.stop();
+    final summary = IngestSummary(
+      results,
+      planned: plan.items.length,
+      cancelled: _cancelled,
+      unreadable: _unreadable,
+    );
+    _logSummary(summary, source: _source ?? '', roots: roots);
     if (!mounted) return;
     setState(() {
-      _summary = IngestSummary(
-        results,
-        planned: plan.items.length,
-        cancelled: _cancelled,
-        unreadable: _unreadable,
-      );
+      _summary = summary;
       _running = false;
     });
     // Remember the destination so it's pre-filled next time.
     unawaited(updateSettings((s) => s.setLastDestination(dest)));
+  }
+
+  // The import's outcome, in full, for the log file — the summary view cuts
+  // long lines off, and it is gone once the dialog closes.
+  void _logSummary(
+    IngestSummary s, {
+    required String source,
+    required List<String> roots,
+  }) {
+    final status = s.cancelled
+        ? 'cancelled'
+        : s.allOk
+        ? 'complete'
+        : 'finished with issues';
+    final head =
+        'Import $status: '
+        '$source → ${roots.join(', ')} · copied ${s.copied}, skipped '
+        '${s.skipped}, conflicts ${s.conflicts}, failed ${s.failed}, '
+        'not started ${s.notStarted}, unreadable ${s.unreadable.length}';
+    final problems = [
+      for (final r in s.results)
+        if (r.message != null) '  ${r.source}: ${r.outcome.name}: ${r.message}',
+      for (final u in s.unreadable) '  unreadable: ${u.path}',
+    ];
+    final text = [head, ...problems].join('\n');
+    if (s.allOk) {
+      appTalker.info(text);
+    } else {
+      appTalker.warning(text);
+    }
   }
 
   void _cancel() => setState(() => _cancelled = true);
@@ -616,6 +655,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
         onPick: () => _pickDest(backup: false),
         hint: 'Choose where the photos are copied…',
       ),
+      FreeSpaceLine(path: _dest, probe: widget.volumeProbe),
       const SizedBox(height: AppSpacing.xs),
       DialogCheckbox(
         value: _verify,
@@ -633,6 +673,7 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
           onPick: () => _pickDest(backup: true),
           hint: 'Choose backup…',
         ),
+      if (_backup) FreeSpaceLine(path: _dest2, probe: widget.volumeProbe),
       for (final problem in _destProblems)
         Padding(
           padding: const EdgeInsets.only(top: AppSpacing.xs),

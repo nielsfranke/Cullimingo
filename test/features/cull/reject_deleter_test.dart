@@ -32,25 +32,23 @@ void main() {
       photos.where((p) => p.flag == PickFlag.reject).toList();
 
   test('trashes each reject with its sidecar and drops the rows', () async {
-    late List<String> trashedPaths;
+    final calls = <List<String>>[];
     final result = await deleteRejectedPhotos(
       db: db,
       importId: importId,
       rejects: rejects(),
       trash: (paths, {onProgress}) async {
-        trashedPaths = paths;
+        calls.add(paths);
         return TrashResult(trashed: paths.length, failed: const []);
       },
     );
 
     expect(result.deleted, 2);
     expect(result.failedPaths, isEmpty);
-    // Photo + .xmp sidecar per reject, pairwise.
-    expect(trashedPaths, [
-      '/shoot/DSC_0001.ARW',
-      '/shoot/DSC_0001.xmp',
-      '/shoot/DSC_0002.ARW',
-      '/shoot/DSC_0002.xmp',
+    // The photos, then their .xmp sidecars.
+    expect(calls, [
+      ['/shoot/DSC_0001.ARW', '/shoot/DSC_0002.ARW'],
+      ['/shoot/DSC_0001.xmp', '/shoot/DSC_0002.xmp'],
     ]);
 
     final remaining = await db.watchPhotosForImport(importId).first;
@@ -84,6 +82,44 @@ void main() {
       remaining.map((p) => p.path),
       isNot(contains('/shoot/DSC_0002.ARW')),
     );
+  });
+
+  test("a refused photo's sidecar stays with it, out of the trash", () async {
+    final calls = <List<String>>[];
+    await deleteRejectedPhotos(
+      db: db,
+      importId: importId,
+      rejects: rejects(),
+      trash: (paths, {onProgress}) async {
+        calls.add(paths);
+        final refused = [
+          for (final path in paths)
+            if (path == '/shoot/DSC_0001.ARW') path,
+        ];
+        return TrashResult(
+          trashed: paths.length - refused.length,
+          failed: refused,
+        );
+      },
+    );
+
+    expect(calls.last, ['/shoot/DSC_0002.xmp']);
+  });
+
+  test('progress runs over photos and sidecars to the end', () async {
+    final ticks = <(int, int)>[];
+    await deleteRejectedPhotos(
+      db: db,
+      importId: importId,
+      rejects: rejects(),
+      trash: (paths, {onProgress}) async {
+        onProgress?.call(paths.length, paths.length);
+        return TrashResult(trashed: paths.length, failed: const []);
+      },
+      onProgress: (done, total) => ticks.add((done, total)),
+    );
+
+    expect(ticks, [(2, 4), (4, 4), (4, 4)]);
   });
 
   test('a failed sidecar alone does not keep the photo row', () async {

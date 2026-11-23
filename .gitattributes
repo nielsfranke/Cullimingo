@@ -1,0 +1,7 @@
+# Normalise line endings: the repository holds LF; a Windows checkout may use
+# CRLF in the working tree, and files that differ only in line endings (e.g.
+# Flutter's regenerated plugin registrants) no longer show as modified.
+* text=auto
+
+# Shell scripts must stay LF even on Windows checkouts (bash rejects CRLF).
+*.sh text eol=lf

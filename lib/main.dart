@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cullimingo/app/app.dart';
 import 'package:cullimingo/app/theme/tokens.dart';
+import 'package:cullimingo/app/window_size.dart';
 import 'package:cullimingo/core/cache/memory_budget.dart';
 import 'package:cullimingo/core/cache/vips.dart';
 import 'package:cullimingo/core/files/host_command.dart';
@@ -22,8 +23,10 @@ import 'package:window_manager/window_manager.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Capture framework + uncaught errors into the in-app log viewer (§8).
+  // Capture framework + uncaught errors into the in-app log viewer (§8), and
+  // mirror the log into a file that outlives the session.
   setupLogging();
+  await startFileLogging();
 
   // Initialise libvips once on this isolate before any preview-worker isolate
   // spawns — libvips' global type registration isn't safe to run concurrently,
@@ -55,9 +58,9 @@ Future<void> main() async {
   final saved = settings.windowSize;
   final windowOptions = WindowOptions(
     size: saved == null
-        ? const Size(1280, 800)
+        ? firstRunWindowSize(_primaryDisplayLogicalSize())
         : Size(saved.width, saved.height),
-    minimumSize: const Size(960, 640),
+    minimumSize: kMinimumWindowSize,
     center: saved == null,
     title: 'Cullimingo',
     backgroundColor: AppColors.bgBase,
@@ -79,6 +82,7 @@ Future<void> main() async {
       }
     }
     await windowManager.show();
+    if (settings.windowMaximized) await windowManager.maximize();
     await windowManager.focus();
   });
   windowManager.addListener(_WindowBoundsPersister(settings));
@@ -155,6 +159,14 @@ Future<void> main() async {
 
 /// Saves the window size + position (debounced) whenever the user resizes or
 /// moves it, so the next launch reopens the same way.
+/// The primary display's size in logical pixels, or null when unknown.
+Size? _primaryDisplayLogicalSize() {
+  final displays = WidgetsBinding.instance.platformDispatcher.displays;
+  if (displays.isEmpty) return null;
+  final d = displays.first;
+  return d.devicePixelRatio <= 0 ? null : d.size / d.devicePixelRatio;
+}
+
 class _WindowBoundsPersister extends WindowListener {
   _WindowBoundsPersister(this._settings);
 
@@ -167,9 +179,18 @@ class _WindowBoundsPersister extends WindowListener {
   @override
   void onWindowMove() => _schedule();
 
+  @override
+  void onWindowMaximize() => unawaited(_settings.setWindowMaximized(true));
+
+  @override
+  void onWindowUnmaximize() => unawaited(_settings.setWindowMaximized(false));
+
   void _schedule() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 400), () async {
+      // A maximized window's bounds are the screen's: keep the normal ones,
+      // so un-maximizing after a restart lands where the user left it.
+      if (await windowManager.isMaximized()) return;
       final size = await windowManager.getSize();
       final position = await windowManager.getPosition();
       await _settings.setWindowSize(size.width, size.height);

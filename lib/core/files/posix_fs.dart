@@ -2,6 +2,7 @@ import 'dart:ffi';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:cullimingo/core/files/windows_fs.dart';
 import 'package:ffi/ffi.dart';
 import 'package:path/path.dart' as p;
 
@@ -9,9 +10,9 @@ import 'package:path/path.dart' as p;
 // publishing a file under a name *without ever replacing* one that exists, and
 // asking which volume a path lives on and how much room it has. Only stable,
 // pointer-and-int ABIs are used; the two structs read here are laid out for
-// 64-bit glibc (statvfs) and 64-bit macOS (statfs, 64-bit-inode variant) —
-// the only targets Cullimingo ships. Blocking calls: run them off the UI
-// isolate.
+// 64-bit glibc (statvfs) and 64-bit macOS (statfs, 64-bit-inode variant).
+// Windows has none of these: it goes through kernel32 (`windows_fs.dart`).
+// Blocking calls: run them off the UI isolate.
 
 /// What happened when [publishNoReplace] tried to give a file its final name.
 enum PublishOutcome {
@@ -31,6 +32,7 @@ typedef _StatD = int Function(Pointer<Utf8>, Pointer<Uint8>);
 
 final DynamicLibrary _libc = DynamicLibrary.process();
 
+// Resolved on first use only — and never on Windows, which has no `link`.
 final _LinkD _link = _libc
     .lookupFunction<Int32 Function(Pointer<Utf8>, Pointer<Utf8>), _LinkD>(
       'link',
@@ -74,8 +76,17 @@ final _RenamexNpD? _renamexNp =
 /// format of a Mac's external drives — so that's where the lock runs. errno
 /// isn't read (the Dart VM may clobber it between the call and the read) —
 /// whether the name is taken is asked of the filesystem instead.
+///
+/// Windows: `MoveFileExW` without the replace flag is that atomic no-replace
+/// rename on every filesystem (see [windowsRenameNoReplace]); the lock is
+/// only the fallback for a refusal that isn't a taken name.
 PublishOutcome publishNoReplace(String from, String to) {
   if (_exists(to)) return PublishOutcome.taken;
+  if (Platform.isWindows) {
+    if (windowsRenameNoReplace(from, to)) return PublishOutcome.published;
+    if (_exists(to)) return PublishOutcome.taken;
+    return publishWithLock(from, to);
+  }
   final f = from.toNativeUtf8();
   final t = to.toNativeUtf8();
   try {
@@ -170,7 +181,7 @@ class VolumeInfo {
   const VolumeInfo({required this.mountPoint, required this.freeBytes});
 
   /// Where the filesystem holding the path is mounted (`/`, `/Volumes/Card`,
-  /// `/mnt/nas`, …).
+  /// `/mnt/nas`, `C:\`, `E:\`, …).
   final String mountPoint;
 
   /// Bytes available to an unprivileged writer.
@@ -196,6 +207,12 @@ VolumeInfo? volumeInfo(String path) {
   }
   if (Platform.isMacOS) return _macStatfs(real);
   if (Platform.isLinux) return _linuxVolume(real);
+  if (Platform.isWindows) {
+    final v = windowsVolume(real);
+    return v == null
+        ? null
+        : VolumeInfo(mountPoint: v.mountPoint, freeBytes: v.freeBytes);
+  }
   return null;
 }
 
