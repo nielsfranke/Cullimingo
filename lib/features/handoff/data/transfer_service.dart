@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:cullimingo/core/files/part_cleanup.dart';
+import 'package:cullimingo/core/files/rel_path.dart';
 import 'package:cullimingo/core/files/sidecar_path.dart';
 import 'package:cullimingo/core/files/verified_copy.dart';
 import 'package:cullimingo/core/files/watched_copy.dart';
@@ -192,7 +193,7 @@ Stream<TransferProgress> runTransfer({
       final i = next++;
       if (i >= total) return;
       final item = plan[i];
-      final dest = p.join(destinationRoot, item.relPath);
+      final dest = joinRelPath(destinationRoot, item.relPath);
 
       // Guard: transferring a file onto itself would, on a move, delete the one
       // and only copy. Treat it as a clean skip.
@@ -210,7 +211,7 @@ Stream<TransferProgress> runTransfer({
         if (result.ok && item.sidecar != null && !stopped) {
           final sidecarResult = await copySidecar(
             source: item.sidecar!.source,
-            destinations: [p.join(destinationRoot, item.sidecar!.relPath)],
+            destinations: [joinRelPath(destinationRoot, item.sidecar!.relPath)],
             verify: verify || mode == TransferMode.move,
           );
           if (sidecarResult.ok) {
@@ -258,9 +259,9 @@ Stream<TransferProgress> runTransfer({
       unawaited(
         removeStalePartFiles({
           for (final item in plan) ...[
-            p.dirname(p.join(destinationRoot, item.relPath)),
+            p.dirname(joinRelPath(destinationRoot, item.relPath)),
             if (item.sidecar case final sc?)
-              p.dirname(p.join(destinationRoot, sc.relPath)),
+              p.dirname(joinRelPath(destinationRoot, sc.relPath)),
           ],
         }),
       );

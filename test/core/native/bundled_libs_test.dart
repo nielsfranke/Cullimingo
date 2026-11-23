@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:cullimingo/core/native/bundled_libs.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   test('returns null when not running from a packaged app', () {
@@ -108,7 +109,7 @@ void _hostPreferredTests() {
     );
     expect(opened, [
       'librsvg-2.so.2',
-      '${fallback.path}/librsvg-2.so.2',
+      p.join(fallback.path, 'librsvg-2.so.2'),
       'libzeta.so.1',
     ]);
   });

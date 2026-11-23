@@ -19,6 +19,7 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 // Test-only transitive dep (via path_provider) for the mock mixin.
 // ignore: depend_on_referenced_packages
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import '../../support/temp_dir.dart';
 
 /// Feeds a fixed app-support dir so the dialog's AppSettings reads resolve
 /// promptly (an empty store on first run), instead of a pending platform call
@@ -42,7 +43,7 @@ void main() {
     AppSettings.resetWriteQueueForTests();
   });
 
-  tearDown(() => tempDir.deleteSync(recursive: true));
+  tearDown(() => deleteTempDir(tempDir));
 
   // The dialog is taller than the default 600px test viewport, so its action
   // buttons would land off-screen. Give every test a tall surface.

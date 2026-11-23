@@ -1,3 +1,8 @@
+// VIPSHOME only matters for the macOS/Linux bundles; on Windows libvips finds
+// its modules next to its own DLL and pointVipsHomeAtBundle is a no-op.
+@TestOn('mac-os || linux')
+library;
+
 import 'dart:ffi';
 import 'dart:io';
 

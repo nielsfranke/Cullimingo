@@ -172,7 +172,7 @@ void main() {
     final importId = await repo.importFolder(tmp.path);
     final photos = await repo.watchImport(importId).first;
 
-    expect(photos.map((p) => p.path.split('/').last).toList(), [
+    expect(photos.map((photo) => p.basename(photo.path)).toList(), [
       'b_earlier.jpg',
       'a_later.jpg',
     ]);

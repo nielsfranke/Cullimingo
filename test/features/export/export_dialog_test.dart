@@ -14,6 +14,7 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 // Test-only transitive dep (via path_provider) for the mock mixin.
 // ignore: depend_on_referenced_packages
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import '../../support/temp_dir.dart';
 
 ExportSource _src(String path) => ExportSource(
   path: path,
@@ -43,7 +44,7 @@ void main() {
     PathProviderPlatform.instance = _FakePathProvider(tempDir.path);
   });
 
-  tearDown(() => tempDir.deleteSync(recursive: true));
+  tearDown(() => deleteTempDir(tempDir));
 
   Future<ExportRequest?> openAndAct(
     WidgetTester tester,

@@ -261,11 +261,13 @@ void main() {
       const IptcTemplate(fields: {IptcField.source: 'Stale'}),
       (t) async {
         await t.tap(find.text('Load XMP…'));
-        // The parse runs in a real isolate — let it finish outside fake async.
-        await t.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 200)),
+        // The parse runs in a real isolate — let it finish outside fake async,
+        // waiting for its result rather than a fixed time (200 ms flaked on a
+        // loaded machine and on Windows).
+        await _settleUntil(
+          t,
+          () => find.text('From file').evaluate().isNotEmpty,
         );
-        await t.pumpAndSettle();
       },
       pickLoadPath: () async => path,
     );
@@ -289,11 +291,8 @@ void main() {
       const IptcTemplate(fields: {IptcField.credit: 'AP'}, keywords: ['a']),
       (t) async {
         await t.tap(find.text('Save XMP…'));
-        // The write runs in a real isolate — let it finish outside fake async.
-        await t.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 200)),
-        );
-        await t.pumpAndSettle();
+        // The write runs in a real isolate — wait for the file, not a timer.
+        await _settleUntil(t, () => File(path).existsSync());
       },
       pickSavePath: () async => path,
     );
@@ -302,4 +301,17 @@ void main() {
     expect(out.fields, {IptcField.credit: 'AP'});
     expect(out.keywords, ['a']);
   });
+}
+
+/// Alternates real time (for isolate work) with pumps until [done] holds,
+/// for up to 10 s of wall-clock time.
+Future<void> _settleUntil(WidgetTester t, bool Function() done) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 10));
+  while (!done() && DateTime.now().isBefore(deadline)) {
+    await t.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await t.pump();
+  }
+  await t.pumpAndSettle();
 }

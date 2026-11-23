@@ -69,7 +69,13 @@ void main() {
 
     test('changes when content changes', () async {
       final before = await fileSignature(photo);
-      photo.writeAsBytesSync(List<int>.filled(200 * 1024, 9));
+      // Same size: the key changes through the mtime. A rewrite within the
+      // filesystem clock's tick (NTFS updates it ~every 16 ms) can keep the
+      // old one, so move it on like any real later save would.
+      final mtime = photo.lastModifiedSync();
+      photo
+        ..writeAsBytesSync(List<int>.filled(200 * 1024, 9))
+        ..setLastModifiedSync(mtime.add(const Duration(seconds: 2)));
       expect(await fileSignature(photo), isNot(before));
     });
   });

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:cullimingo/core/files/posix_fs.dart';
+import 'package:cullimingo/core/files/rel_path.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:path/path.dart' as p;
 
@@ -128,7 +129,7 @@ DestinationCheck checkDestinationsSync({
 
     var need = 0;
     for (final f in files) {
-      final dest = p.join(root, f.relPath);
+      final dest = joinRelPath(root, f.relPath);
       if (FileSystemEntity.typeSync(dest, followLinks: false) !=
           FileSystemEntityType.notFound) {
         continue; // already there: skipped or compared, never rewritten

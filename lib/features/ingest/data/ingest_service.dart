@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cullimingo/core/files/part_cleanup.dart';
+import 'package:cullimingo/core/files/rel_path.dart';
 import 'package:cullimingo/core/files/sidecar_path.dart';
 import 'package:cullimingo/core/files/verified_copy.dart';
 import 'package:cullimingo/core/files/watched_copy.dart';
@@ -427,7 +428,7 @@ Stream<IngestProgress> runIngest({
       if (i >= total) return;
       final item = plan.items[i];
       final dests = [
-        for (final root in destinationRoots) p.join(root, item.relPath),
+        for (final root in destinationRoots) joinRelPath(root, item.relPath),
       ];
       var result = await copy(item.source, dests);
       // Carry the companions (sidecars) along once the media itself is safe.
@@ -438,7 +439,7 @@ Stream<IngestProgress> runIngest({
         for (final c in item.companions) {
           if (stopped) break;
           final companion = await copy(c.source, [
-            for (final root in destinationRoots) p.join(root, c.relPath),
+            for (final root in destinationRoots) joinRelPath(root, c.relPath),
           ]);
           if (result.ok && !companion.ok) {
             result = CopyResult(
@@ -479,9 +480,9 @@ Stream<IngestProgress> runIngest({
         removeStalePartFiles({
           for (final root in destinationRoots)
             for (final item in plan.items) ...[
-              p.dirname(p.join(root, item.relPath)),
+              p.dirname(joinRelPath(root, item.relPath)),
               for (final c in item.companions)
-                p.dirname(p.join(root, c.relPath)),
+                p.dirname(joinRelPath(root, c.relPath)),
             ],
         }),
       );
