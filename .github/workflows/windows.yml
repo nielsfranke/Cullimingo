@@ -3,8 +3,8 @@
 # zip, SHA256SUMS-windows.txt) into the `cullimingo-windows-downloads`
 # artifact, scan each with Microsoft Defender on a fresh runner, and install,
 # start and uninstall each one on a fresh runner. Called by release.yml (a
-# tag's Release attaches the artifact) and windows-spike.yml; runnable on its
-# own from the Actions tab.
+# tag's Release attaches the artifact); runnable on its own from the Actions
+# tab.
 name: Windows downloads
 
 on:

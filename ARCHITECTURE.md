@@ -158,7 +158,7 @@ packages/
   (`io.github.nielsfranke.Cullimingo`) comes in at runtime from `FLATPAK_ID`
   (`linux/runner/my_application.cc`); other Linux builds keep the compiled-in
   `cc.nielsbox.cullimingo`, which names their data folder.
-- Windows (in progress on `spike/windows-build`): `windows/` runner with an
+- Windows: `windows/` runner with an
   always-dark caption; the libvips/LibRaw DLLs come from libvips' official
   `build-win64-mxe` zip (LibRaw ships inside it as `libraw_r-25.dll`; its
   SHA-256 is pinned in `windows/packaging/vips.sha256`) and sit beside

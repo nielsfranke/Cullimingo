@@ -303,11 +303,11 @@ review questions about `--filesystem=home` and
 The `io.github.nielsfranke.Cullimingo` ID is verified through the GitHub
 account that owns the repo — no website file needed.
 
-## Windows (unsigned, in progress)
+## Windows (unsigned)
 
-Not released yet — built on the `spike/windows-build` branch by
-`.github/workflows/windows-spike.yml`. Packaged the same way as rawtonic, and
-**not code-signed** (a deliberate decision): three x64 downloads with the
+Built by `.github/workflows/windows.yml`, which `release.yml` calls for every
+`v*` tag (and which runs on its own from the Actions tab). Packaged the same
+way as rawtonic, and **not code-signed** (a deliberate decision): three x64 downloads with the
 same files,
 
 - `Cullimingo_<v>_x64-setup.exe` — NSIS, per user into

@@ -16,7 +16,7 @@ import 'package:path/path.dart' as p;
 ///   are patched to `RUNPATH=$ORIGIN`, so the loader resolves the rest of the
 ///   dependency tree from the same directory. This is also where Flutter drops
 ///   the engine + plugin `.so`s, so we match by [prefix]/extension.
-/// - **Windows** (spike): next to `cullimingo.exe`, where Flutter also drops
+/// - **Windows**: next to `cullimingo.exe`, where Flutter also drops
 ///   the engine + plugin DLLs. The libvips Windows build (`build-win64-mxe`,
 ///   which also ships LibRaw) names its DLLs `libvips-42.dll`,
 ///   `libraw_r-25.dll`, `libglib-2.0-0.dll`; `LoadLibrary` resolves their

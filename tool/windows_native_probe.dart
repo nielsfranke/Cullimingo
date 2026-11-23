@@ -1,4 +1,4 @@
-// Windows spike: proves the bundled native libs load the way the app loads
+// Windows: proves the bundled native libs load the way the app loads
 // them. Given the directory that holds the DLLs (the release bundle next to
 // cullimingo.exe), it resolves libvips / glib / gobject / LibRaw with the
 // app's own filename matcher (`nativeLibMatches`), opens each with
