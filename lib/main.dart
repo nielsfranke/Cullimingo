@@ -23,8 +23,10 @@ import 'package:window_manager/window_manager.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Capture framework + uncaught errors into the in-app log viewer (§8).
+  // Capture framework + uncaught errors into the in-app log viewer (§8), and
+  // mirror the log into a file that outlives the session.
   setupLogging();
+  await startFileLogging();
 
   // Initialise libvips once on this isolate before any preview-worker isolate
   // spawns — libvips' global type registration isn't safe to run concurrently,

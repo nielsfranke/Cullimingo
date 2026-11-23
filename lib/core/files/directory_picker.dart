@@ -32,8 +32,10 @@ const XTypeGroup macApplicationTypeGroup = XTypeGroup(
 /// is an `.app` bundle. It is a directory on disk, but `NSOpenPanel` treats
 /// bundles as packages, i.e. as *files*. A folder-only panel greys every app
 /// out (#29), so this uses a file panel filtered to application bundles,
-/// opened at `/Applications`. Elsewhere an app is a plain executable, picked as
-/// a file.
+/// opened at `/Applications`. On Windows the panel is filtered to `.exe` and
+/// opens in Program Files (Store apps can't be picked there — see
+/// `windowsAppAliases`); on Linux an app is a plain executable, picked as a
+/// file.
 Future<String?> pickApplication() async {
   final file = Platform.isMacOS
       ? await openFile(
@@ -41,6 +43,37 @@ Future<String?> pickApplication() async {
           initialDirectory: '/Applications',
           confirmButtonText: 'Add',
         )
+      : Platform.isWindows
+      ? await openFile(
+          acceptedTypeGroups: const [
+            XTypeGroup(label: 'Programs', extensions: ['exe']),
+          ],
+          initialDirectory: Platform.environment['ProgramFiles'],
+          confirmButtonText: 'Add',
+        )
       : await openFile();
   return file?.path;
+}
+
+/// The Store apps that can be launched with files, as their app execution
+/// aliases (`%LOCALAPPDATA%\Microsoft\WindowsApps\mspaint.exe`, …), sorted by
+/// name. Windows' file dialog refuses these alias files ("The file cannot be
+/// accessed by the system"), yet starting one with the photos as arguments
+/// works like any `.exe` — so the settings offer them from this list instead.
+/// Empty off Windows or without the folder. [dir] overrides it (tests).
+List<String> windowsAppAliases({String? dir}) {
+  final root =
+      dir ??
+      (Platform.isWindows && Platform.environment['LOCALAPPDATA'] != null
+          ? '${Platform.environment['LOCALAPPDATA']}\\Microsoft\\WindowsApps'
+          : null);
+  if (root == null) return const [];
+  try {
+    return [
+      for (final e in Directory(root).listSync(followLinks: false))
+        if (e.path.toLowerCase().endsWith('.exe')) e.path,
+    ]..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  } on FileSystemException {
+    return const [];
+  }
 }

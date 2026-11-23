@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:cullimingo/app/theme/tokens.dart';
 import 'package:cullimingo/core/cache/memory_budget.dart';
 import 'package:cullimingo/core/files/directory_picker.dart';
 import 'package:cullimingo/core/files/host_command.dart';
+import 'package:cullimingo/core/files/open_external.dart';
 import 'package:cullimingo/core/format/shortcut_labels.dart';
 import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/secrets/secret_store.dart';
@@ -313,8 +315,34 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
 
   /// Picks an application and appends it as a "Send to" editor (label derived
   /// from the app/executable name; a duplicate path is ignored).
-  Future<void> _addEditor() async {
-    final path = await pickApplication();
+  Future<void> _addEditor() async => _appendEditor(await pickApplication());
+
+  /// Windows: picks a Store app (Paint, Photos, …) by its execution alias,
+  /// which the file dialog can't select.
+  Future<void> _addStoreApp() async {
+    final aliases = windowsAppAliases();
+    final path = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Add Store app'),
+        children: [
+          if (aliases.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(AppSpacing.lg),
+              child: Text('No Store apps with a command-line alias found.'),
+            ),
+          for (final alias in aliases)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(context).pop(alias),
+              child: Text(p.basenameWithoutExtension(alias)),
+            ),
+        ],
+      ),
+    );
+    _appendEditor(path);
+  }
+
+  void _appendEditor(String? path) {
     if (path == null || !mounted) return;
     if (_editors.any((e) => e.path == path)) return;
     setState(
@@ -778,10 +806,21 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
       ),
     Align(
       alignment: Alignment.centerLeft,
-      child: OutlinedButton.icon(
-        onPressed: () => unawaited(_addEditor()),
-        icon: const Icon(Icons.add, size: 16),
-        label: const Text('Add editor…'),
+      child: Wrap(
+        spacing: AppSpacing.sm,
+        children: [
+          OutlinedButton.icon(
+            onPressed: () => unawaited(_addEditor()),
+            icon: const Icon(Icons.add, size: 16),
+            label: const Text('Add editor…'),
+          ),
+          if (Platform.isWindows)
+            OutlinedButton.icon(
+              onPressed: () => unawaited(_addStoreApp()),
+              icon: const Icon(Icons.storefront_outlined, size: 16),
+              label: const Text('Add Store app…'),
+            ),
+        ],
       ),
     ),
     const SizedBox(height: AppSpacing.lg),
@@ -853,6 +892,12 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
           icon: const Icon(Icons.article_outlined, size: 16),
           label: const Text('View logs'),
         ),
+        if (appLogFile case final log?)
+          OutlinedButton.icon(
+            onPressed: () => unawaited(revealInFileManager(log.path)),
+            icon: const Icon(Icons.folder_open_outlined, size: 16),
+            label: const Text('Show log file'),
+          ),
         OutlinedButton.icon(
           onPressed: () => showAboutCullimingo(context),
           icon: const Icon(Icons.info_outline, size: 16),
