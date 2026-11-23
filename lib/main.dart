@@ -80,6 +80,7 @@ Future<void> main() async {
       }
     }
     await windowManager.show();
+    if (settings.windowMaximized) await windowManager.maximize();
     await windowManager.focus();
   });
   windowManager.addListener(_WindowBoundsPersister(settings));
@@ -176,9 +177,18 @@ class _WindowBoundsPersister extends WindowListener {
   @override
   void onWindowMove() => _schedule();
 
+  @override
+  void onWindowMaximize() => unawaited(_settings.setWindowMaximized(true));
+
+  @override
+  void onWindowUnmaximize() => unawaited(_settings.setWindowMaximized(false));
+
   void _schedule() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 400), () async {
+      // A maximized window's bounds are the screen's: keep the normal ones,
+      // so un-maximizing after a restart lands where the user left it.
+      if (await windowManager.isMaximized()) return;
       final size = await windowManager.getSize();
       final position = await windowManager.getPosition();
       await _settings.setWindowSize(size.width, size.height);
