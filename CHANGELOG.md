@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.14.0 — 2026-11-23
 
 ### Added
 - **Install updates from inside the app:** when a new version is out, the
