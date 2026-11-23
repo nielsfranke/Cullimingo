@@ -3,6 +3,13 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **New "Send to" editors show up right away:** an editor added (or
+  removed) in Settings only reached the toolbar button, the right-click menu
+  and `⌘E` after a restart. They now update as soon as you press Apply.
+
 ## 1.12.0 — 2026-11-22
 
 ### Added
