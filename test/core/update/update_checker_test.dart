@@ -149,4 +149,16 @@ void main() {
       );
     },
   );
+
+  test('CULLIMINGO_UPDATE_OFFER never offers the running version', () async {
+    final settings = await AppSettings.load();
+    expect(
+      await checkForUpdatesOnStartup(
+        settings: settings,
+        currentVersion: '1.14.0-rc.2',
+        environment: {'CULLIMINGO_UPDATE_OFFER': '1.14.0-rc.2'},
+      ),
+      isNull,
+    );
+  });
 }

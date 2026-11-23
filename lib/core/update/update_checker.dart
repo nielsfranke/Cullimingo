@@ -135,6 +135,8 @@ Future<UpdateInfo?> checkForUpdatesOnStartup({
       (environment ?? Platform.environment)['CULLIMINGO_UPDATE_OFFER'];
   if (offer != null && offer.trim().isNotEmpty) {
     final version = offer.trim().replaceFirst(RegExp('^v'), '');
+    // The relaunched app inherits the variable: never offer itself.
+    if (version == currentVersion) return null;
     return UpdateInfo(
       version: version,
       releaseUrl: Uri.parse(
