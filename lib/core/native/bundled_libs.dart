@@ -16,6 +16,11 @@ import 'package:path/path.dart' as p;
 ///   are patched to `RUNPATH=$ORIGIN`, so the loader resolves the rest of the
 ///   dependency tree from the same directory. This is also where Flutter drops
 ///   the engine + plugin `.so`s, so we match by [prefix]/extension.
+/// - **Windows** (spike): next to `cullimingo.exe`, where Flutter also drops
+///   the engine + plugin DLLs. The libvips Windows build (`build-win64-mxe`,
+///   which also ships LibRaw) names its DLLs `libvips-42.dll`,
+///   `libraw_r-25.dll`, `libglib-2.0-0.dll`; `LoadLibrary` resolves their
+///   dependencies from the application directory.
 ///
 /// See `BUILD_PLAN.md` §6.1.
 String? bundledNativeLib(String prefix) {
@@ -30,14 +35,27 @@ String? bundledNativeLib(String prefix) {
 }
 
 /// Whether [name] is the native library file for [prefix] on the current
-/// platform: a `.dylib` on macOS, or a `.so` / versioned `.so.N` on Linux.
-/// Pass [linux] to override the platform (tests).
-bool nativeLibMatches(String name, String prefix, {bool? linux}) {
-  if (!name.startsWith(prefix)) return false;
-  if (linux ?? Platform.isLinux) {
-    return name.endsWith('.so') || name.contains('.so.');
+/// platform: a `.dylib` on macOS, a `.so` / versioned `.so.N` on Linux, or a
+/// `<stem>[_r][-N].dll` on Windows (stem = [prefix] without a trailing `.`;
+/// `libvips-cpp-42.dll` is deliberately *not* `libvips.`). Pass [os] (a
+/// `Platform.operatingSystem` value) to override the platform (tests).
+bool nativeLibMatches(String name, String prefix, {String? os}) {
+  switch (os ?? Platform.operatingSystem) {
+    case 'windows':
+      final stem = prefix.endsWith('.')
+          ? prefix.substring(0, prefix.length - 1)
+          : prefix;
+      return RegExp(
+        '^${RegExp.escape(stem)}(_r)?(-[0-9][0-9_.]*)?\\.dll\$',
+        caseSensitive: false,
+      ).hasMatch(name);
+    case 'linux':
+      if (!name.startsWith(prefix)) return false;
+      return name.endsWith('.so') || name.contains('.so.');
+    default:
+      if (!name.startsWith(prefix)) return false;
+      return name.endsWith('.dylib');
   }
-  return name.endsWith('.dylib');
 }
 
 /// Loads the *host-preferred* native libs — those under the bundle's
@@ -108,7 +126,7 @@ List<String> hostPreferredSonames(Directory fallbackDir) =>
         .listSync()
         .whereType<File>()
         .map((f) => p.basename(f.path))
-        .where((n) => nativeLibMatches(n, 'lib', linux: true))
+        .where((n) => nativeLibMatches(n, 'lib', os: 'linux'))
         .toList()
       ..sort();
 
@@ -128,6 +146,8 @@ Directory? get _bundledLibsDir {
     libsPath = p.normalize(p.join(exeDir, '..', 'libs'));
   } else if (Platform.isLinux) {
     libsPath = p.join(exeDir, 'lib');
+  } else if (Platform.isWindows) {
+    libsPath = exeDir;
   } else {
     return _cached = null;
   }

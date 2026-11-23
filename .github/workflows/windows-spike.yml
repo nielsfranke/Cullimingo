@@ -1,0 +1,127 @@
+# Windows feasibility spike — NOT part of the release pipeline.
+#
+# Answers "how far is a Windows build?" with facts instead of guesses:
+#   1. Does `flutter build windows` succeed with our plugin set?
+#   2. Do the official libvips Windows binaries (libvips/build-win64-mxe, which
+#      also ship LibRaw as libraw_r-NN.dll) load through the app's own lib
+#      resolver (tool/windows_native_probe.dart)?
+#   3. Does the bundled app start and stay up?
+#   4. Which unit tests fail on Windows (paths, POSIX FFI, OS tools)?
+#
+# Every step that is expected to fail at this stage is `continue-on-error`, so
+# one run reports all four answers. The bundle is uploaded as an artifact for
+# manual testing in a Windows VM.
+name: Windows spike
+
+on:
+  push:
+    branches: ['spike/windows**']
+  workflow_dispatch:
+
+concurrency:
+  group: windows-spike-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: 3.44.4
+  VIPS_VERSION: 8.18.7
+
+jobs:
+  build:
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Fetch libvips (+ LibRaw) Windows binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "v$env:VIPS_VERSION" -R libvips/build-win64-mxe `
+            -p "vips-dev-x64-all-$env:VIPS_VERSION.zip" -D "$env:RUNNER_TEMP"
+          Expand-Archive "$env:RUNNER_TEMP/vips-dev-x64-all-$env:VIPS_VERSION.zip" `
+            -DestinationPath "$env:RUNNER_TEMP/vips"
+          $bin = (Get-ChildItem "$env:RUNNER_TEMP/vips" -Directory | Select-Object -First 1).FullName + "/bin"
+          "VIPS_BIN=$bin" | Out-File -Append $env:GITHUB_ENV
+          Get-ChildItem $bin -Filter *.dll | Select-Object -ExpandProperty Name
+
+      - name: Build Windows release bundle
+        run: flutter build windows --release
+
+      - name: Copy native DLLs next to cullimingo.exe
+        run: |
+          $out = "build/windows/x64/runner/Release"
+          Copy-Item "$env:VIPS_BIN/*.dll" $out
+          Get-ChildItem $out | Format-Table Name, Length
+
+      - name: Native lib probe (app's own resolver)
+        continue-on-error: true
+        run: dart run tool/windows_native_probe.dart build/windows/x64/runner/Release
+
+      - name: Smoke test — app starts and stays up for 20 s
+        continue-on-error: true
+        run: |
+          $exe = Resolve-Path "build/windows/x64/runner/Release/cullimingo.exe"
+          $proc = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 20
+          if ($proc.HasExited) {
+            Write-Host "App exited early with code $($proc.ExitCode)"
+            exit 1
+          }
+          Write-Host "App still running after 20 s (pid $($proc.Id))"
+          Stop-Process -Id $proc.Id -Force
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cullimingo-windows-x64
+          path: build/windows/x64/runner/Release
+          retention-days: 14
+
+  test:
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Run tests (failures expected — this is the to-do list)
+        continue-on-error: true
+        run: |
+          flutter test --reporter expanded 2>&1 | Tee-Object -FilePath test.log
+          exit $LASTEXITCODE
+
+      - name: Summarise failing tests
+        if: always()
+        run: |
+          $fails = Select-String -Path test.log -Pattern '\[E\]$' | ForEach-Object { $_.Line }
+          "## Windows test failures ($($fails.Count))" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          '```' | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          $fails | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          '```' | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          Select-String -Path test.log -Pattern '^\d\d:\d\d \+\d+.*: (All tests passed|Some tests failed)' |
+            Select-Object -Last 1 | ForEach-Object { $_.Line } | Out-File -Append $env:GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: windows-test-log
+          path: test.log
