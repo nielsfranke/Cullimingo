@@ -3,7 +3,7 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
-## Unreleased
+## 1.13.0 — 2026-11-23
 
 ### Added
 - **Windows version** (x64, Windows 10 and 11): an installer for your user,
