@@ -80,7 +80,12 @@ packages/
   non-recursively, on an isolate alongside the copies (`part_cleanup.dart`).
   The import's backup root is
   always verified. Volume info is libc FFI (`posix_fs.dart`): `statfs` on
-  macOS, `/proc/self/mountinfo` + `statvfs` on Linux, 64-bit layouts only.
+  macOS, `/proc/self/mountinfo` + `statvfs` on Linux, 64-bit layouts only;
+  Windows uses kernel32 (`windows_fs.dart`: `MoveFileExW` without the
+  replace flag as the atomic no-replace publish, `GetVolumePathNameW` +
+  `GetDiskFreeSpaceExW` for volume and room). The POSIX mount heuristics
+  (`/Volumes`, `/media`, fstab) don't apply on Windows, where a gone drive
+  letter leaves no folder behind.
 
 ## Deviations from BUILD_PLAN.md (keep this list honest)
 - **Missing/tiny-preview RAW fallback:** embedded JPEGs remain the normal fast
@@ -152,3 +157,17 @@ packages/
   (`io.github.nielsfranke.Cullimingo`) comes in at runtime from `FLATPAK_ID`
   (`linux/runner/my_application.cc`); other Linux builds keep the compiled-in
   `cc.nielsbox.cullimingo`, which names their data folder.
+- Windows (in progress on `spike/windows-build`): `windows/` runner with an
+  always-dark caption; the libvips/LibRaw DLLs come from libvips' official
+  `build-win64-mxe` zip (LibRaw ships inside it as `libraw_r-25.dll`; its
+  SHA-256 is pinned in `windows/packaging/vips.sha256`) and sit beside
+  `cullimingo.exe` with the VC++ runtime. Shipped **unsigned**, packaged like
+  rawtonic: per-user NSIS setup, per-machine MSI, portable zip, checksums
+  (`tool/bundle_windows.ps1`, `.github/workflows/windows.yml`: Defender scan
+  + install/start/uninstall smoke per download, called by `release.yml`).
+  Cards are drive letters (`GetLogicalDrives`/`GetDriveTypeW`, the system
+  drive excluded) picked up by the same poll as macOS volumes; Recycle Bin
+  through PowerShell + .NET `FileSystem.DeleteFile(SendToRecycleBin)`; Store
+  apps as editors through their execution aliases. App data lives under
+  `%APPDATA%`/`%LOCALAPPDATA%\cc.nielsbox\Cullimingo` (the runner's
+  CompanyName).
