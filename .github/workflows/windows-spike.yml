@@ -5,7 +5,8 @@
 #   2. Do the official libvips Windows binaries (libvips/build-win64-mxe, which
 #      also ship LibRaw as libraw_r-NN.dll) load through the app's own lib
 #      resolver (tool/windows_native_probe.dart)?
-#   3. Does the bundled app start and stay up?
+#   3. Do the three unsigned downloads (NSIS, MSI, portable zip — packaged
+#      like rawtonic's) scan clean, install, start and uninstall?
 #   4. Which unit tests fail on Windows (paths, POSIX FFI, OS tools)?
 #
 # Every step that is expected to fail at this stage is `continue-on-error`, so
@@ -49,43 +50,144 @@ jobs:
         run: |
           gh release download "v$env:VIPS_VERSION" -R libvips/build-win64-mxe `
             -p "vips-dev-x64-all-$env:VIPS_VERSION.zip" -D "$env:RUNNER_TEMP"
-          Expand-Archive "$env:RUNNER_TEMP/vips-dev-x64-all-$env:VIPS_VERSION.zip" `
-            -DestinationPath "$env:RUNNER_TEMP/vips"
-          $bin = (Get-ChildItem "$env:RUNNER_TEMP/vips" -Directory | Select-Object -First 1).FullName + "/bin"
-          "VIPS_BIN=$bin" | Out-File -Append $env:GITHUB_ENV
-          Get-ChildItem $bin -Filter *.dll | Select-Object -ExpandProperty Name
+          "VIPS_ZIP=$env:RUNNER_TEMP\vips-dev-x64-all-$env:VIPS_VERSION.zip" >> $env:GITHUB_ENV
+
+      - name: Install NSIS and the WiX 5 CLI
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            $nsis = "${env:ProgramFiles(x86)}\NSIS"
+            if (-not (Test-Path "$nsis\makensis.exe")) { choco install nsis -y --no-progress }
+            "$nsis" >> $env:GITHUB_PATH
+          }
+          dotnet tool install --global wix --version 5.0.2
 
       - name: Build Windows release bundle
         run: flutter build windows --release
 
-      - name: Copy native DLLs next to cullimingo.exe
-        run: |
-          $out = "build/windows/x64/runner/Release"
-          Copy-Item "$env:VIPS_BIN/*.dll" $out
-          Get-ChildItem $out | Format-Table Name, Length
+      # Stages the bundle + libvips/LibRaw + VC++ runtime and builds the three
+      # unsigned downloads (NSIS, MSI, portable zip) + SHA256SUMS.
+      - name: Package the downloads
+        run: pwsh tool/bundle_windows.ps1 -VipsZip $env:VIPS_ZIP
 
-      - name: Native lib probe (app's own resolver)
-        continue-on-error: true
-        run: dart run tool/windows_native_probe.dart build/windows/x64/runner/Release
-
-      - name: Smoke test — app starts and stays up for 20 s
-        continue-on-error: true
-        run: |
-          $exe = Resolve-Path "build/windows/x64/runner/Release/cullimingo.exe"
-          $proc = Start-Process -FilePath $exe -PassThru
-          Start-Sleep -Seconds 20
-          if ($proc.HasExited) {
-            Write-Host "App exited early with code $($proc.ExitCode)"
-            exit 1
-          }
-          Write-Host "App still running after 20 s (pid $($proc.Id))"
-          Stop-Process -Id $proc.Id -Force
+      - name: Native lib probe on the staged folder (app's own resolver)
+        run: dart run tool/windows_native_probe.dart build/windows/dist/work/Cullimingo
 
       - uses: actions/upload-artifact@v7
         with:
-          name: cullimingo-windows-x64
-          path: build/windows/x64/runner/Release
+          name: cullimingo-windows-downloads
+          path: build/windows/dist/out/
           retention-days: 14
+
+  # Microsoft Defender on a fresh runner with freshly updated signatures, as
+  # rawtonic does: evidence, not proof (users' PCs add cloud reputation and
+  # SmartScreen). Verdicts go to the run summary.
+  defender:
+    needs: build
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: cullimingo-windows-downloads
+          path: downloads
+      - name: Scan with Microsoft Defender
+        run: |
+          $mp = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe"
+          try { Set-MpPreference -MAPSReporting Advanced -CloudBlockLevel High -ErrorAction Stop } catch { "cloud protection refused: $($_.Exception.Message)" }
+          & $mp -SignatureUpdate | Out-Host
+          $inner = Join-Path $env:RUNNER_TEMP 'portable'
+          Expand-Archive (Get-ChildItem downloads\*-portable.zip)[0].FullName -DestinationPath $inner
+          $files = @(Get-ChildItem downloads -File | Where-Object Name -ne 'SHA256SUMS-windows.txt') +
+            @(Get-Item "$inner\Cullimingo\cullimingo.exe")
+          $sum = @('## Microsoft Defender scan', '', '| File | Verdict | Exit |', '|---|---|---|')
+          $bad = $false
+          foreach ($f in $files) {
+            $log = & $mp -Scan -ScanType 3 -File $f.FullName -DisableRemediation 2>&1 | Out-String
+            $code = $LASTEXITCODE
+            $log
+            $threats = ([regex]::Matches($log, '(?m)^\s*Threat\s*:\s*(.+)$') | ForEach-Object { $_.Groups[1].Value.Trim() }) -join ', '
+            $verdict = if ($code -eq 0) { 'clean' } elseif ($code -eq 2 -and $threats) { "THREAT $threats"; $bad = $true } else { 'scan error' }
+            $sum += "| ``$($f.Name)`` | $verdict | $code |"
+          }
+          $sum -join "`n" >> $env:GITHUB_STEP_SUMMARY
+          if ($bad) { exit 1 }
+
+  # Each download on its own fresh runner (no Visual Studio runtime assumed
+  # beyond the image's): install or unpack silently, start the app for 20 s,
+  # uninstall and check nothing of the install is left.
+  smoke:
+    needs: build
+    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        kind: [nsis, msi, portable]
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: cullimingo-windows-downloads
+          path: downloads
+      - name: Verify the checksums
+        run: |
+          Set-Location downloads
+          foreach ($line in Get-Content SHA256SUMS-windows.txt) {
+            $hash, $name = $line -split '  ', 2
+            if ((Get-FileHash $name -Algorithm SHA256).Hash.ToLower() -ne $hash) { Write-Error "${name}: checksum mismatch"; exit 1 }
+            "ok $name"
+          }
+      - name: Install, start, uninstall (${{ matrix.kind }})
+        env:
+          KIND: ${{ matrix.kind }}
+        run: |
+          switch ($env:KIND) {
+            'nsis' {
+              $dir = Join-Path $env:RUNNER_TEMP 'Cullimingo install'
+              $p = Start-Process (Get-ChildItem downloads\*-setup.exe)[0].FullName -ArgumentList '/S', "/D=$dir" -PassThru -Wait
+            }
+            'msi' {
+              $dir = Join-Path $env:ProgramFiles 'Cullimingo'
+              $msi = (Get-ChildItem downloads\*.msi)[0].FullName
+              $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/norestart', '/l*v', "`"$env:RUNNER_TEMP\msi.log`"" -PassThru -Wait
+            }
+            'portable' {
+              $base = Join-Path $env:RUNNER_TEMP 'Portable apps'
+              Expand-Archive (Get-ChildItem downloads\*-portable.zip)[0].FullName -DestinationPath $base
+              $dir = Join-Path $base 'Cullimingo'
+              $p = [pscustomobject]@{ ExitCode = 0 }
+            }
+          }
+          "install exit $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { if (Test-Path "$env:RUNNER_TEMP\msi.log") { Get-Content "$env:RUNNER_TEMP\msi.log" -Tail 60 }; exit 1 }
+          if (-not (Test-Path "$dir\cullimingo.exe")) { Write-Error "cullimingo.exe not in $dir"; exit 1 }
+          $v = (Get-Item "$dir\cullimingo.exe").VersionInfo
+          "ProductName=$($v.ProductName) CompanyName=$($v.CompanyName) ProductVersion=$($v.ProductVersion)"
+
+          $proc = Start-Process "$dir\cullimingo.exe" -PassThru
+          Start-Sleep -Seconds 20
+          if ($proc.HasExited) { Write-Error "the app exited early with code $($proc.ExitCode)"; exit 1 }
+          "app still running after 20 s"
+          Stop-Process -Id $proc.Id -Force
+          Start-Sleep -Seconds 2
+
+          switch ($env:KIND) {
+            'nsis' {
+              $u = Start-Process "$dir\uninstall.exe" -ArgumentList '/S' -PassThru -Wait
+              for ($i = 0; $i -lt 30 -and (Test-Path $dir); $i++) { Start-Sleep 1 }
+            }
+            'msi' {
+              $msi = (Get-ChildItem downloads\*.msi)[0].FullName
+              $u = Start-Process msiexec.exe -ArgumentList '/x', "`"$msi`"", '/qn', '/norestart' -PassThru -Wait
+              if ($u.ExitCode -ne 0) { Write-Error "uninstall exit $($u.ExitCode)"; exit 1 }
+            }
+            'portable' { Remove-Item $dir -Recurse -Force }
+          }
+          if (Test-Path $dir) { Get-ChildItem $dir -Recurse | Select-Object -First 20 FullName; Write-Error "files left in $dir"; exit 1 }
+          "uninstalled cleanly"
 
   test:
     runs-on: windows-2025
