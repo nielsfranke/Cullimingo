@@ -27,9 +27,11 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
-  });
+  // main.dart shows the window itself (window_manager's waitUntilReadyToShow,
+  // after restoring its bounds). The template's Show() here ran on the first
+  // frame with SW_SHOWNORMAL — after main.dart had re-maximized the window —
+  // and so un-maximized it again on every start.
+  flutter_controller_->engine()->SetNextFrameCallback([&]() {});
 
   // Flutter can complete the first frame before the "show window" callback is
   // registered. The following call ensures a frame is pending to ensure the

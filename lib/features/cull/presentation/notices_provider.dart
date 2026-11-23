@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/features/cull/presentation/widgets/notice_bar.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -24,9 +25,17 @@ class NoticesController extends _$NoticesController {
   /// Shows [notice], replacing whatever is up. Transient ones (no actions,
   /// info/success) clear themselves after a few seconds so the layout doesn't
   /// keep a stale message.
+  ///
+  /// Every notice also goes to the log (and so to the log file): a bar
+  /// message is gone after a few seconds, the record of what happened isn't.
   void show(Notice notice) {
     _timer?.cancel();
     state = notice;
+    if (notice.kind == NoticeKind.warning) {
+      appTalker.warning('Notice: ${notice.message}');
+    } else {
+      appTalker.info('Notice: ${notice.message}');
+    }
     final transient =
         notice.actions.isEmpty &&
         (notice.kind == NoticeKind.info || notice.kind == NoticeKind.success);

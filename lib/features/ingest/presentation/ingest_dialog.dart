@@ -6,6 +6,7 @@ import 'package:cullimingo/core/files/directory_picker.dart';
 import 'package:cullimingo/core/files/posix_fs.dart';
 import 'package:cullimingo/core/files/supported_files.dart';
 import 'package:cullimingo/core/files/verified_copy.dart';
+import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/naming/rename_template.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:cullimingo/features/ingest/data/ingest_service.dart';
@@ -462,18 +463,50 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
       if (mounted) setState(() => _progress = tick);
     }
     _stopwatch.stop();
+    final summary = IngestSummary(
+      results,
+      planned: plan.items.length,
+      cancelled: _cancelled,
+      unreadable: _unreadable,
+    );
+    _logSummary(summary, source: _source ?? '', roots: roots);
     if (!mounted) return;
     setState(() {
-      _summary = IngestSummary(
-        results,
-        planned: plan.items.length,
-        cancelled: _cancelled,
-        unreadable: _unreadable,
-      );
+      _summary = summary;
       _running = false;
     });
     // Remember the destination so it's pre-filled next time.
     unawaited(updateSettings((s) => s.setLastDestination(dest)));
+  }
+
+  // The import's outcome, in full, for the log file — the summary view cuts
+  // long lines off, and it is gone once the dialog closes.
+  void _logSummary(
+    IngestSummary s, {
+    required String source,
+    required List<String> roots,
+  }) {
+    final status = s.cancelled
+        ? 'cancelled'
+        : s.allOk
+        ? 'complete'
+        : 'finished with issues';
+    final head =
+        'Import $status: '
+        '$source → ${roots.join(', ')} · copied ${s.copied}, skipped '
+        '${s.skipped}, conflicts ${s.conflicts}, failed ${s.failed}, '
+        'not started ${s.notStarted}, unreadable ${s.unreadable.length}';
+    final problems = [
+      for (final r in s.results)
+        if (r.message != null) '  ${r.source}: ${r.outcome.name}: ${r.message}',
+      for (final u in s.unreadable) '  unreadable: ${u.path}',
+    ];
+    final text = [head, ...problems].join('\n');
+    if (s.allOk) {
+      appTalker.info(text);
+    } else {
+      appTalker.warning(text);
+    }
   }
 
   void _cancel() => setState(() => _cancelled = true);
