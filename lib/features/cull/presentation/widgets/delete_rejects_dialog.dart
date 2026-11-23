@@ -78,7 +78,8 @@ Future<TrashFallback?> showTrashUnavailableDialog(
         width: 420,
         child: Text(
           '${reason ?? "$count $noun couldn't be moved to the Trash — "
-                  'network shares and some drives have none.'}\n\n'
+                  'the file may be open in another app, or its drive or '
+                  'network share has no Trash.'}\n\n'
           'Move ${count == 1 ? 'it' : 'them'} into a "$kRejectedFolderName" '
           'folder next to the ${count == 1 ? 'photo' : 'photos'} instead? '
           'Nothing is deleted: Cullimingo skips that folder, and you can '

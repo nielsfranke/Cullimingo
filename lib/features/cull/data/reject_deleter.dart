@@ -45,17 +45,34 @@ Future<RejectDeleteResult> deleteRejectedPhotos({
   if (rejects.isEmpty) {
     return const RejectDeleteResult(deleted: 0, failedPaths: []);
   }
-  // Photo + its own sidecar per reject; a missing sidecar is skipped by the
-  // trasher. Resolved per photo so trashing the JPEG of a RAW+JPEG pair takes
-  // `DSC1.JPG.xmp`, never the RAW's `DSC1.xmp`.
+  // Each reject's own sidecar, resolved per photo so trashing the JPEG of a
+  // RAW+JPEG pair takes `DSC1.JPG.xmp`, never the RAW's `DSC1.xmp`. A missing
+  // sidecar is skipped by the trasher.
   final resolver = SidecarResolver();
-  final paths = <String>[
-    for (final photo in rejects) ...[
-      photo.path,
-      await resolver.resolve(photo.path),
+  final sidecars = <String, String>{
+    for (final photo in rejects) photo.path: await resolver.resolve(photo.path),
+  };
+  // Photos first, then only the sidecars of photos that actually went: a
+  // photo the OS refused (locked, on a share without trash) keeps its marks
+  // beside it instead of losing its sidecar to the trash.
+  final total = rejects.length * 2;
+  final result = await trash(
+    [for (final photo in rejects) photo.path],
+    onProgress: onProgress == null
+        ? null
+        : (done, _) => onProgress(done, total),
+  );
+  final refused = result.failed.toSet();
+  await trash(
+    [
+      for (final photo in rejects)
+        if (!refused.contains(photo.path)) sidecars[photo.path]!,
     ],
-  ];
-  final result = await trash(paths, onProgress: onProgress);
+    onProgress: onProgress == null
+        ? null
+        : (done, _) => onProgress(rejects.length + done, total),
+  );
+  onProgress?.call(total, total);
 
   final failed = result.failed.toSet();
   final deletable = <String>[];

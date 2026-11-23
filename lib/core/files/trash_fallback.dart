@@ -34,12 +34,25 @@ Future<List<String>> moveIntoRejectedFolder(List<PhotoFiles> items) =>
 // Any error — not only a FileSystemException — counts as "not moved", so it
 // is reported to the user instead of escaping the isolate unnoticed (the
 // Windows spike's missing `link` left an empty _Rejected folder and no word).
+// A failed move leaves no empty _Rejected folder behind (a non-recursive
+// delete only removes it while it is empty).
 bool _tryMoveOne(PhotoFiles item) {
+  var moved = false;
   try {
-    return _moveOne(item);
+    moved = _moveOne(item);
   } on Object {
-    return false;
+    moved = false;
   }
+  if (!moved) {
+    try {
+      Directory(
+        p.join(p.dirname(item.photo), kRejectedFolderName),
+      ).deleteSync();
+    } on FileSystemException {
+      // Not empty (earlier photos moved in) or never created: keep it.
+    }
+  }
+  return moved;
 }
 
 /// Deletes each photo and its sidecar for good — no trash, no undo. Only for

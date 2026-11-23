@@ -50,7 +50,7 @@ void main(List<String> args) {
       continue;
     }
     try {
-      libs[prefix] = DynamicLibrary.open(p.join(dir.path, name));
+      libs[prefix] = DynamicLibrary.open(p.join(dir.absolute.path, name));
       stdout.writeln('loaded   $prefix -> $name');
     } on Object catch (e) {
       stdout.writeln('FAILED   $prefix -> $name: $e');
