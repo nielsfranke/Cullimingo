@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:cullimingo/core/files/windows_fs.dart';
 import 'package:path/path.dart' as p;
 
 /// A mounted volume that could be an ingest source (`BUILD_PLAN.md` Phase 3).
@@ -20,7 +21,9 @@ class Volume {
 
 /// Lists mounted volumes that could be an ingest source: on macOS the entries
 /// under `/Volumes`, on Linux the per-user mount roots (`/media/$USER`,
-/// `/run/media/$USER`) and `/mnt`. Pass [searchRoots] in tests.
+/// `/run/media/$USER`) and `/mnt`; on Windows every drive letter with media
+/// except the system drive (see [windowsSourceVolumes]). Pass [searchRoots]
+/// in tests.
 ///
 /// Top-level listing only (cheap) and fully synchronous, so callers that
 /// poll this every few seconds (`cull_page.workspace.dart`) must run it via
@@ -29,6 +32,15 @@ class Volume {
 /// call can't be raced against a timeout on the same isolate.
 /// Returns volumes sorted with likely camera cards (those with `DCIM`) first.
 Future<List<Volume>> listVolumes({List<String>? searchRoots}) async {
+  if (searchRoots == null && Platform.isWindows) {
+    return _sorted(
+      windowsSourceVolumes(
+        windowsDrives(),
+        systemDrive: Platform.environment['SystemDrive'] ?? 'C:',
+        hasDcim: _hasDcim,
+      ),
+    );
+  }
   final roots = searchRoots ?? _platformRoots();
   final volumes = <Volume>[];
 
@@ -51,11 +63,43 @@ Future<List<Volume>> listVolumes({List<String>? searchRoots}) async {
     }
   }
 
-  volumes.sort((a, b) {
+  return _sorted(volumes);
+}
+
+List<Volume> _sorted(List<Volume> volumes) => volumes
+  ..sort((a, b) {
     if (a.hasDcim != b.hasDcim) return a.hasDcim ? -1 : 1; // cards first
     return a.name.toLowerCase().compareTo(b.name.toLowerCase());
   });
-  return volumes;
+
+/// The ingest sources among Windows [drives]: removable media (card readers,
+/// USB sticks), fixed disks other than the [systemDrive] (`C:` — the
+/// counterpart of keeping "Macintosh HD" out) and network drives. Optical
+/// drives and RAM disks are left out. Named like Explorer does,
+/// `LABEL (E:)`, or just `E:` without a label. Pure apart from [hasDcim],
+/// for tests.
+List<Volume> windowsSourceVolumes(
+  List<WindowsDrive> drives, {
+  required String systemDrive,
+  required bool Function(String root) hasDcim,
+}) {
+  final system = systemDrive.toUpperCase().replaceAll(RegExp(r'[\\/]+$'), '');
+  return [
+    for (final d in drives)
+      if (const {
+            WindowsDriveType.removable,
+            WindowsDriveType.fixed,
+            WindowsDriveType.remote,
+          }.contains(d.type) &&
+          !d.root.toUpperCase().startsWith(system))
+        Volume(
+          path: d.root,
+          name: d.label.isEmpty
+              ? d.root.substring(0, 2)
+              : '${d.label} (${d.root.substring(0, 2)})',
+          hasDcim: hasDcim(d.root),
+        ),
+  ];
 }
 
 /// The camera cards (volumes with `DCIM`) in [current] whose path isn't in

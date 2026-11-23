@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cullimingo/app/app.dart';
 import 'package:cullimingo/app/theme/tokens.dart';
+import 'package:cullimingo/app/window_size.dart';
 import 'package:cullimingo/core/cache/memory_budget.dart';
 import 'package:cullimingo/core/cache/vips.dart';
 import 'package:cullimingo/core/files/host_command.dart';
@@ -55,9 +56,9 @@ Future<void> main() async {
   final saved = settings.windowSize;
   final windowOptions = WindowOptions(
     size: saved == null
-        ? const Size(1280, 800)
+        ? firstRunWindowSize(_primaryDisplayLogicalSize())
         : Size(saved.width, saved.height),
-    minimumSize: const Size(960, 640),
+    minimumSize: kMinimumWindowSize,
     center: saved == null,
     title: 'Cullimingo',
     backgroundColor: AppColors.bgBase,
@@ -155,6 +156,14 @@ Future<void> main() async {
 
 /// Saves the window size + position (debounced) whenever the user resizes or
 /// moves it, so the next launch reopens the same way.
+/// The primary display's size in logical pixels, or null when unknown.
+Size? _primaryDisplayLogicalSize() {
+  final displays = WidgetsBinding.instance.platformDispatcher.displays;
+  if (displays.isEmpty) return null;
+  final d = displays.first;
+  return d.devicePixelRatio <= 0 ? null : d.size / d.devicePixelRatio;
+}
+
 class _WindowBoundsPersister extends WindowListener {
   _WindowBoundsPersister(this._settings);
 
