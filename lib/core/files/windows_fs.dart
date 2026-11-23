@@ -3,8 +3,9 @@ import 'dart:ffi';
 import 'package:ffi/ffi.dart';
 
 // The Windows half of `posix_fs.dart`: kernel32 calls for publishing a file
-// without replacing one, and for asking which volume a path lives on and how
-// much room it has. Only reached when `Platform.isWindows`; the library is
+// without replacing one, asking which volume a path lives on and how much
+// room it has, listing drive letters, and reading the installed RAM. Only
+// reached when `Platform.isWindows`; the library is
 // opened lazily, so macOS/Linux never touch it. Blocking calls: run them off
 // the UI isolate.
 
@@ -205,5 +206,24 @@ List<WindowsDrive> windowsDrives() {
     calloc
       ..free(oldMode)
       ..free(label);
+  }
+}
+
+/// Total physical RAM in bytes (`GetPhysicallyInstalledSystemMemory`, which
+/// reports KB), or null when Windows can't tell. Sizes the in-RAM caches
+/// (`memory_budget.dart`); without it Windows ran on the 64 MB floor.
+int? windowsTotalMemoryBytes() {
+  final kb = calloc<Uint64>();
+  try {
+    final getMemory = _kernel32
+        .lookupFunction<
+          Int32 Function(Pointer<Uint64>),
+          int Function(Pointer<Uint64>)
+        >('GetPhysicallyInstalledSystemMemory');
+    return getMemory(kb) == 0 ? null : kb.value * 1024;
+  } on Object {
+    return null;
+  } finally {
+    calloc.free(kb);
   }
 }

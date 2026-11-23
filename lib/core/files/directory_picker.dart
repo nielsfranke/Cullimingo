@@ -77,3 +77,19 @@ List<String> windowsAppAliases({String? dir}) {
     return const [];
   }
 }
+
+/// A readable name for a Store app alias: the app's name where it's known
+/// (`mspaint.exe` → "Paint"), else the alias itself.
+String windowsAppAliasLabel(String aliasPath) {
+  final name = aliasPath.split(RegExp(r'[\\/]')).last;
+  final stem = name.toLowerCase().endsWith('.exe')
+      ? name.substring(0, name.length - 4)
+      : name;
+  return const {
+        'mspaint': 'Paint',
+        'wt': 'Windows Terminal',
+        'notepad': 'Notepad',
+        'mediaplayer': 'Media Player',
+      }[stem.toLowerCase()] ??
+      stem;
+}

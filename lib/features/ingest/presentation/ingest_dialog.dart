@@ -1184,7 +1184,8 @@ class _IngestDialogState extends ConsumerState<IngestDialog> {
           if (hasPlan)
             TextSpan(
               text:
-                  '${plan.items.length} photos · '
+                  '${plan.items.length} '
+                  '${plan.items.length == 1 ? 'photo' : 'photos'} · '
                   '${_formatBytes(plan.totalBytes)}',
               style: const TextStyle(
                 color: AppColors.textPrimary,

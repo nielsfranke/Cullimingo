@@ -151,7 +151,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Switch the destination mode to beside-the-originals.
-      await tester.tap(find.text('Choose a folder…'));
+      await tester.tap(find.text('Into one folder'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Same folder as originals').last);
       await tester.pumpAndSettle();

@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:cullimingo/core/files/windows_fs.dart';
+
 /// Hard ceiling for a single in-RAM cache (~256 MB). On a roomy machine this is
 /// the Photo-Mechanic-style "keep everything resident" budget the app targets.
 const int _budgetCap = 256 * 1024 * 1024;
@@ -41,8 +43,9 @@ int? totalPhysicalMemoryBytes() {
       final kb = int.tryParse(line.replaceAll(RegExp('[^0-9]'), ''));
       return kb == null ? null : kb * 1024;
     }
+    if (Platform.isWindows) return windowsTotalMemoryBytes();
   } on Object {
     return null;
   }
-  return null; // Windows/unknown: callers use the floor until §later support.
+  return null; // Unknown platform: callers use the floor.
 }

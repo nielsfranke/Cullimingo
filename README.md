@@ -174,11 +174,14 @@ Full list: [**Keyboard** on the wiki](https://github.com/nielsfranke/Cullimingo/
 ```bash
 flutter pub get
 dart run build_runner watch --delete-conflicting-outputs   # keep running
-flutter run -d macos      # or: flutter run -d linux
+flutter run -d macos      # or: -d linux / -d windows
 ```
 
-macOS needs Xcode + CocoaPods; both platforms need LibRaw and libvips for
-RAW/thumbnail decode (`brew install libraw vips`, or the distro `-dev` packages).
+macOS needs Xcode + CocoaPods; Windows needs the Visual Studio 2022 Build Tools
+(C++ workload plus "C++ ATL") and Developer Mode. Every platform needs LibRaw
+and libvips for RAW/thumbnail decode (`brew install libraw vips`, the distro
+`-dev` packages, or on Windows the DLLs from libvips' `build-win64-mxe` zip,
+which includes LibRaw, next to `cullimingo.exe`).
 Full setup and the pre-commit checks are in
 [**Development**](https://github.com/nielsfranke/Cullimingo/wiki/Development).
 
@@ -188,8 +191,8 @@ Please [**open a GitHub issue**](https://github.com/nielsfranke/Cullimingo/issue
 for bugs, questions and feature ideas — rather than email. Issues keep the
 details, screenshots and follow-ups in one place, other users with the same
 problem can find them, and you get notified when a fix ships. A useful bug
-report says which Cullimingo version you run (Settings → About), your OS and
-Mac model or Linux distro, and — for files that don't display — the camera
+report says which Cullimingo version you run (Settings → About), your OS
+(Mac model, Linux distro or Windows version), and — for files that don't display — the camera
 model and file type (e.g. Sony `.ARW`).
 
 ## Support

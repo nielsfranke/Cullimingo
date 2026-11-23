@@ -23,4 +23,10 @@ void main() {
   test('a missing folder yields no aliases', () {
     expect(windowsAppAliases(dir: '/no/such/WindowsApps'), isEmpty);
   });
+
+  test('known aliases get their app name, others keep the alias', () {
+    expect(windowsAppAliasLabel(r'C:\Apps\WindowsApps\mspaint.exe'), 'Paint');
+    expect(windowsAppAliasLabel('/x/MediaPlayer.exe'), 'Media Player');
+    expect(windowsAppAliasLabel(r'C:\Apps\WindowsApps\code.exe'), 'code');
+  });
 }

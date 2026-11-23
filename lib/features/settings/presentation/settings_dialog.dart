@@ -334,21 +334,27 @@ class _SettingsDialogState extends ConsumerState<_SettingsDialog> {
           for (final alias in aliases)
             SimpleDialogOption(
               onPressed: () => Navigator.of(context).pop(alias),
-              child: Text(p.basenameWithoutExtension(alias)),
+              child: Text(windowsAppAliasLabel(alias)),
             ),
         ],
       ),
     );
-    _appendEditor(path);
+    _appendEditor(
+      path,
+      label: path == null ? null : windowsAppAliasLabel(path),
+    );
   }
 
-  void _appendEditor(String? path) {
+  void _appendEditor(String? path, {String? label}) {
     if (path == null || !mounted) return;
     if (_editors.any((e) => e.path == path)) return;
     setState(
       () => _editors = [
         ..._editors,
-        ExternalEditor(label: p.basenameWithoutExtension(path), path: path),
+        ExternalEditor(
+          label: label ?? p.basenameWithoutExtension(path),
+          path: path,
+        ),
       ],
     );
   }

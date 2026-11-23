@@ -401,7 +401,7 @@ class _ExportDialogState extends State<_ExportDialog> {
           value: _nextToOriginals,
           onChanged: (v) => setState(() => _nextToOriginals = v ?? false),
           items: const [
-            DropdownMenuItem(value: false, child: Text('Choose a folder…')),
+            DropdownMenuItem(value: false, child: Text('Into one folder')),
             DropdownMenuItem(
               value: true,
               child: Text('Same folder as originals'),

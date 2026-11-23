@@ -23,6 +23,9 @@ All notable user-facing changes to Cullimingo. The format loosely follows
   follow only photos that actually went.
 - **"Move to _Rejected" reports every failure** and no longer leaves an
   empty `_Rejected` folder behind when nothing could be moved.
+- The import dialog says "1 photo", not "1 photos", and the export
+  destination menu reads "Into one folder" instead of a misleading
+  "Choose a folder…".
 - **New "Send to" editors show up right away:** an editor added (or
   removed) in Settings only reached the toolbar button, the right-click menu
   and `⌘E` after a restart. They now update as soon as you press Apply.
