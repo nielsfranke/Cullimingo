@@ -31,7 +31,9 @@ class NoticesController extends _$NoticesController {
   void show(Notice notice) {
     _timer?.cancel();
     state = notice;
-    if (notice.kind == NoticeKind.warning) {
+    if (!notice.log) {
+      // A progress tick: the outcome is logged, not every step.
+    } else if (notice.kind == NoticeKind.warning) {
       appTalker.warning('Notice: ${notice.message}');
     } else {
       appTalker.info('Notice: ${notice.message}');

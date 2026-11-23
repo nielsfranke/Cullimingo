@@ -34,6 +34,10 @@ class AppSettings {
   @visibleForTesting
   static Future<void> get pendingWrites => _writeQueue;
 
+  /// Completes once every settings write queued so far is on disk — for a
+  /// deliberate exit (restarting into an update).
+  static Future<void> flushWrites() => _writeQueue;
+
   /// Detaches the write queue from any previous test's zone. Dart schedules a
   /// `.then` on an already-completed future as a microtask in the zone the
   /// future *completed in* — for widget tests that's the previous test's dead

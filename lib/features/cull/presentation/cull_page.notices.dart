@@ -43,19 +43,119 @@ mixin _CullNotices on ConsumerState<CullPage> {
   /// "Download" action that opens the GitHub release page in the browser. Has
   /// an action, so the bar stays until the user dismisses it.
   void _showUpdateNotice(UpdateInfo update) {
+    final target = detectInstallTarget();
     _showNotice(
       Notice(
         kind: NoticeKind.info,
         icon: Icons.system_update_alt,
         message: 'Cullimingo ${update.version} is available.',
         actions: [
+          if (target != null)
+            (
+              label: 'Install update',
+              onTap: () => unawaited(_installUpdate(update, target)),
+            ),
           (
-            label: 'Download',
+            label: target == null ? 'Download' : "What's new",
             onTap: () =>
                 unawaited(openExternally(update.releaseUrl.toString())),
           ),
         ],
       ),
     );
+  }
+
+  /// Downloads and verifies [update] for [target], then offers the restart
+  /// that installs it. The running app stays as it is until then — and on
+  /// any failure, which falls back to the release page.
+  Future<void> _installUpdate(UpdateInfo update, InstallTarget target) async {
+    final notices = ref.read(noticesControllerProvider.notifier);
+    final version = update.version;
+    void failed(UpdateFailure failure, Object? detail) {
+      appTalker.warning('Update to $version failed: ${failure.name}: $detail');
+      notices.show(
+        Notice(
+          kind: NoticeKind.warning,
+          icon: Icons.system_update_alt,
+          message: failure.message,
+          actions: [
+            (
+              label: 'Download page',
+              onTap: () =>
+                  unawaited(openExternally(update.releaseUrl.toString())),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (!canReplace(target)) {
+      failed(UpdateFailure.permission, target.path);
+      return;
+    }
+    void progress(int percent) => notices.show(
+      Notice(
+        kind: NoticeKind.info,
+        icon: Icons.downloading,
+        message: 'Downloading Cullimingo $version… $percent %',
+        log: false,
+      ),
+    );
+    progress(0);
+    try {
+      var shown = 0;
+      final staged = await downloadUpdate(
+        version: version,
+        target: target,
+        workDir: await updateWorkDir(),
+        onProgress: (received, total) {
+          final percent = total == 0 ? 0 : received * 100 ~/ total;
+          if (percent >= shown + 5) progress(shown = percent);
+        },
+      );
+      appTalker.info(
+        'Update $version downloaded and verified (${target.method.name}): '
+        '${staged.file.path}',
+      );
+      notices.show(
+        Notice(
+          kind: NoticeKind.success,
+          icon: Icons.system_update_alt,
+          message: 'Cullimingo $version is ready to install.',
+          actions: [
+            (
+              label: 'Restart now',
+              onTap: () => unawaited(_restartIntoUpdate(staged, failed)),
+            ),
+          ],
+        ),
+      );
+    } on UpdateException catch (e) {
+      failed(e.failure, e.detail);
+    } on Object catch (e) {
+      failed(UpdateFailure.network, e);
+    }
+  }
+
+  /// Hands [staged] to the installer helper and quits; the helper installs
+  /// once this process is gone and starts the new version.
+  Future<void> _restartIntoUpdate(
+    StagedUpdate staged,
+    void Function(UpdateFailure, Object?) failed,
+  ) async {
+    try {
+      await installAndRelaunch(staged);
+    } on UpdateException catch (e) {
+      failed(e.failure, e.detail);
+      return;
+    }
+    appTalker.info('Restarting into Cullimingo ${staged.version}');
+    // Let pending settings saves and the log reach the disk first.
+    await AppSettings.flushWrites().timeout(
+      const Duration(seconds: 2),
+      onTimeout: () {},
+    );
+    await flushFileLogging();
+    exit(0);
   }
 }

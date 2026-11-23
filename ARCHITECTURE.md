@@ -158,6 +158,12 @@ packages/
   (`io.github.nielsfranke.Cullimingo`) comes in at runtime from `FLATPAK_ID`
   (`linux/runner/my_application.cc`); other Linux builds keep the compiled-in
   `cc.nielsbox.cullimingo`, which names their data folder.
+- In-app updates (`lib/core/update/`): `install_target.dart` detects how this
+  copy was installed (NSIS/MSI/`.app`/AppImage, else none),
+  `update_installer.dart` downloads the release's package, checks it against
+  the Ed25519-signed `latest.json` (`update_manifest.dart`, key in
+  `release.yml` → `tool/update_manifest.py`) and hands it to a detached helper
+  (PowerShell / `sh`) that installs after the app quits and relaunches it.
 - Windows: `windows/` runner with an
   always-dark caption; the libvips/LibRaw DLLs come from libvips' official
   `build-win64-mxe` zip (LibRaw ships inside it as `libraw_r-25.dll`; its

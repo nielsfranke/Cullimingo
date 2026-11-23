@@ -32,6 +32,7 @@ class Notice {
     required this.message,
     required this.icon,
     this.actions = const [],
+    this.log = true,
   });
 
   /// A plain notice using the kind's default icon (the common case).
@@ -49,6 +50,9 @@ class Notice {
 
   /// Optional inline action buttons.
   final List<({String label, VoidCallback onTap})> actions;
+
+  /// Whether the notice goes to the log too (false for progress ticks).
+  final bool log;
 
   /// The kind's colour (single source for the bar's accent).
   Color get color => kind.color;

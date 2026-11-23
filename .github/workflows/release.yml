@@ -220,6 +220,29 @@ jobs:
           path: dist
           merge-multiple: true
 
+      # The in-app updater's manifest: every self-updatable package signed
+      # with the update key, then re-checked against the public key the app
+      # itself ships (lib/core/update/update_manifest.dart) — a secret that
+      # doesn't match the app would publish updates nobody can install.
+      - name: Sign the update packages (latest.json)
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          key="$RUNNER_TEMP/update-key.pem"
+          umask 077
+          printf '%s\n' "$UPDATE_SIGNING_KEY" > "$key"
+          python3 tool/update_manifest.py make --version "$VERSION" --tag "$TAG" \
+            --repo "$GH_REPO" --key "$key" --dir dist --out dist/latest.json
+          rm -f "$key"
+          pub="$(sed -n "s/^const String kUpdatePublicKey = '\(.*\)';$/\1/p" \
+            lib/core/update/update_manifest.dart)"
+          python3 tool/update_manifest.py verify --manifest dist/latest.json \
+            --pub "$pub" --version "$VERSION" --dir dist \
+            --expect windows-x64-nsis windows-x64-msi macos-arm64-dmg \
+                     macos-x64-dmg linux-x64-appimage
+
       - name: Publish the Release with artifacts
         run: |
           set -euo pipefail

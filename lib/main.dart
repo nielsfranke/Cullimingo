@@ -11,6 +11,7 @@ import 'package:cullimingo/core/logging/provider_diagnostics.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:cullimingo/core/settings/performance_preset.dart';
 import 'package:cullimingo/core/update/update_checker.dart';
+import 'package:cullimingo/core/update/update_installer.dart';
 import 'package:cullimingo/core/update/update_providers.dart';
 import 'package:cullimingo/core/version/app_version.g.dart';
 import 'package:cullimingo/features/cull/presentation/cull_providers.dart';
@@ -86,6 +87,7 @@ Future<void> main() async {
     await windowManager.focus();
   });
   windowManager.addListener(_WindowBoundsPersister(settings));
+  unawaited(cleanUpUpdateDownloads());
 
   runApp(
     ProviderScope(

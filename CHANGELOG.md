@@ -3,6 +3,16 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Added
+- **Install updates from inside the app:** when a new version is out, the
+  update notice now offers **Install update** — Cullimingo downloads it,
+  checks its signature, and installs it on **Restart now** (Windows setup
+  and MSI, macOS, Linux AppImage; Flatpak keeps updating through
+  `flatpak update`, the Windows portable zip links to the download page).
+  Available for updates *from* this version on.
+
 ## 1.13.0 — 2026-11-23
 
 ### Added

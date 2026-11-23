@@ -78,3 +78,13 @@ Future<void> startFileLogging() async {
     // No app-support folder: the in-app viewer still has this session.
   }
 }
+
+/// Waits until everything logged so far is in the log file (before a
+/// deliberate exit, e.g. restarting into an update).
+Future<void> flushFileLogging() async {
+  try {
+    await _fileLog?.flush().timeout(const Duration(seconds: 1));
+  } on Object {
+    // Best effort.
+  }
+}

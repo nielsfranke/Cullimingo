@@ -1,3 +1,4 @@
+import 'package:cullimingo/core/settings/app_settings.dart';
 import 'package:cullimingo/core/update/update_checker.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -131,4 +132,21 @@ void main() {
       expect(seenUa, 'Cullimingo');
     });
   });
+
+  test(
+    'CULLIMINGO_UPDATE_OFFER offers exactly that version (updater tests)',
+    () async {
+      final settings = await AppSettings.load(); // no plugin: a file-less store
+      final info = await checkForUpdatesOnStartup(
+        settings: settings,
+        currentVersion: '1.14.0-rc.1',
+        environment: {'CULLIMINGO_UPDATE_OFFER': 'v1.14.0-rc.2'},
+      );
+      expect(info!.version, '1.14.0-rc.2');
+      expect(
+        info.releaseUrl.toString(),
+        'https://github.com/nielsfranke/Cullimingo/releases/tag/v1.14.0-rc.2',
+      );
+    },
+  );
 }

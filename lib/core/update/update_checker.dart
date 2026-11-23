@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:cullimingo/core/logging/app_logger.dart';
 import 'package:cullimingo/core/settings/app_settings.dart';
@@ -125,7 +126,22 @@ Future<UpdateInfo?> checkForUpdatesOnStartup({
   DateTime? now,
   http.Client? client,
   Uri? endpoint,
+  Map<String, String>? environment,
 }) async {
+  // Testing the in-app updater against a release that isn't the newest
+  // (e.g. a pre-release): offer exactly that version. It only chooses what
+  // is offered — the download must still carry the release key's signature.
+  final offer =
+      (environment ?? Platform.environment)['CULLIMINGO_UPDATE_OFFER'];
+  if (offer != null && offer.trim().isNotEmpty) {
+    final version = offer.trim().replaceFirst(RegExp('^v'), '');
+    return UpdateInfo(
+      version: version,
+      releaseUrl: Uri.parse(
+        'https://github.com/nielsfranke/Cullimingo/releases/tag/v$version',
+      ),
+    );
+  }
   if (!settings.checkForUpdatesEnabled) return null;
   final at = now ?? DateTime.now();
   if (!isUpdateCheckDue(settings.lastUpdateCheckAt, at)) return null;

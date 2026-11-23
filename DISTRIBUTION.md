@@ -342,6 +342,44 @@ desktop workload **and** "C++ ATL for latest v143 build tools"
 (`Microsoft.VisualStudio.Component.VC.ATL`, needed by
 `flutter_secure_storage`), plus Windows Developer Mode for plugin symlinks.
 
+## In-app updates
+
+The startup update check (once a day, opt-out in Settings) offers a newer
+release; where Cullimingo can replace itself, its notice has **Install
+update**: the app downloads this copy's package from the release, verifies
+it and, on **Restart now**, quits while a small helper installs it and
+starts the new version.
+
+| Installation | How it updates |
+|---|---|
+| Windows setup (per user) | the new setup runs silently (`/S`) over the old folder |
+| Windows MSI (per machine) | `msiexec /passive` — one UAC prompt |
+| macOS `.app` (DMG) | the DMG is mounted and the bundle swapped (old one restored on failure) |
+| Linux AppImage | the file is replaced (`$APPIMAGE`) |
+| Windows portable zip, Flatpak, other Linux builds, debug builds | no self-update: the notice links to the release (Flatpak: `flatpak update`) |
+
+**Trust.** Every release carries `latest.json` (built by
+`tool/update_manifest.py` in `release.yml`): per package its name, size,
+SHA-256, URL and an **Ed25519 signature** over
+`cullimingo-update-v1 / version / package key / file name / SHA-256`. The
+app checks it against the public key it ships
+(`kUpdatePublicKey` in `lib/core/update/update_manifest.dart`) before
+downloading, and the file's size and hash after — a package that isn't
+signed for exactly this version and kind is never installed. This is not OS
+code signing (the Windows downloads stay unsigned), only the app trusting its
+own updates. `release.yml` re-verifies the manifest against the app's key
+before publishing, so a mismatched secret stops the release.
+
+The private key is the Actions secret `UPDATE_SIGNING_KEY` (PEM), backed up
+at `~/.config/cullimingo/update-signing-key.pem` on the release Mac — keep an
+offline copy too. Losing it means shipping a new public key in a release that
+users must install by hand once.
+
+**Testing an update** without publishing a newer stable release: start an
+installed build with `CULLIMINGO_UPDATE_OFFER=<version>` (e.g. a
+pre-release `1.14.0-rc.2`) — it offers exactly that version, and everything
+else (download, signature, install) runs as for real.
+
 ## Releases (automated)
 
 `.github/workflows/release.yml` builds both artifacts and attaches them to a
