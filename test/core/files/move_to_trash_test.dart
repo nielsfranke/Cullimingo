@@ -61,24 +61,64 @@ void main() {
     expect(calls.single.$2, ['--host', 'gio', 'trash', '--', a]);
   });
 
-  test('macos sends one Finder delete per chunk with escaped paths', () async {
-    final a = makeFile('with "quote".jpg');
+  test(
+    'macos sends one Finder delete per chunk with escaped paths',
+    () async {
+      final a = makeFile('with "quote".jpg');
+      final calls = <(String, List<String>)>[];
+
+      final result = await moveToTrash(
+        [a],
+        os: 'macos',
+        runProcess: (exe, args) async {
+          calls.add((exe, args));
+          return ok();
+        },
+      );
+
+      expect(result.trashed, 1);
+      expect(calls.single.$1, 'osascript');
+      final script = calls.single.$2[1];
+      expect(script, startsWith('tell application "Finder" to delete {'));
+      expect(script, contains(r'with \"quote\".jpg'));
+    },
+    // A `"` is illegal in a Windows file name, so the fixture can't exist.
+    skip: Platform.isWindows,
+  );
+
+  test('windows recycles each chunk through one PowerShell call', () async {
+    final a = makeFile("it's.jpg");
+    final b = makeFile('b.jpg');
     final calls = <(String, List<String>)>[];
 
     final result = await moveToTrash(
-      [a],
-      os: 'macos',
+      [a, b],
+      os: 'windows',
       runProcess: (exe, args) async {
         calls.add((exe, args));
         return ok();
       },
     );
 
-    expect(result.trashed, 1);
-    expect(calls.single.$1, 'osascript');
-    final script = calls.single.$2[1];
-    expect(script, startsWith('tell application "Finder" to delete {'));
-    expect(script, contains(r'with \"quote\".jpg'));
+    expect(result.trashed, 2);
+    expect(result.error, isNull);
+    expect(calls.single.$1, 'powershell.exe');
+    expect(calls.single.$2.take(3), [
+      '-NoProfile',
+      '-NonInteractive',
+      '-EncodedCommand',
+    ]);
+    final script = decodeWindowsCommand(calls.single.$2[3]);
+    expect(script, contains('SendToRecycleBin'));
+    // Single-quoted literals, an embedded quote doubled.
+    expect(script, contains("'${a.replaceAll("'", "''")}'"));
+    expect(script, contains("'$b'"));
+    expect(script, contains(r'if ($failed) { exit 1 }'));
+  });
+
+  test('windows round-trips non-ASCII paths through the encoding', () {
+    const path = r'C:\Fotos\Hochzeit – Ä\DSC_0001.NEF';
+    expect(decodeWindowsCommand(windowsRecycleCommand([path])), contains(path));
   });
 
   test('missing files are skipped and counted as done', () async {
@@ -143,7 +183,7 @@ void main() {
   test('an unsupported platform refuses without running anything', () async {
     final result = await moveToTrash(
       ['/x.jpg'],
-      os: 'windows',
+      os: 'fuchsia',
       runProcess: (exe, args) async => fail(),
     );
 

@@ -135,6 +135,17 @@ class VipsEncoder {
       final ok = init(argv0);
       calloc.free(argv0);
       if (ok != 0) return null;
+      // dlsym on a libvips handle also finds its glib/gobject dependencies'
+      // symbols (macOS, Linux); a Windows DLL exports only its own, so there
+      // g_free / g_object_unref come from the bundled glib / gobject DLLs.
+      DynamicLibrary owner(String symbol, String depPrefix) {
+        if (lib.providesSymbol(symbol)) return lib;
+        final dep = bundledNativeLib(depPrefix);
+        return dep == null ? lib : DynamicLibrary.open(dep);
+      }
+
+      final glib = owner('g_free', 'libglib-2.0');
+      final gobject = owner('g_object_unref', 'libgobject-2.0');
       return _cached = VipsEncoder._(
         lib.lookupFunction<_NewFromMemoryN, _NewFromMemoryD>(
           'vips_image_new_from_memory_copy',
@@ -144,8 +155,8 @@ class VipsEncoder {
         lib.lookupFunction<_HeifSaveN, _HeifSaveD>('vips_heifsave_buffer'),
         lib.lookupFunction<_ErrorBufferN, _ErrorBufferD>('vips_error_buffer'),
         lib.lookupFunction<_VoidN, _VoidD>('vips_error_clear'),
-        lib.lookupFunction<_VoidPtrN, _VoidPtrD>('g_free'),
-        lib.lookupFunction<_VoidPtrN, _VoidPtrD>('g_object_unref'),
+        glib.lookupFunction<_VoidPtrN, _VoidPtrD>('g_free'),
+        gobject.lookupFunction<_VoidPtrN, _VoidPtrD>('g_object_unref'),
       );
     } on Object {
       return null;

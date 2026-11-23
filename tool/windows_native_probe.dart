@@ -7,6 +7,11 @@
 //   dart run tool/windows_native_probe.dart build\windows\x64\runner\Release
 //
 // Exit code 0 = everything loaded; 1 = something is missing or failed to load.
+//
+// On Windows the dependency search for a DLL opened by full path starts in the
+// *executable's* folder — cullimingo.exe's in the app, but dart.exe's here — so
+// the probe first adds [dir] with SetDllDirectoryW, as the app's layout does
+// implicitly.
 import 'dart:ffi';
 import 'dart:io';
 
@@ -20,6 +25,7 @@ void main(List<String> args) {
     exit(2);
   }
   final dir = Directory(args.single);
+  if (Platform.isWindows) _addDllDirectory(dir.absolute.path);
   final names = dir
       .listSync()
       .whereType<File>()
@@ -84,4 +90,15 @@ void main(List<String> args) {
 
   stdout.writeln(ok ? 'PROBE OK' : 'PROBE FAILED');
   exit(ok ? 0 : 1);
+}
+
+void _addDllDirectory(String path) {
+  final setDllDirectory = DynamicLibrary.open('kernel32.dll')
+      .lookupFunction<
+        Int32 Function(Pointer<Utf16>),
+        int Function(Pointer<Utf16>)
+      >('SetDllDirectoryW');
+  final cPath = path.toNativeUtf16();
+  if (setDllDirectory(cPath) == 0) stdout.writeln('SetDllDirectoryW failed');
+  malloc.free(cPath);
 }

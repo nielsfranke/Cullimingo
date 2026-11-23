@@ -89,7 +89,7 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "Niels Franke" "\0"
+            VALUE "CompanyName", "cc.nielsbox" "\0"
             VALUE "FileDescription", "Cullimingo" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "cullimingo" "\0"

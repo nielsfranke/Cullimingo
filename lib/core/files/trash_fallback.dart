@@ -27,9 +27,20 @@ Future<List<String>> moveIntoRejectedFolder(List<PhotoFiles> items) =>
     Isolate.run(
       () => [
         for (final item in items)
-          if (!_moveOne(item)) item.photo,
+          if (!_tryMoveOne(item)) item.photo,
       ],
     );
+
+// Any error — not only a FileSystemException — counts as "not moved", so it
+// is reported to the user instead of escaping the isolate unnoticed (the
+// Windows spike's missing `link` left an empty _Rejected folder and no word).
+bool _tryMoveOne(PhotoFiles item) {
+  try {
+    return _moveOne(item);
+  } on Object {
+    return false;
+  }
+}
 
 /// Deletes each photo and its sidecar for good — no trash, no undo. Only for
 /// photos the user explicitly chose to delete permanently. A photo that is
