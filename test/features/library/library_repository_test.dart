@@ -196,87 +196,106 @@ void main() {
 
   group('overlapping folders', () {
     test(
-      'opening a parent claims files a subfolder import already owns',
+      'a parent and its subfolder both show the shared file, marks shared',
       () async {
         final sub = Directory(p.join(tmp.path, 'sub'))..createSync();
         File(p.join(sub.path, 'a.jpg')).writeAsBytesSync(
           img.encodeJpg(img.Image(width: 8, height: 8)),
         );
 
-        // Open the subfolder first — it claims the file.
         final subId = await repo.importFolder(sub.path);
         final subPhoto = (await repo.watchImport(subId).first).single;
-        await db.setRating(
-          subPhoto.id,
-          5,
-        ); // a mark that must survive re-parenting
+        await db.setRating(subPhoto.id, 5);
 
-        // Now open the parent recursively: it must show the same file (not the
-        // empty grid `insertOrIgnore` used to leave), keeping the rating.
+        // Opening the parent shows the same row (one per physical file) and
+        // leaves the subfolder tab showing it too (#31).
         final parentId = await repo.importFolder(tmp.path);
         final parentPhotos = await repo.watchImport(parentId).first;
-        expect(parentPhotos, hasLength(1));
-        expect(p.basename(parentPhotos.single.path), 'a.jpg');
+        expect(parentPhotos.single.id, subPhoto.id);
         expect(parentPhotos.single.rating, 5);
-
-        // Re-parented (one row per physical file), so the subfolder no longer
-        // owns it.
-        expect(await repo.watchImport(subId).first, isEmpty);
+        expect(await repo.watchImport(subId).first, hasLength(1));
       },
     );
 
     test(
-      'an automatic rescan spares files owned by other open tabs (#31)',
+      'parent and subfolder tabs stay full through any refresh (#31)',
       () async {
         final sub = Directory(p.join(tmp.path, 'day2'))..createSync();
         final jpg = img.encodeJpg(img.Image(width: 8, height: 8));
         File(p.join(tmp.path, 'a.jpg')).writeAsBytesSync(jpg);
         File(p.join(sub.path, 'b.jpg')).writeAsBytesSync(jpg);
-        // Last session: the parent tab, then the subfolder tab.
         final parentId = await repo.importFolder(tmp.path);
         final subId = await repo.importFolder(sub.path);
 
-        // Restart: both tabs rescan, each sparing the other.
-        Set<int> open() => {parentId, subId};
-        await Future.wait([
-          repo.refreshImport(parentId, tmp.path, spareImports: open),
-          repo.refreshImport(subId, sub.path, spareImports: open),
-        ]);
-        expect(await repo.watchImport(parentId).first, hasLength(1));
-        expect(await repo.watchImport(subId).first, hasLength(1));
+        Future<void> expectBoth() async {
+          expect(await repo.watchImport(parentId).first, hasLength(2));
+          expect(await repo.watchImport(subId).first, hasLength(1));
+        }
 
-        // An explicit refresh (no spared imports) still claims them.
+        await expectBoth();
+        // Restart: both tabs rescan concurrently.
+        await Future.wait([
+          repo.refreshImport(parentId, tmp.path),
+          repo.refreshImport(subId, sub.path),
+        ]);
+        await expectBoth();
+        // Ctrl+R on either tab.
         await repo.refreshImport(parentId, tmp.path);
-        expect(await repo.watchImport(parentId).first, hasLength(2));
-        expect(await repo.watchImport(subId).first, isEmpty);
+        await expectBoth();
+        await repo.refreshImport(subId, sub.path);
+        await expectBoth();
       },
     );
 
-    test('reopening a folder left empty finally populates it', () async {
-      // Simulate the DCIM case: a subfolder import owns the files, and a parent
-      // import exists but empty. A refresh (what reopening triggers) heals it.
-      final sub = Directory(p.join(tmp.path, 'sub'))..createSync();
-      File(p.join(sub.path, 'a.jpg')).writeAsBytesSync(
-        img.encodeJpg(img.Image(width: 8, height: 8)),
-      );
-      await repo.importFolder(sub.path); // subfolder claims the file
-      final (parentId, _) = await repo.findOrCreateImport(tmp.path);
-      expect(await repo.watchImport(parentId).first, isEmpty);
+    test('sub-folders off hides their photos without deleting them', () async {
+      final sub = Directory(p.join(tmp.path, 'day2'))..createSync();
+      final jpg = img.encodeJpg(img.Image(width: 8, height: 8));
+      File(p.join(tmp.path, 'a.jpg')).writeAsBytesSync(jpg);
+      File(p.join(sub.path, 'b.jpg')).writeAsBytesSync(jpg);
+      final parentId = await repo.importFolder(tmp.path);
+      final subId = await repo.importFolder(sub.path);
 
-      final (
-        :added,
-        :removed,
-        changedPaths: _,
-        unavailable: _,
-        unreadable: _,
-      ) = await repo.refreshImport(
-        parentId,
-        tmp.path,
-      );
-      expect(added, 1);
-      expect(removed, 0);
-      expect(await repo.watchImport(parentId).first, hasLength(1));
+      // The toggle off re-scans non-recursively: nothing may be removed.
+      final r = await repo.refreshImport(parentId, tmp.path, recursive: false);
+      expect(r.removed, 0);
+      final flat = await repo.watchImport(parentId, recursive: false).first;
+      expect(flat.map((ph) => p.basename(ph.path)), ['a.jpg']);
+      expect(await repo.watchImport(subId).first, hasLength(1));
+      expect(await repo.watchImport(parentId).first, hasLength(2));
     });
+
+    test('a sibling folder sharing a name prefix is not included', () async {
+      final shoot = Directory(p.join(tmp.path, 'shoot'))..createSync();
+      final sibling = Directory(p.join(tmp.path, 'shoot2'))..createSync();
+      final jpg = img.encodeJpg(img.Image(width: 8, height: 8));
+      File(p.join(shoot.path, 'a.jpg')).writeAsBytesSync(jpg);
+      File(p.join(sibling.path, 'b.jpg')).writeAsBytesSync(jpg);
+      await repo.importFolder(sibling.path);
+      final shootId = await repo.importFolder(shoot.path);
+      final photos = await repo.watchImport(shootId).first;
+      expect(photos.map((ph) => p.basename(ph.path)), ['a.jpg']);
+    });
+
+    test(
+      'a parent shows what a subfolder brought in, before any scan',
+      () async {
+        // The DCIM case: a subfolder was opened first, the parent import exists
+        // but was never scanned. It shows the subfolder's file straight away,
+        // and its refresh neither re-adds nor removes it.
+        final sub = Directory(p.join(tmp.path, 'sub'))..createSync();
+        File(p.join(sub.path, 'a.jpg')).writeAsBytesSync(
+          img.encodeJpg(img.Image(width: 8, height: 8)),
+        );
+        await repo.importFolder(sub.path);
+        final (parentId, _) = await repo.findOrCreateImport(tmp.path);
+        expect(await repo.watchImport(parentId).first, hasLength(1));
+
+        final r = await repo.refreshImport(parentId, tmp.path);
+        expect(r.added, 0);
+        expect(r.removed, 0);
+        expect(await repo.watchImport(parentId).first, hasLength(1));
+      },
+    );
   });
 
   group('refreshImport', () {

@@ -85,7 +85,9 @@ class Photos extends Table {
   /// Primary key.
   IntColumn get id => integer().autoIncrement()();
 
-  /// Owning import.
+  /// The import that first brought this file in. Not what a tab shows: an
+  /// import shows every photo under its folder, whichever import inserted it
+  /// (see `AppDatabase.photosForImport`), so overlapping tabs both show it.
   IntColumn get importId => integer().nullable().references(Imports, #id)();
 
   /// Absolute path to the image file (RAW or JPEG).

@@ -33,6 +33,13 @@ packages/
   updates but never deletes. The ingest scan reports the same unreadable
   entries in the plan and the summary, and always reads EXIF for capture
   dates (mtime is only the fallback).
+- **Tabs show folders, not owned rows** (#31): `photos.path` is UNIQUE (one
+  row per physical file, so marks agree everywhere), and a tab shows every
+  row under its folder by path range (`AppDatabase.photosForImport`), not the
+  rows whose `importId` matches. A folder and its subfolder can be open side
+  by side, both full; `importId` only records who inserted the row. The
+  "sub-folders" toggle is a view filter (direct children only) and deletes
+  nothing.
 - **Delete = OS Trash** (`core/files/move_to_trash.dart`), never a silent hard
   delete. Where the trash refuses (network shares have none, GitHub #14) the
   user picks a fallback per run (`core/files/trash_fallback.dart`): a

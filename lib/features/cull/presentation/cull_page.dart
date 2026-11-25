@@ -218,7 +218,7 @@ class _CullPageState extends ConsumerState<CullPage>
                     count: total,
                     onOpenFolder: _openFolder,
                     onIngest: _ingest,
-                    includeSubfolders: _includeSubfolders,
+                    includeSubfolders: ref.watch(includeSubfoldersProvider),
                     onIncludeSubfolders: _setIncludeSubfolders,
                     onFind: total > 0 ? _findByList : null,
                     onCompare: total > 0 ? _openCompare : null,

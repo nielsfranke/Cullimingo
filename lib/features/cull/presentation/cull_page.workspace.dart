@@ -24,12 +24,8 @@ mixin _CullWorkspace on _CullGrid {
   // open-folders list on each intermediate tab change.
   bool _restoringFolders = false;
 
-  // Background rescans deferred while restoring, started once every tab exists
-  // so each one knows which other tabs' files to leave alone (#31).
-  final List<({int importId, String root})> _deferredResyncs = [];
-
-  // Whether "Open folder" scans sub-folders (toggle in the toolbar).
-  bool _includeSubfolders = true;
+  // Whether the grid includes sub-folders (toggle in the toolbar).
+  bool get _includeSubfolders => ref.read(includeSubfoldersProvider);
 
   // True while a poll's listVolumes() call is still in flight, so a stuck
   // card/reader (blocking well past _volumePollStallTimeout) can't pile up
@@ -154,12 +150,12 @@ mixin _CullWorkspace on _CullGrid {
     if (dir != null) await _importFolder(dir, recursive: _includeSubfolders);
   }
 
-  /// Toggles whether sub-folders are included and immediately re-scans the open
-  /// folder so the grid reflects the change live (turning it off drops the
-  /// sub-folder photos, turning it on brings them back). No-op with no folder.
+  /// Toggles whether sub-folders are included. The grid follows at once (a
+  /// view filter — turning it off hides the sub-folder photos, it deletes
+  /// nothing); the re-scan then picks up files new since the last one.
   void _setIncludeSubfolders(bool value) {
     if (value == _includeSubfolders) return;
-    setState(() => _includeSubfolders = value);
+    ref.read(includeSubfoldersProvider.notifier).set(value);
     unawaited(_refreshFolder());
   }
 
@@ -365,11 +361,7 @@ mixin _CullWorkspace on _CullGrid {
       // changed. Rescanning here also heals an import left empty (e.g. first
       // opened with subfolders off), so opening a folder always shows its
       // current contents.
-      if (_restoringFolders) {
-        _deferredResyncs.add((importId: importId, root: dir));
-      } else {
-        unawaited(_backgroundResync(importId, dir));
-      }
+      unawaited(_backgroundResync(importId, dir));
     }
   }
 
@@ -396,12 +388,7 @@ mixin _CullWorkspace on _CullGrid {
     } finally {
       _restoringFolders = false;
     }
-    final resyncs = [..._deferredResyncs];
-    _deferredResyncs.clear();
     if (!mounted) return;
-    for (final r in resyncs) {
-      unawaited(_backgroundResync(r.importId, r.root, spareOpenTabs: true));
-    }
     // Re-activate the tab that was active last session (clamped in case some
     // folders went missing), so you land where you left off.
     final tabs = ref.read(workspaceProvider).tabs;
@@ -483,27 +470,13 @@ mixin _CullWorkspace on _CullGrid {
     paths.forEach(ref.read(previewCacheProvider).evict);
   }
 
-  /// [spareOpenTabs] is for the restart restore only: there every tab comes
-  /// back as it was left, so a parent's rescan must not empty a subfolder tab
-  /// (#31). Opening a folder explicitly claims its files, like ⌘/Ctrl+R.
-  Future<void> _backgroundResync(
-    int importId,
-    String root, {
-    bool spareOpenTabs = false,
-  }) async {
+  Future<void> _backgroundResync(int importId, String root) async {
     // First re-scan for files added/removed on disk (recursively per the
     // toggle), so a reopened folder reflects its current contents — and an
     // empty import finally populates. Then sync marks edited externally.
     final scan = await ref
         .read(libraryRepositoryProvider)
-        .refreshImport(
-          importId,
-          root,
-          recursive: _includeSubfolders,
-          spareImports: () => spareOpenTabs && mounted
-              ? {for (final t in ref.read(workspaceProvider).tabs) t.importId}
-              : const {},
-        );
+        .refreshImport(importId, root, recursive: _includeSubfolders);
     // Folder gone or listing empty (drive unplugged): keep everything as is.
     if (scan.unavailable) return;
     if (mounted) _evictChangedPreviews(scan.changedPaths);

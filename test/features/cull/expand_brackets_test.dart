@@ -136,7 +136,7 @@ void main() {
   testWidgets('G leaves a non-bracket selection unchanged', (tester) async {
     await pumpPage(tester);
     // Replace the shoot with a single lone frame (no bracket).
-    await db.deletePhotosByPaths(importId, [
+    await db.deletePhotosByPaths([
       '/shoot/DSCF0002.RAF',
       '/shoot/DSCF0003.RAF',
     ]);

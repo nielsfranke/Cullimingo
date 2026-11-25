@@ -2602,6 +2602,76 @@ abstract class _$Workspace extends $Notifier<WorkspaceState> {
   }
 }
 
+/// Whether the grid includes the photos in sub-folders of the open folder
+/// (the toolbar toggle; on by default, not persisted). A view filter: turning
+/// it off hides the sub-folder photos without deleting their rows, which a
+/// subfolder tab may still show.
+
+@ProviderFor(IncludeSubfolders)
+final includeSubfoldersProvider = IncludeSubfoldersProvider._();
+
+/// Whether the grid includes the photos in sub-folders of the open folder
+/// (the toolbar toggle; on by default, not persisted). A view filter: turning
+/// it off hides the sub-folder photos without deleting their rows, which a
+/// subfolder tab may still show.
+final class IncludeSubfoldersProvider
+    extends $NotifierProvider<IncludeSubfolders, bool> {
+  /// Whether the grid includes the photos in sub-folders of the open folder
+  /// (the toolbar toggle; on by default, not persisted). A view filter: turning
+  /// it off hides the sub-folder photos without deleting their rows, which a
+  /// subfolder tab may still show.
+  IncludeSubfoldersProvider._()
+    : super(
+        from: null,
+        argument: null,
+        retry: null,
+        name: r'includeSubfoldersProvider',
+        isAutoDispose: false,
+        dependencies: null,
+        $allTransitiveDependencies: null,
+      );
+
+  @override
+  String debugGetCreateSourceHash() => _$includeSubfoldersHash();
+
+  @$internal
+  @override
+  IncludeSubfolders create() => IncludeSubfolders();
+
+  /// {@macro riverpod.override_with_value}
+  Override overrideWithValue(bool value) {
+    return $ProviderOverride(
+      origin: this,
+      providerOverride: $SyncValueProvider<bool>(value),
+    );
+  }
+}
+
+String _$includeSubfoldersHash() => r'af67c0dbf4a5d730634330cb992c55637da80143';
+
+/// Whether the grid includes the photos in sub-folders of the open folder
+/// (the toolbar toggle; on by default, not persisted). A view filter: turning
+/// it off hides the sub-folder photos without deleting their rows, which a
+/// subfolder tab may still show.
+
+abstract class _$IncludeSubfolders extends $Notifier<bool> {
+  bool build();
+  @$mustCallSuper
+  @override
+  WhenComplete runBuild() {
+    final ref = this.ref as $Ref<bool, bool>;
+    final element =
+        ref.element
+            as $ClassProviderElement<
+              AnyNotifier<bool, bool>,
+              bool,
+              Object?,
+              Object?
+            >;
+    return element.handleCreate(ref, build);
+  }
+}
+
 /// The currently open import (folder), derived from the active tab, or `null`
 /// before any folder is opened.
 

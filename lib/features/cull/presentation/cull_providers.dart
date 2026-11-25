@@ -758,6 +758,20 @@ class Workspace extends _$Workspace {
   void clear() => state = const WorkspaceState();
 }
 
+/// Whether the grid includes the photos in sub-folders of the open folder
+/// (the toolbar toggle; on by default, not persisted). A view filter: turning
+/// it off hides the sub-folder photos without deleting their rows, which a
+/// subfolder tab may still show.
+@Riverpod(keepAlive: true)
+class IncludeSubfolders extends _$IncludeSubfolders {
+  @override
+  bool build() => true;
+
+  /// Turns sub-folders on or off.
+  // ignore: avoid_positional_boolean_parameters, use_setters_to_change_properties — mirrors the other flag notifiers.
+  void set(bool value) => state = value;
+}
+
 /// The currently open import (folder), derived from the active tab, or `null`
 /// before any folder is opened.
 @Riverpod(keepAlive: true)
@@ -771,7 +785,12 @@ int? currentImport(Ref ref) => ref.watch(workspaceProvider).active?.importId;
 final photosProvider = StreamProvider<List<Photo>>((ref) {
   final importId = ref.watch(currentImportProvider);
   if (importId == null) return Stream.value(const []);
-  return ref.watch(libraryRepositoryProvider).watchImport(importId);
+  return ref
+      .watch(libraryRepositoryProvider)
+      .watchImport(
+        importId,
+        recursive: ref.watch(includeSubfoldersProvider),
+      );
 }, name: 'photos');
 
 /// The saved selections for the open import (empty when none is open). Classic

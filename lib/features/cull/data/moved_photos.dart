@@ -21,6 +21,6 @@ Future<List<String>> forgetMovedPhotos({
     // ignore: avoid_slow_async_io
     if (!await File(path).exists()) gone.add(path);
   }
-  await db.deletePhotosByPaths(importId, gone);
+  await db.deletePhotosByPaths(gone);
   return gone;
 }

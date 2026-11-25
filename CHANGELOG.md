@@ -6,9 +6,16 @@ All notable user-facing changes to Cullimingo. The format loosely follows
 ## Unreleased
 
 ### Fixed
-- **Opening a subfolder in a new tab shows its photos again** (#31): since
-  1.14.1 a subfolder opened while its parent folder was open stayed empty
-  until ⌘/Ctrl+R. Only a restart now keeps the tabs as you left them.
+- **A folder and its subfolders can be open as tabs side by side** (#31):
+  each tab now shows every photo inside its folder, so opening, refreshing
+  (⌘/Ctrl+R) or restarting no longer empties the other tabs — and 1.14.1's
+  empty tab when opening a subfolder is gone. Marks are shared: rate a photo
+  in one tab and the other shows the same rating.
+
+### Changed
+- **Turning "sub-folders" off only hides their photos** — it no longer drops
+  them from the read model, so turning it back on is instant and nothing
+  stored only in Cullimingo (rotation, stacks, saved selections) is lost.
 
 ## 1.14.1 — 2026-11-25
 

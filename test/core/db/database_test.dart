@@ -277,4 +277,52 @@ void main() {
     expect(id, greaterThan(0));
     expect(await db.watchSavedSelections(id).first, isEmpty);
   });
+
+  test(
+    'folder membership: Windows paths, odd names, roots, direct only',
+    () async {
+      Future<List<String>> shown(String root, {bool recursive = true}) async {
+        final id = await db.createImport(sourcePath: root);
+        final rows = await db.photosForImport(id, recursive: recursive);
+        return rows.map((r) => r.path).toList()..sort();
+      }
+
+      final paths = [
+        r'C:\Shoot',
+        r"C:\Shoot\a_100%'s.jpg",
+        r'C:\Shoot\day 2\b.jpg',
+        r'C:\Shoot2\c.jpg',
+        "/data/Bob's_50%/x.jpg",
+        "/data/Bob's_50%/sub/y.jpg",
+        '/data/Bobs_50%/z.jpg',
+      ];
+      final setup = await db.createImport(sourcePath: '/setup');
+      await db.insertPhotos([
+        for (final path in paths.skip(1))
+          PhotosCompanion.insert(
+            importId: Value(setup),
+            path: path,
+            mtime: DateTime(2026),
+          ),
+      ]);
+
+      expect(await shown(r'C:\Shoot'), [
+        r"C:\Shoot\a_100%'s.jpg",
+        r'C:\Shoot\day 2\b.jpg',
+      ]);
+      expect(await shown(r'C:\Shoot', recursive: false), [
+        r"C:\Shoot\a_100%'s.jpg",
+      ]);
+      expect(await shown(r'C:\Shoot\day 2'), [r'C:\Shoot\day 2\b.jpg']);
+      expect(await shown(r'C:\'), hasLength(3));
+      expect(await shown("/data/Bob's_50%"), [
+        "/data/Bob's_50%/sub/y.jpg",
+        "/data/Bob's_50%/x.jpg",
+      ]);
+      expect(await shown("/data/Bob's_50%", recursive: false), [
+        "/data/Bob's_50%/x.jpg",
+      ]);
+      expect(await shown('/'), hasLength(3));
+    },
+  );
 }

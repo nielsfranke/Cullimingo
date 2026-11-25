@@ -80,7 +80,7 @@ Future<RejectDeleteResult> deleteRejectedPhotos({
   for (final photo in rejects) {
     (failed.contains(photo.path) ? kept : deletable).add(photo.path);
   }
-  await db.deletePhotosByPaths(importId, deletable);
+  await db.deletePhotosByPaths(deletable);
 
   return RejectDeleteResult(
     deleted: deletable.length,
@@ -126,6 +126,6 @@ Future<RejectDeleteResult> applyTrashFallback({
     for (final path in paths)
       if (!kept.contains(path)) path,
   ];
-  await db.deletePhotosByPaths(importId, handled);
+  await db.deletePhotosByPaths(handled);
   return RejectDeleteResult(deleted: handled.length, failedPaths: failed);
 }

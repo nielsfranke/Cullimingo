@@ -129,35 +129,11 @@ class AppDatabase extends _$AppDatabase {
     );
   }
 
-  /// Inserts [rows], or — when a path already exists, possibly under another
-  /// import — re-parents that row to [importId], keeping all its marks. Lets a
-  /// folder show files that an overlapping folder/tab already claimed (e.g.
-  /// opening a parent of already-opened subfolders), where `insertOrIgnore`
-  /// would silently drop them. `path` is globally unique by design (one row per
-  /// physical file, so marks stay consistent), so ownership just moves.
-  Future<void> claimPhotos(int importId, Iterable<PhotosCompanion> rows) {
-    return batch((b) {
-      for (final row in rows) {
-        b.insert(
-          photos,
-          row,
-          onConflict: DoUpdate(
-            (_) => PhotosCompanion(importId: Value(importId)),
-            target: [photos.path],
-          ),
-        );
-      }
-    });
-  }
-
-  /// Removes the [paths] from [importId] (used by folder refresh when files
-  /// disappear from disk). No-op for an empty list.
-  Future<void> deletePhotosByPaths(int importId, List<String> paths) {
+  /// Removes the rows for [paths] (files gone from disk, trashed or moved
+  /// away) — whichever folder tab shows them. No-op for an empty list.
+  Future<void> deletePhotosByPaths(List<String> paths) {
     if (paths.isEmpty) return Future.value();
-    return (delete(photos)..where(
-          (t) => t.importId.equals(importId) & t.path.isIn(paths),
-        ))
-        .go();
+    return (delete(photos)..where((t) => t.path.isIn(paths))).go();
   }
 
   /// Rewrites the on-disk path of each photo after an in-place rename
@@ -182,18 +158,63 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  /// One-shot list of an import's photos (see [watchPhotosForImport] for the
-  /// reactive variant that drives the grid).
-  Future<List<Photo>> photosForImport(int importId) =>
-      (select(photos)..where((t) => t.importId.equals(importId))).get();
+  /// The folder [importId] shows, or null for an unknown id.
+  Future<String?> importRoot(int importId) async => (await (select(
+    imports,
+  )..where((t) => t.id.equals(importId))).getSingleOrNull())?.sourcePath;
 
-  /// The paths owned by any of [importIds] (empty set for no ids).
-  Future<Set<String>> pathsOwnedBy(Set<int> importIds) async {
-    if (importIds.isEmpty) return const {};
-    final query = selectOnly(photos)
-      ..addColumns([photos.path])
-      ..where(photos.importId.isIn(importIds));
-    return {for (final row in await query.get()) row.read(photos.path)!};
+  /// Matches the photos inside [root] — its whole tree, or with [recursive]
+  /// off only the files directly in it. An import *shows* the files under its
+  /// folder rather than *owning* rows, so a folder and its subfolder can be
+  /// open as tabs side by side, each showing its photos (#31); a file still
+  /// has one row, so its marks are the same in every tab.
+  ///
+  /// A path-range match (`root/` ≤ path < `root0`) rides the `path` UNIQUE
+  /// index, and needs no LIKE-escaping of `%`/`_` in folder names. Both `/`
+  /// and `\` count as separators so Windows paths and POSIX-style test paths
+  /// both work.
+  Expression<bool> _inFolder(
+    $PhotosTable t,
+    String root, {
+    required bool recursive,
+  }) {
+    Expression<bool>? any;
+    for (final sep in const ['/', r'\']) {
+      final prefix = root.endsWith(sep) ? root : '$root$sep';
+      // The separator's successor bounds the range: '/'+1 = '0', '\'+1 = ']'.
+      final upper =
+          prefix.substring(0, prefix.length - 1) +
+          String.fromCharCode(sep.codeUnitAt(0) + 1);
+      var match =
+          t.path.isBiggerOrEqualValue(prefix) &
+          t.path.isSmallerThanValue(upper);
+      if (!recursive) {
+        // Direct children: no further separator after the prefix. SQLite
+        // measures the prefix itself, so non-BMP names can't skew the offset.
+        final lit = "'${prefix.replaceAll("'", "''")}'";
+        final rest = 'substr("path", length($lit) + 1)';
+        match =
+            match &
+            CustomExpression<bool>(
+              "instr($rest, '/') = 0 AND instr($rest, '\\') = 0",
+            );
+      }
+      any = any == null ? match : any | match;
+    }
+    return any!;
+  }
+
+  /// One-shot list of the photos [importId] shows (see
+  /// [watchPhotosForImport] for the reactive variant that drives the grid).
+  Future<List<Photo>> photosForImport(
+    int importId, {
+    bool recursive = true,
+  }) async {
+    final root = await importRoot(importId);
+    if (root == null) return const [];
+    return (select(
+      photos,
+    )..where((t) => _inFolder(t, root, recursive: recursive))).get();
   }
 
   /// The current rows for [ids] (missing ids are simply absent).
@@ -207,15 +228,20 @@ class AppDatabase extends _$AppDatabase {
       (select(photos)..where((t) => t.id.equals(photoId))).getSingleOrNull();
 
   /// Watches all photos for an import, ordered by capture time then path.
-  Stream<List<Photo>> watchPhotosForImport(int importId) {
-    return (select(photos)
-          ..where((t) => t.importId.equals(importId))
-          ..orderBy([
-            (t) => OrderingTerm(expression: t.capturedAt),
-            (t) => OrderingTerm(expression: t.path),
-          ]))
-        .watch();
-  }
+  Stream<List<Photo>> watchPhotosForImport(
+    int importId, {
+    bool recursive = true,
+  }) => Stream.fromFuture(importRoot(importId)).asyncExpand(
+    (root) => root == null
+        ? Stream.value(const <Photo>[])
+        : (select(photos)
+                ..where((t) => _inFolder(t, root, recursive: recursive))
+                ..orderBy([
+                  (t) => OrderingTerm(expression: t.capturedAt),
+                  (t) => OrderingTerm(expression: t.path),
+                ]))
+              .watch(),
+  );
 
   /// Sets the star rating (0–5) for a photo. Stamps [Photos.marksMtime] so the
   /// sync layer can tell a local edit from an external sidecar change.

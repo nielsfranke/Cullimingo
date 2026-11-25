@@ -66,8 +66,7 @@ class LibraryRepository {
       recursive: recursive,
       includeVideos: true,
     )).files;
-    await _db.claimPhotos(
-      importId,
+    await _db.insertPhotos(
       files.map(
         (f) => PhotosCompanion.insert(
           importId: Value(importId),
@@ -107,10 +106,9 @@ class LibraryRepository {
   /// new and changed files are still picked up, but nothing is removed, and
   /// `unreadable` counts what the scan skipped.
   ///
-  /// [spareImports] names imports whose files must *not* be claimed — the
-  /// other open tabs, on an automatic rescan (reopen/restore), so a parent tab
-  /// doesn't silently empty a subfolder tab (#31). It's read after the scan,
-  /// so tabs opened meanwhile are spared too. An explicit refresh passes none.
+  /// [recursive] off scopes everything — the listing *and* what counts as
+  /// removed — to the files directly in [root], so turning sub-folders off
+  /// hides their photos without deleting the rows another tab still shows.
   Future<
     ({
       int added,
@@ -124,7 +122,6 @@ class LibraryRepository {
     int importId,
     String root, {
     bool recursive = true,
-    Set<int> Function()? spareImports,
   }) async {
     const unavailable = (
       added: 0,
@@ -143,21 +140,19 @@ class LibraryRepository {
     );
     final files = scan.files;
     final diskPaths = files.map((f) => f.path).toSet();
-    final existing = await _db.photosForImport(importId);
+    final existing = await _db.photosForImport(
+      importId,
+      recursive: recursive,
+    );
     if (files.isEmpty && existing.isNotEmpty) return unavailable;
     final existingPaths = existing.map((row) => row.path).toSet();
     final rowByPath = {for (final row in existing) row.path: row};
 
-    // Files this import doesn't already own — new to disk *or* owned by another
-    // import (e.g. a subfolder opened separately). Both get claimed to this
-    // import so a reopened/parent folder shows its full contents.
-    final spared = await _db.pathsOwnedBy(
-      {...?spareImports?.call()}..remove(importId),
-    );
+    // Files the read model doesn't have yet. A file another tab already
+    // brought in is shown here too (membership is by folder, not by row), so
+    // it's never re-inserted or taken away from that tab.
     final newFiles = files
-        .where(
-          (f) => !existingPaths.contains(f.path) && !spared.contains(f.path),
-        )
+        .where((f) => !existingPaths.contains(f.path))
         .toList();
     // A file missing from an incomplete listing may just sit in the part the
     // scan couldn't read — never treat that as deleted.
@@ -166,8 +161,7 @@ class LibraryRepository {
         : const <String>[];
 
     if (newFiles.isNotEmpty) {
-      await _db.claimPhotos(
-        importId,
+      await _db.insertPhotos(
         newFiles.map(
           (f) => PhotosCompanion.insert(
             importId: Value(importId),
@@ -184,7 +178,7 @@ class LibraryRepository {
       );
     }
     if (removedPaths.isNotEmpty) {
-      await _db.deletePhotosByPaths(importId, removedPaths);
+      await _db.deletePhotosByPaths(removedPaths);
     }
 
     // Files overwritten/edited in place: the on-disk mtime moved past the
@@ -284,6 +278,7 @@ class LibraryRepository {
   }
 
   /// Reactive stream of the photos in [importId], ordered for the grid.
-  Stream<List<Photo>> watchImport(int importId) =>
-      _db.watchPhotosForImport(importId);
+  /// With [recursive] off, only the files directly in its folder.
+  Stream<List<Photo>> watchImport(int importId, {bool recursive = true}) =>
+      _db.watchPhotosForImport(importId, recursive: recursive);
 }
