@@ -3,6 +3,14 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **Subfolder tabs no longer come up empty after a restart** (#31): with a
+  folder and one of its subfolders open as separate tabs, the parent's
+  background rescan used to take the subfolder tab's photos, leaving it on
+  the welcome screen until ⌘/Ctrl+R. Reopened tabs now keep their photos.
+
 ## 1.14.0 — 2026-11-23
 
 ### Added

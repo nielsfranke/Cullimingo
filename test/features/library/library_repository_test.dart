@@ -225,6 +225,33 @@ void main() {
       },
     );
 
+    test(
+      'an automatic rescan spares files owned by other open tabs (#31)',
+      () async {
+        final sub = Directory(p.join(tmp.path, 'day2'))..createSync();
+        final jpg = img.encodeJpg(img.Image(width: 8, height: 8));
+        File(p.join(tmp.path, 'a.jpg')).writeAsBytesSync(jpg);
+        File(p.join(sub.path, 'b.jpg')).writeAsBytesSync(jpg);
+        // Last session: the parent tab, then the subfolder tab.
+        final parentId = await repo.importFolder(tmp.path);
+        final subId = await repo.importFolder(sub.path);
+
+        // Restart: both tabs rescan, each sparing the other.
+        Set<int> open() => {parentId, subId};
+        await Future.wait([
+          repo.refreshImport(parentId, tmp.path, spareImports: open),
+          repo.refreshImport(subId, sub.path, spareImports: open),
+        ]);
+        expect(await repo.watchImport(parentId).first, hasLength(1));
+        expect(await repo.watchImport(subId).first, hasLength(1));
+
+        // An explicit refresh (no spared imports) still claims them.
+        await repo.refreshImport(parentId, tmp.path);
+        expect(await repo.watchImport(parentId).first, hasLength(2));
+        expect(await repo.watchImport(subId).first, isEmpty);
+      },
+    );
+
     test('reopening a folder left empty finally populates it', () async {
       // Simulate the DCIM case: a subfolder import owns the files, and a parent
       // import exists but empty. A refresh (what reopening triggers) heals it.

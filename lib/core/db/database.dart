@@ -187,6 +187,15 @@ class AppDatabase extends _$AppDatabase {
   Future<List<Photo>> photosForImport(int importId) =>
       (select(photos)..where((t) => t.importId.equals(importId))).get();
 
+  /// The paths owned by any of [importIds] (empty set for no ids).
+  Future<Set<String>> pathsOwnedBy(Set<int> importIds) async {
+    if (importIds.isEmpty) return const {};
+    final query = selectOnly(photos)
+      ..addColumns([photos.path])
+      ..where(photos.importId.isIn(importIds));
+    return {for (final row in await query.get()) row.read(photos.path)!};
+  }
+
   /// The current rows for [ids] (missing ids are simply absent).
   Future<List<Photo>> photosByIds(List<int> ids) {
     if (ids.isEmpty) return Future.value(const []);

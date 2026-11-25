@@ -106,6 +106,11 @@ class LibraryRepository {
   /// error on a sub-folder, a stalled card reader), the listing is incomplete:
   /// new and changed files are still picked up, but nothing is removed, and
   /// `unreadable` counts what the scan skipped.
+  ///
+  /// [spareImports] names imports whose files must *not* be claimed — the
+  /// other open tabs, on an automatic rescan (reopen/restore), so a parent tab
+  /// doesn't silently empty a subfolder tab (#31). It's read after the scan,
+  /// so tabs opened meanwhile are spared too. An explicit refresh passes none.
   Future<
     ({
       int added,
@@ -119,6 +124,7 @@ class LibraryRepository {
     int importId,
     String root, {
     bool recursive = true,
+    Set<int> Function()? spareImports,
   }) async {
     const unavailable = (
       added: 0,
@@ -145,8 +151,13 @@ class LibraryRepository {
     // Files this import doesn't already own — new to disk *or* owned by another
     // import (e.g. a subfolder opened separately). Both get claimed to this
     // import so a reopened/parent folder shows its full contents.
+    final spared = await _db.pathsOwnedBy(
+      {...?spareImports?.call()}..remove(importId),
+    );
     final newFiles = files
-        .where((f) => !existingPaths.contains(f.path))
+        .where(
+          (f) => !existingPaths.contains(f.path) && !spared.contains(f.path),
+        )
         .toList();
     // A file missing from an incomplete listing may just sit in the part the
     // scan couldn't read — never treat that as deleted.

@@ -24,6 +24,10 @@ mixin _CullWorkspace on _CullGrid {
   // open-folders list on each intermediate tab change.
   bool _restoringFolders = false;
 
+  // Background rescans deferred while restoring, started once every tab exists
+  // so each one knows which other tabs' files to leave alone (#31).
+  final List<({int importId, String root})> _deferredResyncs = [];
+
   // Whether "Open folder" scans sub-folders (toggle in the toolbar).
   bool _includeSubfolders = true;
 
@@ -361,7 +365,11 @@ mixin _CullWorkspace on _CullGrid {
       // changed. Rescanning here also heals an import left empty (e.g. first
       // opened with subfolders off), so opening a folder always shows its
       // current contents.
-      unawaited(_backgroundResync(importId, dir));
+      if (_restoringFolders) {
+        _deferredResyncs.add((importId: importId, root: dir));
+      } else {
+        unawaited(_backgroundResync(importId, dir));
+      }
     }
   }
 
@@ -388,7 +396,12 @@ mixin _CullWorkspace on _CullGrid {
     } finally {
       _restoringFolders = false;
     }
+    final resyncs = [..._deferredResyncs];
+    _deferredResyncs.clear();
     if (!mounted) return;
+    for (final r in resyncs) {
+      unawaited(_backgroundResync(r.importId, r.root));
+    }
     // Re-activate the tab that was active last session (clamped in case some
     // folders went missing), so you land where you left off.
     final tabs = ref.read(workspaceProvider).tabs;
@@ -476,7 +489,16 @@ mixin _CullWorkspace on _CullGrid {
     // empty import finally populates. Then sync marks edited externally.
     final scan = await ref
         .read(libraryRepositoryProvider)
-        .refreshImport(importId, root, recursive: _includeSubfolders);
+        .refreshImport(
+          importId,
+          root,
+          recursive: _includeSubfolders,
+          // Leave files owned by the other open tabs where they are — an
+          // automatic rescan must not empty a subfolder tab (#31).
+          spareImports: () => mounted
+              ? {for (final t in ref.read(workspaceProvider).tabs) t.importId}
+              : const {},
+        );
     // Folder gone or listing empty (drive unplugged): keep everything as is.
     if (scan.unavailable) return;
     if (mounted) _evictChangedPreviews(scan.changedPaths);
