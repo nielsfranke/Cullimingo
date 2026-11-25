@@ -3,6 +3,13 @@
 All notable user-facing changes to Cullimingo. The format loosely follows
 [Keep a Changelog](https://keepachangelog.com/); dates are `YYYY-MM-DD`.
 
+## Unreleased
+
+### Fixed
+- **Opening a subfolder in a new tab shows its photos again** (#31): since
+  1.14.1 a subfolder opened while its parent folder was open stayed empty
+  until ⌘/Ctrl+R. Only a restart now keeps the tabs as you left them.
+
 ## 1.14.1 — 2026-11-25
 
 ### Fixed

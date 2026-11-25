@@ -400,7 +400,7 @@ mixin _CullWorkspace on _CullGrid {
     _deferredResyncs.clear();
     if (!mounted) return;
     for (final r in resyncs) {
-      unawaited(_backgroundResync(r.importId, r.root));
+      unawaited(_backgroundResync(r.importId, r.root, spareOpenTabs: true));
     }
     // Re-activate the tab that was active last session (clamped in case some
     // folders went missing), so you land where you left off.
@@ -483,7 +483,14 @@ mixin _CullWorkspace on _CullGrid {
     paths.forEach(ref.read(previewCacheProvider).evict);
   }
 
-  Future<void> _backgroundResync(int importId, String root) async {
+  /// [spareOpenTabs] is for the restart restore only: there every tab comes
+  /// back as it was left, so a parent's rescan must not empty a subfolder tab
+  /// (#31). Opening a folder explicitly claims its files, like ⌘/Ctrl+R.
+  Future<void> _backgroundResync(
+    int importId,
+    String root, {
+    bool spareOpenTabs = false,
+  }) async {
     // First re-scan for files added/removed on disk (recursively per the
     // toggle), so a reopened folder reflects its current contents — and an
     // empty import finally populates. Then sync marks edited externally.
@@ -493,9 +500,7 @@ mixin _CullWorkspace on _CullGrid {
           importId,
           root,
           recursive: _includeSubfolders,
-          // Leave files owned by the other open tabs where they are — an
-          // automatic rescan must not empty a subfolder tab (#31).
-          spareImports: () => mounted
+          spareImports: () => spareOpenTabs && mounted
               ? {for (final t in ref.read(workspaceProvider).tabs) t.importId}
               : const {},
         );
